@@ -44,3 +44,7 @@ Thumbs.db
 
 # JetBrains Rider
 *.sln.iml
+
+# Claude Code settings (local)
+.claude/settings.local.json
+*.local.json
