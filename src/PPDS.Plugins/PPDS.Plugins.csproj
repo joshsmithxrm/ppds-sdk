@@ -26,7 +26,6 @@
     <RepositoryUrl>https://github.com/joshsmithxrm/ppds-sdk.git</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     <PackageReadmeFile>README.md</PackageReadmeFile>
-    <PackageIcon>icon.png</PackageIcon>
     <PackageReleaseNotes>Initial release with PluginStep, PluginImage attributes and related enums.</PackageReleaseNotes>
 
     <!-- Source Link for debugging -->
