@@ -1,0 +1,48 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFrameworks>net462;net6.0;net8.0</TargetFrameworks>
+    <RootNamespace>PPDS.Plugins</RootNamespace>
+    <AssemblyName>PPDS.Plugins</AssemblyName>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+
+    <!-- Strong naming for Dataverse compatibility -->
+    <SignAssembly>true</SignAssembly>
+    <AssemblyOriginatorKeyFile>PPDS.Plugins.snk</AssemblyOriginatorKeyFile>
+
+    <!-- NuGet Package Metadata -->
+    <PackageId>PPDS.Plugins</PackageId>
+    <Version>1.0.0</Version>
+    <Authors>Josh Smith</Authors>
+    <Company>Power Platform Developer Suite</Company>
+    <Description>Plugin development attributes for Dataverse. Provides PluginStep and PluginImage attributes for declarative plugin registration configuration that can be extracted and deployed using PPDS.Tools.</Description>
+    <PackageTags>dataverse;dynamics365;powerplatform;plugins;sdk;crm;xrm</PackageTags>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <Copyright>Copyright (c) 2025 Josh Smith</Copyright>
+    <PackageProjectUrl>https://github.com/joshsmithxrm/ppds-sdk</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/joshsmithxrm/ppds-sdk.git</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageIcon>icon.png</PackageIcon>
+    <PackageReleaseNotes>Initial release with PluginStep, PluginImage attributes and related enums.</PackageReleaseNotes>
+
+    <!-- Source Link for debugging -->
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
+    <EmbedUntrackedSources>true</EmbedUntrackedSources>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="..\..\README.md" Pack="true" PackagePath="\" />
+    <None Include="..\..\icon.png" Pack="true" PackagePath="\" Condition="Exists('..\..\icon.png')" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.SourceLink.GitHub" Version="8.0.0" PrivateAssets="All" />
+  </ItemGroup>
+
+</Project>
