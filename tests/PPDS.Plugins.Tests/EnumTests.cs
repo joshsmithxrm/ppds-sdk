@@ -6,22 +6,14 @@ public class EnumTests
 {
     #region PluginStage Tests
 
-    [Fact]
-    public void PluginStage_PreValidation_HasCorrectValue()
+    [Theory]
+    [InlineData(PluginStage.PreValidation, 10)]
+    [InlineData(PluginStage.PreOperation, 20)]
+    [InlineData(PluginStage.PostOperation, 40)]
+    public void PluginStage_ValuesMatchDataverseSDK(PluginStage stage, int expectedValue)
     {
-        Assert.Equal(10, (int)PluginStage.PreValidation);
-    }
-
-    [Fact]
-    public void PluginStage_PreOperation_HasCorrectValue()
-    {
-        Assert.Equal(20, (int)PluginStage.PreOperation);
-    }
-
-    [Fact]
-    public void PluginStage_PostOperation_HasCorrectValue()
-    {
-        Assert.Equal(40, (int)PluginStage.PostOperation);
+        // These values must match the Dataverse SDK for proper registration
+        Assert.Equal(expectedValue, (int)stage);
     }
 
     [Fact]
@@ -31,29 +23,17 @@ public class EnumTests
         Assert.Equal(3, values.Length);
     }
 
-    [Fact]
-    public void PluginStage_ValuesMatchDataverseSDK()
-    {
-        // These values must match the Dataverse SDK for proper registration
-        Assert.Equal(10, (int)PluginStage.PreValidation);
-        Assert.Equal(20, (int)PluginStage.PreOperation);
-        Assert.Equal(40, (int)PluginStage.PostOperation);
-    }
-
     #endregion
 
     #region PluginMode Tests
 
-    [Fact]
-    public void PluginMode_Synchronous_HasCorrectValue()
+    [Theory]
+    [InlineData(PluginMode.Synchronous, 0)]
+    [InlineData(PluginMode.Asynchronous, 1)]
+    public void PluginMode_ValuesMatchDataverseSDK(PluginMode mode, int expectedValue)
     {
-        Assert.Equal(0, (int)PluginMode.Synchronous);
-    }
-
-    [Fact]
-    public void PluginMode_Asynchronous_HasCorrectValue()
-    {
-        Assert.Equal(1, (int)PluginMode.Asynchronous);
+        // These values must match the Dataverse SDK for proper registration
+        Assert.Equal(expectedValue, (int)mode);
     }
 
     [Fact]
@@ -63,34 +43,18 @@ public class EnumTests
         Assert.Equal(2, values.Length);
     }
 
-    [Fact]
-    public void PluginMode_ValuesMatchDataverseSDK()
-    {
-        // These values must match the Dataverse SDK for proper registration
-        Assert.Equal(0, (int)PluginMode.Synchronous);
-        Assert.Equal(1, (int)PluginMode.Asynchronous);
-    }
-
     #endregion
 
     #region PluginImageType Tests
 
-    [Fact]
-    public void PluginImageType_PreImage_HasCorrectValue()
+    [Theory]
+    [InlineData(PluginImageType.PreImage, 0)]
+    [InlineData(PluginImageType.PostImage, 1)]
+    [InlineData(PluginImageType.Both, 2)]
+    public void PluginImageType_ValuesMatchDataverseSDK(PluginImageType imageType, int expectedValue)
     {
-        Assert.Equal(0, (int)PluginImageType.PreImage);
-    }
-
-    [Fact]
-    public void PluginImageType_PostImage_HasCorrectValue()
-    {
-        Assert.Equal(1, (int)PluginImageType.PostImage);
-    }
-
-    [Fact]
-    public void PluginImageType_Both_HasCorrectValue()
-    {
-        Assert.Equal(2, (int)PluginImageType.Both);
+        // These values must match the Dataverse SDK for proper registration
+        Assert.Equal(expectedValue, (int)imageType);
     }
 
     [Fact]
@@ -98,15 +62,6 @@ public class EnumTests
     {
         var values = Enum.GetValues<PluginImageType>();
         Assert.Equal(3, values.Length);
-    }
-
-    [Fact]
-    public void PluginImageType_ValuesMatchDataverseSDK()
-    {
-        // These values must match the Dataverse SDK for proper registration
-        Assert.Equal(0, (int)PluginImageType.PreImage);
-        Assert.Equal(1, (int)PluginImageType.PostImage);
-        Assert.Equal(2, (int)PluginImageType.Both);
     }
 
     #endregion
@@ -125,7 +80,7 @@ public class EnumTests
     [InlineData(typeof(PluginStage))]
     [InlineData(typeof(PluginMode))]
     [InlineData(typeof(PluginImageType))]
-    public void AllEnums_HaveXmlDocumentation(Type enumType)
+    public void AllEnums_AreValidAndNotEmpty(Type enumType)
     {
         // Verify the enum type exists and is an enum
         Assert.True(enumType.IsEnum);

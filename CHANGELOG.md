@@ -11,18 +11,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- PluginStepAttribute for declarative plugin step registration
-  - Message, EntityLogicalName, Stage (required)
-  - Mode, FilteringAttributes, ExecutionOrder (optional)
-  - UnsecureConfiguration, SecureConfiguration for plugin settings
-  - StepId for multi-step plugins
-- PluginImageAttribute for defining pre/post images
-  - ImageType, Name (required)
-  - Attributes, EntityAlias, StepId (optional)
-- PluginStage enum (PreValidation, PreOperation, PostOperation)
-- PluginMode enum (Synchronous, Asynchronous)
-- PluginImageType enum (PreImage, PostImage, Both)
-- Multi-targeting: net462, net6.0, net8.0
+- `PluginStepAttribute` for declarative plugin step registration
+  - `Message`, `EntityLogicalName`, `Stage` (required)
+  - `Mode`, `FilteringAttributes`, `ExecutionOrder` (optional)
+  - `UnsecureConfiguration`, `SecureConfiguration` for plugin settings
+  - `StepId` for multi-step plugins
+- `PluginImageAttribute` for defining pre/post images
+  - `ImageType`, `Name` (required)
+  - `Attributes`, `EntityAlias`, `StepId` (optional)
+- `PluginStage` enum (`PreValidation`, `PreOperation`, `PostOperation`)
+- `PluginMode` enum (`Synchronous`, `Asynchronous`)
+- `PluginImageType` enum (`PreImage`, `PostImage`, `Both`)
+- Multi-targeting: `net462`, `net6.0`, `net8.0`
 - Strong name signing for Dataverse compatibility
 - Full XML documentation
 - GitHub Actions workflows for build and NuGet publishing

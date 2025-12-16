@@ -75,7 +75,8 @@ namespace PPDS.Plugins
 
         /// <summary>
         /// Gets or sets the unsecure configuration string passed to the plugin constructor.
-        /// This configuration is stored in plain text and visible to all users with access to the plugin step.
+        /// This configuration is stored in plain text and is visible to users with appropriate read access
+        /// to the plugin step entity, as determined by their security roles and privileges in Dataverse.
         /// </summary>
         public string? UnsecureConfiguration { get; set; }
 
