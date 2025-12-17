@@ -11,7 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- `SecureConfiguration` property on `PluginStepAttribute` for secure plugin settings
+- Added `SecureConfiguration` property to `PluginStepAttribute` for secure plugin settings
 
 ### Changed
 
