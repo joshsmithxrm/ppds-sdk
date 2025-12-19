@@ -1,0 +1,51 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFrameworks>net8.0;net10.0</TargetFrameworks>
+    <RootNamespace>PPDS.Dataverse</RootNamespace>
+    <AssemblyName>PPDS.Dataverse</AssemblyName>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+
+    <!-- Strong naming for Dataverse compatibility -->
+    <SignAssembly>true</SignAssembly>
+    <AssemblyOriginatorKeyFile>PPDS.Dataverse.snk</AssemblyOriginatorKeyFile>
+
+    <!-- NuGet Package Metadata -->
+    <PackageId>PPDS.Dataverse</PackageId>
+    <Version>1.0.0</Version>
+    <Authors>Josh Smith</Authors>
+    <Company>Power Platform Developer Suite</Company>
+    <Description>High-performance Dataverse connectivity layer with connection pooling, bulk operations, and resilience. Provides multi-connection support for load distribution, throttle-aware connection selection, and modern bulk API wrappers (CreateMultiple, UpsertMultiple).</Description>
+    <PackageTags>dataverse;dynamics365;powerplatform;connection-pool;bulk-api;serviceclient</PackageTags>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <Copyright>Copyright (c) 2025 Josh Smith</Copyright>
+    <PackageProjectUrl>https://github.com/joshsmithxrm/ppds-sdk</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/joshsmithxrm/ppds-sdk.git</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+
+    <!-- Source Link for debugging -->
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
+    <EmbedUntrackedSources>true</EmbedUntrackedSources>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="..\..\README.md" Pack="true" PackagePath="\" />
+    <None Include="..\..\icon.png" Pack="true" PackagePath="\" Condition="Exists('..\..\icon.png')" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.PowerPlatform.Dataverse.Client" Version="1.1.*" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="8.0.*" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="8.0.*" />
+    <PackageReference Include="Microsoft.Extensions.Options" Version="8.0.*" />
+    <PackageReference Include="Microsoft.Extensions.Options.ConfigurationExtensions" Version="8.0.*" />
+    <PackageReference Include="Microsoft.SourceLink.GitHub" Version="8.0.0" PrivateAssets="All" />
+  </ItemGroup>
+
+</Project>
