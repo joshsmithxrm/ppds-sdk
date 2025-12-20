@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **PPDS.Migration.Cli** - New CLI tool for high-performance Dataverse data migration
+  - Commands: `export`, `import`, `analyze`, `migrate`
+  - JSON progress output for tool integration (`--json` flag)
+  - Support for multiple Application Users and bypass options
+  - Packaged as .NET global tool (`ppds-migrate`)
+  - Comprehensive unit test suite (98 tests)
+  - Targets: `net8.0`, `net10.0`
+
 - **PPDS.Dataverse** - New package for high-performance Dataverse connectivity
   - Multi-connection pool supporting multiple Application Users for load distribution
   - Connection selection strategies: RoundRobin, LeastConnections, ThrottleAware
