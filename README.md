@@ -12,6 +12,13 @@ NuGet packages for Microsoft Dataverse development. Part of the [Power Platform 
 | **PPDS.Plugins** | [![NuGet](https://img.shields.io/nuget/v/PPDS.Plugins.svg)](https://www.nuget.org/packages/PPDS.Plugins/) | Declarative plugin registration attributes |
 | **PPDS.Dataverse** | [![NuGet](https://img.shields.io/nuget/v/PPDS.Dataverse.svg)](https://www.nuget.org/packages/PPDS.Dataverse/) | High-performance connection pooling and bulk operations |
 
+## Compatibility
+
+| Package | Works With |
+|---------|------------|
+| PPDS.Plugins 1.x | [PPDS.Tools](https://github.com/joshsmithxrm/ppds-tools) >= 1.1.0 |
+| PPDS.Migration.Cli 1.x | [PPDS.Tools](https://github.com/joshsmithxrm/ppds-tools) >= 1.2.0 |
+
 ---
 
 ## PPDS.Plugins
