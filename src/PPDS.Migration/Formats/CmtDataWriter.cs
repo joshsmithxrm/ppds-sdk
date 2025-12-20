@@ -160,61 +160,53 @@ namespace PPDS.Migration.Formats
             await writer.WriteStartElementAsync(null, "field", null).ConfigureAwait(false);
             await writer.WriteAttributeStringAsync(null, "name", null, name).ConfigureAwait(false);
 
+            // CMT format: value as element content, type-specific attributes
             switch (value)
             {
                 case EntityReference er:
-                    await writer.WriteAttributeStringAsync(null, "type", null, "lookup").ConfigureAwait(false);
-                    await writer.WriteAttributeStringAsync(null, "value", null, er.Id.ToString()).ConfigureAwait(false);
                     await writer.WriteAttributeStringAsync(null, "lookupentity", null, er.LogicalName).ConfigureAwait(false);
                     if (!string.IsNullOrEmpty(er.Name))
                     {
                         await writer.WriteAttributeStringAsync(null, "lookupentityname", null, er.Name).ConfigureAwait(false);
                     }
+                    await writer.WriteStringAsync(er.Id.ToString()).ConfigureAwait(false);
                     break;
 
                 case OptionSetValue osv:
-                    await writer.WriteAttributeStringAsync(null, "type", null, "optionset").ConfigureAwait(false);
-                    await writer.WriteAttributeStringAsync(null, "value", null, osv.Value.ToString()).ConfigureAwait(false);
+                    await writer.WriteStringAsync(osv.Value.ToString()).ConfigureAwait(false);
                     break;
 
                 case Money m:
-                    await writer.WriteAttributeStringAsync(null, "type", null, "money").ConfigureAwait(false);
-                    await writer.WriteAttributeStringAsync(null, "value", null, m.Value.ToString(CultureInfo.InvariantCulture)).ConfigureAwait(false);
+                    await writer.WriteStringAsync(m.Value.ToString(CultureInfo.InvariantCulture)).ConfigureAwait(false);
                     break;
 
                 case DateTime dt:
-                    await writer.WriteAttributeStringAsync(null, "type", null, "datetime").ConfigureAwait(false);
-                    await writer.WriteAttributeStringAsync(null, "value", null, dt.ToString("O")).ConfigureAwait(false);
+                    // CMT uses specific date format
+                    await writer.WriteStringAsync(dt.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture)).ConfigureAwait(false);
                     break;
 
                 case bool b:
-                    await writer.WriteAttributeStringAsync(null, "type", null, "bool").ConfigureAwait(false);
-                    await writer.WriteAttributeStringAsync(null, "value", null, b.ToString().ToLowerInvariant()).ConfigureAwait(false);
+                    await writer.WriteStringAsync(b ? "1" : "0").ConfigureAwait(false);
                     break;
 
                 case Guid g:
-                    await writer.WriteAttributeStringAsync(null, "type", null, "guid").ConfigureAwait(false);
-                    await writer.WriteAttributeStringAsync(null, "value", null, g.ToString()).ConfigureAwait(false);
+                    await writer.WriteStringAsync(g.ToString()).ConfigureAwait(false);
                     break;
 
                 case int i:
-                    await writer.WriteAttributeStringAsync(null, "type", null, "int").ConfigureAwait(false);
-                    await writer.WriteAttributeStringAsync(null, "value", null, i.ToString()).ConfigureAwait(false);
+                    await writer.WriteStringAsync(i.ToString()).ConfigureAwait(false);
                     break;
 
                 case decimal d:
-                    await writer.WriteAttributeStringAsync(null, "type", null, "decimal").ConfigureAwait(false);
-                    await writer.WriteAttributeStringAsync(null, "value", null, d.ToString(CultureInfo.InvariantCulture)).ConfigureAwait(false);
+                    await writer.WriteStringAsync(d.ToString(CultureInfo.InvariantCulture)).ConfigureAwait(false);
                     break;
 
                 case double dbl:
-                    await writer.WriteAttributeStringAsync(null, "type", null, "float").ConfigureAwait(false);
-                    await writer.WriteAttributeStringAsync(null, "value", null, dbl.ToString(CultureInfo.InvariantCulture)).ConfigureAwait(false);
+                    await writer.WriteStringAsync(dbl.ToString(CultureInfo.InvariantCulture)).ConfigureAwait(false);
                     break;
 
                 default:
-                    await writer.WriteAttributeStringAsync(null, "type", null, "string").ConfigureAwait(false);
-                    await writer.WriteAttributeStringAsync(null, "value", null, value.ToString()).ConfigureAwait(false);
+                    await writer.WriteStringAsync(value.ToString() ?? string.Empty).ConfigureAwait(false);
                     break;
             }
 
@@ -238,8 +230,17 @@ namespace PPDS.Migration.Formats
 
             await writer.WriteStartDocumentAsync().ConfigureAwait(false);
             await writer.WriteStartElementAsync(null, "entities", null).ConfigureAwait(false);
+            await writer.WriteAttributeStringAsync(null, "dateMode", null, "absolute").ConfigureAwait(false);
             await writer.WriteAttributeStringAsync(null, "version", null, schema.Version).ConfigureAwait(false);
             await writer.WriteAttributeStringAsync(null, "timestamp", null, DateTime.UtcNow.ToString("O")).ConfigureAwait(false);
+
+            // Write entityImportOrder (required by CMT)
+            await writer.WriteStartElementAsync(null, "entityImportOrder", null).ConfigureAwait(false);
+            foreach (var entity in schema.Entities)
+            {
+                await writer.WriteElementStringAsync(null, "entityName", null, entity.LogicalName).ConfigureAwait(false);
+            }
+            await writer.WriteEndElementAsync().ConfigureAwait(false); // entityImportOrder
 
             foreach (var entity in schema.Entities)
             {

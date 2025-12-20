@@ -69,6 +69,15 @@ namespace PPDS.Migration.Formats
 
             await writer.WriteStartDocumentAsync().ConfigureAwait(false);
             await writer.WriteStartElementAsync(null, "entities", null).ConfigureAwait(false);
+            await writer.WriteAttributeStringAsync(null, "dateMode", null, "absolute").ConfigureAwait(false);
+
+            // Write entityImportOrder (required by CMT)
+            await writer.WriteStartElementAsync(null, "entityImportOrder", null).ConfigureAwait(false);
+            foreach (var entity in schema.Entities)
+            {
+                await writer.WriteElementStringAsync(null, "entityName", null, entity.LogicalName).ConfigureAwait(false);
+            }
+            await writer.WriteEndElementAsync().ConfigureAwait(false); // entityImportOrder
 
             foreach (var entity in schema.Entities)
             {
