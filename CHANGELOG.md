@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **PPDS.Migration** - New library for high-performance Dataverse data migration
+  - Parallel export with configurable degree of parallelism
+  - Tiered import with automatic dependency resolution using Tarjan's algorithm
+  - Circular reference detection with deferred field processing
+  - CMT format compatibility (schema.xml and data.zip)
+  - Progress reporting with console and JSON output formats
+  - Security-first design: connection string redaction, no PII in logs
+  - DI integration via `AddDataverseMigration()` extension method
+  - Targets: `net8.0`, `net10.0`
+
 - **PPDS.Migration.Cli** - New CLI tool for high-performance Dataverse data migration
   - Commands: `export`, `import`, `analyze`, `migrate`
   - JSON progress output for tool integration (`--json` flag)

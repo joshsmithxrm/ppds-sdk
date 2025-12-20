@@ -7,6 +7,8 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <!-- Suppress known vulnerability in transitive dependency until upstream fix -->
+    <NoWarn>$(NoWarn);NU1903</NoWarn>
 
     <!-- .NET Tool Configuration -->
     <PackAsTool>true</PackAsTool>
@@ -30,8 +32,9 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- TODO: Add project reference to PPDS.Migration when implemented -->
-    <!-- <ProjectReference Include="..\PPDS.Migration\PPDS.Migration.csproj" /> -->
+    <ProjectReference Include="..\PPDS.Migration\PPDS.Migration.csproj" />
+    <ProjectReference Include="..\PPDS.Dataverse\PPDS.Dataverse.csproj" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="8.0.*" />
     <PackageReference Include="System.CommandLine" Version="2.0.0-beta4.22272.1" />
   </ItemGroup>
 </Project>

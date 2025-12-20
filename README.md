@@ -11,6 +11,8 @@ NuGet packages for Microsoft Dataverse development. Part of the [Power Platform 
 |---------|-------|-------------|
 | **PPDS.Plugins** | [![NuGet](https://img.shields.io/nuget/v/PPDS.Plugins.svg)](https://www.nuget.org/packages/PPDS.Plugins/) | Declarative plugin registration attributes |
 | **PPDS.Dataverse** | [![NuGet](https://img.shields.io/nuget/v/PPDS.Dataverse.svg)](https://www.nuget.org/packages/PPDS.Dataverse/) | High-performance connection pooling and bulk operations |
+| **PPDS.Migration** | [![NuGet](https://img.shields.io/nuget/v/PPDS.Migration.svg)](https://www.nuget.org/packages/PPDS.Migration/) | High-performance data migration engine |
+| **PPDS.Migration.Cli** | [![NuGet](https://img.shields.io/nuget/v/PPDS.Migration.Cli.svg)](https://www.nuget.org/packages/PPDS.Migration.Cli/) | CLI tool for data migration (.NET tool) |
 
 ## Compatibility
 
@@ -18,6 +20,7 @@ NuGet packages for Microsoft Dataverse development. Part of the [Power Platform 
 |---------|-------------------|
 | PPDS.Plugins | net462, net8.0, net10.0 |
 | PPDS.Dataverse | net8.0, net10.0 |
+| PPDS.Migration | net8.0, net10.0 |
 | PPDS.Migration.Cli | net8.0, net10.0 |
 
 ---
@@ -71,6 +74,73 @@ var account = await client.RetrieveAsync("account", id, new ColumnSet(true));
 ```
 
 See [PPDS.Dataverse documentation](src/PPDS.Dataverse/README.md) for details.
+
+---
+
+## PPDS.Migration
+
+High-performance data migration engine for Dataverse. Replaces CMT for automated pipeline scenarios with 3-8x performance improvement.
+
+```bash
+dotnet add package PPDS.Migration
+```
+
+```csharp
+// Setup
+services.AddDataverseConnectionPool(options =>
+{
+    options.Connections.Add(new DataverseConnection("Target", connectionString));
+});
+services.AddDataverseMigration();
+
+// Export
+var exporter = serviceProvider.GetRequiredService<IExporter>();
+await exporter.ExportAsync("schema.xml", "data.zip");
+
+// Import with dependency resolution
+var importer = serviceProvider.GetRequiredService<IImporter>();
+await importer.ImportAsync("data.zip");
+```
+
+**Key Features:**
+- Parallel export (all entities exported concurrently)
+- Tiered import with automatic dependency resolution
+- Circular reference detection with deferred field processing
+- CMT format compatibility (drop-in replacement)
+- Security-first: no PII in logs, connection string redaction
+
+See [PPDS.Migration documentation](src/PPDS.Migration/README.md) for details.
+
+---
+
+## PPDS.Migration.Cli
+
+CLI tool for data migration operations. Install as a .NET global tool:
+
+```bash
+dotnet tool install -g PPDS.Migration.Cli
+```
+
+```bash
+# Set connection via environment variable (recommended for security)
+export PPDS_CONNECTION="AuthType=ClientSecret;Url=https://org.crm.dynamics.com;..."
+
+# Analyze schema dependencies
+ppds-migrate analyze --schema schema.xml
+
+# Export data
+ppds-migrate export --schema schema.xml --output data.zip
+
+# Import data
+ppds-migrate import --data data.zip --batch-size 1000
+
+# Full migration (export + import)
+export PPDS_SOURCE_CONNECTION="..."
+export PPDS_TARGET_CONNECTION="..."
+ppds-migrate migrate --schema schema.xml
+```
+
+See [PPDS.Migration.Cli documentation](src/PPDS.Migration.Cli/README.md) for details.
 
 ---
 
