@@ -1,156 +1,172 @@
-# PPDS.Plugins
+# PPDS SDK
 
 [![Build](https://github.com/joshsmithxrm/ppds-sdk/actions/workflows/build.yml/badge.svg)](https://github.com/joshsmithxrm/ppds-sdk/actions/workflows/build.yml)
-[![NuGet](https://img.shields.io/nuget/v/PPDS.Plugins.svg)](https://www.nuget.org/packages/PPDS.Plugins/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-Plugin development attributes for Microsoft Dataverse. Part of the [Power Platform Developer Suite](https://github.com/joshsmithxrm/power-platform-developer-suite) ecosystem.
+NuGet packages for Microsoft Dataverse development. Part of the [Power Platform Developer Suite](https://github.com/joshsmithxrm/power-platform-developer-suite) ecosystem.
 
-## Overview
+## Packages
 
-PPDS.Plugins provides declarative attributes for configuring Dataverse plugin registrations directly in your plugin code. These attributes are extracted by [PPDS.Tools](https://github.com/joshsmithxrm/ppds-tools) to generate registration files that can be deployed to any environment.
+| Package | NuGet | Description |
+|---------|-------|-------------|
+| **PPDS.Plugins** | [![NuGet](https://img.shields.io/nuget/v/PPDS.Plugins.svg)](https://www.nuget.org/packages/PPDS.Plugins/) | Declarative plugin registration attributes |
+| **PPDS.Dataverse** | [![NuGet](https://img.shields.io/nuget/v/PPDS.Dataverse.svg)](https://www.nuget.org/packages/PPDS.Dataverse/) | High-performance connection pooling and bulk operations |
+| **PPDS.Migration** | [![NuGet](https://img.shields.io/nuget/v/PPDS.Migration.svg)](https://www.nuget.org/packages/PPDS.Migration/) | High-performance data migration engine |
+| **PPDS.Migration.Cli** | [![NuGet](https://img.shields.io/nuget/v/PPDS.Migration.Cli.svg)](https://www.nuget.org/packages/PPDS.Migration.Cli/) | CLI tool for data migration (.NET tool) |
 
-## Installation
+## Compatibility
+
+| Package | Target Frameworks |
+|---------|-------------------|
+| PPDS.Plugins | net462, net8.0, net10.0 |
+| PPDS.Dataverse | net8.0, net10.0 |
+| PPDS.Migration | net8.0, net10.0 |
+| PPDS.Migration.Cli | net8.0, net10.0 |
+
+---
+
+## PPDS.Plugins
+
+Declarative attributes for configuring Dataverse plugin registrations directly in code.
 
 ```bash
 dotnet add package PPDS.Plugins
 ```
 
-Or via the NuGet Package Manager:
-
-```powershell
-Install-Package PPDS.Plugins
-```
-
-## Usage
-
-### Basic Plugin Step
-
 ```csharp
-using PPDS.Plugins;
-
 [PluginStep(
     Message = "Create",
-    EntityLogicalName = "account",
-    Stage = PluginStage.PostOperation)]
-public class AccountCreatePlugin : IPlugin
-{
-    public void Execute(IServiceProvider serviceProvider)
-    {
-        // Plugin implementation
-    }
-}
-```
-
-### Plugin with Filtering Attributes
-
-```csharp
-[PluginStep(
-    Message = "Update",
-    EntityLogicalName = "contact",
-    Stage = PluginStage.PreOperation,
-    Mode = PluginMode.Synchronous,
-    FilteringAttributes = "firstname,lastname,emailaddress1")]
-public class ContactUpdatePlugin : IPlugin
-{
-    public void Execute(IServiceProvider serviceProvider)
-    {
-        // Only triggers when specified attributes change
-    }
-}
-```
-
-### Plugin with Images
-
-```csharp
-[PluginStep(
-    Message = "Update",
     EntityLogicalName = "account",
     Stage = PluginStage.PostOperation)]
 [PluginImage(
     ImageType = PluginImageType.PreImage,
     Name = "PreImage",
-    Attributes = "name,telephone1,revenue")]
-public class AccountAuditPlugin : IPlugin
+    Attributes = "name,telephone1")]
+public class AccountCreatePlugin : IPlugin
 {
-    public void Execute(IServiceProvider serviceProvider)
-    {
-        // Access pre-image via context.PreEntityImages["PreImage"]
-    }
+    public void Execute(IServiceProvider serviceProvider) { }
 }
 ```
 
-### Asynchronous Plugin
+See [PPDS.Plugins on NuGet](https://www.nuget.org/packages/PPDS.Plugins/) for details.
+
+---
+
+## PPDS.Dataverse
+
+High-performance Dataverse connectivity with connection pooling, throttle-aware routing, and bulk operations.
+
+```bash
+dotnet add package PPDS.Dataverse
+```
 
 ```csharp
-[PluginStep(
-    Message = "Create",
-    EntityLogicalName = "email",
-    Stage = PluginStage.PostOperation,
-    Mode = PluginMode.Asynchronous)]
-public class EmailNotificationPlugin : IPlugin
+// Setup
+services.AddDataverseConnectionPool(options =>
 {
-    public void Execute(IServiceProvider serviceProvider)
-    {
-        // Runs in background via async service
-    }
-}
+    options.Connections.Add(new DataverseConnection("Primary", connectionString));
+    options.Pool.DisableAffinityCookie = true; // 10x+ throughput improvement
+});
+
+// Usage
+await using var client = await pool.GetClientAsync();
+var account = await client.RetrieveAsync("account", id, new ColumnSet(true));
 ```
 
-## Attributes
+See [PPDS.Dataverse documentation](src/PPDS.Dataverse/README.md) for details.
 
-### PluginStepAttribute
+---
 
-Defines how a plugin is registered in Dataverse.
+## PPDS.Migration
 
-| Property | Type | Description |
-|----------|------|-------------|
-| `Message` | string | SDK message name (Create, Update, Delete, etc.) |
-| `EntityLogicalName` | string | Target entity logical name |
-| `Stage` | PluginStage | Pipeline stage (PreValidation, PreOperation, PostOperation) |
-| `Mode` | PluginMode | Execution mode (Synchronous, Asynchronous) |
-| `FilteringAttributes` | string | Comma-separated attributes that trigger the plugin |
-| `ExecutionOrder` | int | Order when multiple plugins registered for same event |
-| `Name` | string | Display name for the step |
-| `StepId` | string | Unique ID for associating images with specific steps |
+High-performance data migration engine for Dataverse. Replaces CMT for automated pipeline scenarios with 3-8x performance improvement.
 
-### PluginImageAttribute
+```bash
+dotnet add package PPDS.Migration
+```
 
-Defines pre/post images for a plugin step.
+```csharp
+// Setup
+services.AddDataverseConnectionPool(options =>
+{
+    options.Connections.Add(new DataverseConnection("Target", connectionString));
+});
+services.AddDataverseMigration();
 
-| Property | Type | Description |
-|----------|------|-------------|
-| `ImageType` | PluginImageType | PreImage, PostImage, or Both |
-| `Name` | string | Key to access image in plugin context |
-| `Attributes` | string | Comma-separated attributes to include |
-| `EntityAlias` | string | Entity alias (defaults to Name) |
-| `StepId` | string | Associates image with specific step |
+// Export
+var exporter = serviceProvider.GetRequiredService<IExporter>();
+await exporter.ExportAsync("schema.xml", "data.zip");
 
-## Enums
+// Import with dependency resolution
+var importer = serviceProvider.GetRequiredService<IImporter>();
+await importer.ImportAsync("data.zip");
+```
 
-### PluginStage
+**Key Features:**
+- Parallel export (all entities exported concurrently)
+- Tiered import with automatic dependency resolution
+- Circular reference detection with deferred field processing
+- CMT format compatibility (drop-in replacement)
+- Security-first: no PII in logs, connection string redaction
 
-- `PreValidation (10)` - Before main system validation
-- `PreOperation (20)` - Before main operation, within transaction
-- `PostOperation (40)` - After main operation
+See [PPDS.Migration documentation](src/PPDS.Migration/README.md) for details.
 
-### PluginMode
+---
 
-- `Synchronous (0)` - Immediate execution, blocks operation
-- `Asynchronous (1)` - Background execution via async service
+## PPDS.Migration.Cli
 
-### PluginImageType
+CLI tool for data migration operations. Install as a .NET global tool:
 
-- `PreImage (0)` - Entity state before operation
-- `PostImage (1)` - Entity state after operation
-- `Both (2)` - Both pre and post images
+```bash
+dotnet tool install -g PPDS.Migration.Cli
+```
+
+```bash
+# Set connection via environment variable (recommended for security)
+export PPDS_CONNECTION="AuthType=ClientSecret;Url=https://org.crm.dynamics.com;..."
+
+# Analyze schema dependencies
+ppds-migrate analyze --schema schema.xml
+
+# Export data
+ppds-migrate export --schema schema.xml --output data.zip
+
+# Import data
+ppds-migrate import --data data.zip --batch-size 1000
+
+# Full migration (export + import)
+export PPDS_SOURCE_CONNECTION="..."
+export PPDS_TARGET_CONNECTION="..."
+ppds-migrate migrate --schema schema.xml
+```
+
+See [PPDS.Migration.Cli documentation](src/PPDS.Migration.Cli/README.md) for details.
+
+---
+
+## Architecture Decisions
+
+Key design decisions are documented as ADRs:
+
+- [ADR-0001: Disable Affinity Cookie by Default](docs/adr/0001_DISABLE_AFFINITY_COOKIE.md)
+- [ADR-0002: Multi-Connection Pooling](docs/adr/0002_MULTI_CONNECTION_POOLING.md)
+- [ADR-0003: Throttle-Aware Connection Selection](docs/adr/0003_THROTTLE_AWARE_SELECTION.md)
+
+## Patterns
+
+- [Connection Pooling](docs/architecture/CONNECTION_POOLING_PATTERNS.md) - When and how to use connection pooling
+- [Bulk Operations](docs/architecture/BULK_OPERATIONS_PATTERNS.md) - High-throughput data operations
+
+---
 
 ## Related Projects
 
-- [power-platform-developer-suite](https://github.com/joshsmithxrm/power-platform-developer-suite) - VS Code extension
-- [ppds-tools](https://github.com/joshsmithxrm/ppds-tools) - PowerShell deployment module
-- [ppds-alm](https://github.com/joshsmithxrm/ppds-alm) - CI/CD pipeline templates
-- [ppds-demo](https://github.com/joshsmithxrm/ppds-demo) - Reference implementation
+| Project | Description |
+|---------|-------------|
+| [power-platform-developer-suite](https://github.com/joshsmithxrm/power-platform-developer-suite) | VS Code extension |
+| [ppds-tools](https://github.com/joshsmithxrm/ppds-tools) | PowerShell deployment module |
+| [ppds-alm](https://github.com/joshsmithxrm/ppds-alm) | CI/CD pipeline templates |
+| [ppds-demo](https://github.com/joshsmithxrm/ppds-demo) | Reference implementation |
 
 ## License
 

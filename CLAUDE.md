@@ -160,14 +160,37 @@ namespace PPDS.Plugins.Enums;        // Enums
 
 ---
 
-## 🔗 Ecosystem Integration
+## 🔗 Dependencies & Versioning
 
-**This package is used by:**
-- **ppds-demo** - Reference implementation
-- **Customer plugin projects** - Via NuGet reference
+### This Repo Produces
 
-**Extracted by:**
-- **ppds-tools** - `Get-DataversePluginRegistrations` reads these attributes
+| Package | Distribution |
+|---------|--------------|
+| PPDS.Plugins | NuGet |
+| PPDS.Dataverse | NuGet |
+| PPDS.Migration.Cli | .NET Tool |
+
+### Consumed By
+
+| Consumer | How | Breaking Change Impact |
+|----------|-----|------------------------|
+| ppds-tools | Reflects on attributes | Must update reflection code |
+| ppds-tools | Shells to `ppds-migrate` CLI | Must update CLI calls |
+| ppds-demo | NuGet reference | Must update package reference |
+
+### Version Sync Rules
+
+| Rule | Details |
+|------|---------|
+| Major versions | Sync with ppds-tools when attributes have breaking changes |
+| Minor/patch | Independent |
+| Pre-release format | `-alpha.N`, `-beta.N`, `-rc.N` suffix in git tag |
+
+### Breaking Changes Requiring Coordination
+
+- Adding required properties to `PluginStepAttribute` or `PluginImageAttribute`
+- Changing attribute property types or names
+- Changing `ppds-migrate` CLI arguments or output format
 
 ---
 
