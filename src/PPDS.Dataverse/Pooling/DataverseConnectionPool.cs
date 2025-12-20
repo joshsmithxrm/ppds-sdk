@@ -12,6 +12,7 @@ using PPDS.Dataverse.Client;
 using PPDS.Dataverse.DependencyInjection;
 using PPDS.Dataverse.Pooling.Strategies;
 using PPDS.Dataverse.Resilience;
+using PPDS.Dataverse.Security;
 
 namespace PPDS.Dataverse.Pooling
 {
@@ -228,7 +229,34 @@ namespace PPDS.Dataverse.Pooling
 
             _logger.LogDebug("Creating new connection for {ConnectionName}", connectionName);
 
-            var serviceClient = new ServiceClient(connectionConfig.ConnectionString);
+            ServiceClient serviceClient;
+            try
+            {
+                serviceClient = new ServiceClient(connectionConfig.ConnectionString);
+            }
+            catch (Exception ex)
+            {
+                // Wrap the exception to prevent connection string leakage in error messages
+                throw DataverseConnectionException.CreateConnectionFailed(connectionName, ex);
+            }
+
+            if (!serviceClient.IsReady)
+            {
+                var error = serviceClient.LastError ?? "Unknown error";
+                var exception = serviceClient.LastException;
+
+                serviceClient.Dispose();
+
+                if (exception != null)
+                {
+                    throw DataverseConnectionException.CreateConnectionFailed(connectionName, exception);
+                }
+
+                throw new DataverseConnectionException(
+                    connectionName,
+                    $"Connection '{connectionName}' failed to initialize: {ConnectionStringRedactor.RedactExceptionMessage(error)}",
+                    new InvalidOperationException(error));
+            }
 
             // Disable affinity cookie for better load distribution
             if (_options.Pool.DisableAffinityCookie)

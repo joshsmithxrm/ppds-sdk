@@ -29,21 +29,23 @@ public class MigrateCommandTests
     }
 
     [Fact]
-    public void Create_HasRequiredSourceConnectionOption()
+    public void Create_HasSourceConnectionOption()
     {
         var option = _command.Options.FirstOrDefault(o => o.Name == "source-connection");
         Assert.NotNull(option);
-        Assert.True(option.IsRequired);
+        // Not required at parse time - can come from environment variable
+        Assert.False(option.IsRequired);
         Assert.Contains("--source", option.Aliases);
         Assert.Contains("--source-connection", option.Aliases);
     }
 
     [Fact]
-    public void Create_HasRequiredTargetConnectionOption()
+    public void Create_HasTargetConnectionOption()
     {
         var option = _command.Options.FirstOrDefault(o => o.Name == "target-connection");
         Assert.NotNull(option);
-        Assert.True(option.IsRequired);
+        // Not required at parse time - can come from environment variable
+        Assert.False(option.IsRequired);
         Assert.Contains("--target", option.Aliases);
         Assert.Contains("--target-connection", option.Aliases);
     }
@@ -127,17 +129,19 @@ public class MigrateCommandTests
     }
 
     [Fact]
-    public void Parse_MissingSourceConnection_HasError()
+    public void Parse_MissingSourceConnection_NoParseError()
     {
+        // Connection can come from environment variable, so no parse error
         var result = _command.Parse("--target-connection target --schema schema.xml");
-        Assert.NotEmpty(result.Errors);
+        Assert.Empty(result.Errors);
     }
 
     [Fact]
-    public void Parse_MissingTargetConnection_HasError()
+    public void Parse_MissingTargetConnection_NoParseError()
     {
+        // Connection can come from environment variable, so no parse error
         var result = _command.Parse("--source-connection source --schema schema.xml");
-        Assert.NotEmpty(result.Errors);
+        Assert.Empty(result.Errors);
     }
 
     [Fact]

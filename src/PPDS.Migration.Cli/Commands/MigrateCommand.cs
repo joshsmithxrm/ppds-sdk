@@ -9,19 +9,13 @@ public static class MigrateCommand
 {
     public static Command Create()
     {
-        var sourceConnectionOption = new Option<string>(
+        var sourceConnectionOption = new Option<string?>(
             aliases: ["--source-connection", "--source"],
-            description: "Source Dataverse connection string")
-        {
-            IsRequired = true
-        };
+            description: ConnectionResolver.GetHelpDescription(ConnectionResolver.SourceConnectionEnvVar));
 
-        var targetConnectionOption = new Option<string>(
+        var targetConnectionOption = new Option<string?>(
             aliases: ["--target-connection", "--target"],
-            description: "Target Dataverse connection string")
-        {
-            IsRequired = true
-        };
+            description: ConnectionResolver.GetHelpDescription(ConnectionResolver.TargetConnectionEnvVar));
 
         var schemaOption = new Option<FileInfo>(
             aliases: ["--schema", "-s"],
@@ -74,8 +68,8 @@ public static class MigrateCommand
 
         command.SetHandler(async (context) =>
         {
-            var sourceConnection = context.ParseResult.GetValueForOption(sourceConnectionOption)!;
-            var targetConnection = context.ParseResult.GetValueForOption(targetConnectionOption)!;
+            var sourceArg = context.ParseResult.GetValueForOption(sourceConnectionOption);
+            var targetArg = context.ParseResult.GetValueForOption(targetConnectionOption);
             var schema = context.ParseResult.GetValueForOption(schemaOption)!;
             var tempDir = context.ParseResult.GetValueForOption(tempDirOption);
             var batchSize = context.ParseResult.GetValueForOption(batchSizeOption);
@@ -83,6 +77,28 @@ public static class MigrateCommand
             var bypassFlows = context.ParseResult.GetValueForOption(bypassFlowsOption);
             var json = context.ParseResult.GetValueForOption(jsonOption);
             var verbose = context.ParseResult.GetValueForOption(verboseOption);
+
+            // Resolve connection strings from arguments or environment variables
+            string sourceConnection;
+            string targetConnection;
+            try
+            {
+                sourceConnection = ConnectionResolver.Resolve(
+                    sourceArg,
+                    ConnectionResolver.SourceConnectionEnvVar,
+                    "source-connection");
+
+                targetConnection = ConnectionResolver.Resolve(
+                    targetArg,
+                    ConnectionResolver.TargetConnectionEnvVar,
+                    "target-connection");
+            }
+            catch (InvalidOperationException ex)
+            {
+                ConsoleOutput.WriteError(ex.Message, json);
+                context.ExitCode = ExitCodes.InvalidArguments;
+                return;
+            }
 
             context.ExitCode = await ExecuteAsync(
                 sourceConnection, targetConnection, schema, tempDir,

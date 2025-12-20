@@ -9,12 +9,9 @@ public static class ExportCommand
 {
     public static Command Create()
     {
-        var connectionOption = new Option<string>(
+        var connectionOption = new Option<string?>(
             aliases: ["--connection", "-c"],
-            description: "Dataverse connection string")
-        {
-            IsRequired = true
-        };
+            description: ConnectionResolver.GetHelpDescription(ConnectionResolver.ConnectionEnvVar));
 
         var schemaOption = new Option<FileInfo>(
             aliases: ["--schema", "-s"],
@@ -69,7 +66,7 @@ public static class ExportCommand
 
         command.SetHandler(async (context) =>
         {
-            var connection = context.ParseResult.GetValueForOption(connectionOption)!;
+            var connectionArg = context.ParseResult.GetValueForOption(connectionOption);
             var schema = context.ParseResult.GetValueForOption(schemaOption)!;
             var output = context.ParseResult.GetValueForOption(outputOption)!;
             var parallel = context.ParseResult.GetValueForOption(parallelOption);
@@ -77,6 +74,22 @@ public static class ExportCommand
             var includeFiles = context.ParseResult.GetValueForOption(includeFilesOption);
             var json = context.ParseResult.GetValueForOption(jsonOption);
             var verbose = context.ParseResult.GetValueForOption(verboseOption);
+
+            // Resolve connection string from argument or environment variable
+            string connection;
+            try
+            {
+                connection = ConnectionResolver.Resolve(
+                    connectionArg,
+                    ConnectionResolver.ConnectionEnvVar,
+                    "connection");
+            }
+            catch (InvalidOperationException ex)
+            {
+                ConsoleOutput.WriteError(ex.Message, json);
+                context.ExitCode = ExitCodes.InvalidArguments;
+                return;
+            }
 
             context.ExitCode = await ExecuteAsync(
                 connection, schema, output, parallel, pageSize,

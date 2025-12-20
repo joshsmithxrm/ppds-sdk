@@ -59,6 +59,38 @@ ppds-migrate migrate \
   --schema ./schema.xml
 ```
 
+## Security: Environment Variables
+
+Connection strings contain sensitive credentials. To avoid exposing them in command-line arguments (which may appear in process listings or shell history), use environment variables:
+
+| Environment Variable | Used By | Description |
+|---------------------|---------|-------------|
+| `PPDS_CONNECTION` | `export`, `import` | Default connection string |
+| `PPDS_SOURCE_CONNECTION` | `migrate` | Source environment connection |
+| `PPDS_TARGET_CONNECTION` | `migrate` | Target environment connection |
+
+**Example using environment variables:**
+
+```bash
+# Set credentials once (in your CI/CD pipeline or shell profile)
+export PPDS_CONNECTION="AuthType=ClientSecret;Url=https://org.crm.dynamics.com;ClientId=xxx;ClientSecret=xxx"
+
+# Commands use environment variable automatically
+ppds-migrate export --schema ./schema.xml --output ./data.zip
+ppds-migrate import --data ./data.zip --bypass-plugins
+```
+
+**Example for migration:**
+
+```bash
+export PPDS_SOURCE_CONNECTION="AuthType=ClientSecret;Url=https://source.crm.dynamics.com;..."
+export PPDS_TARGET_CONNECTION="AuthType=ClientSecret;Url=https://target.crm.dynamics.com;..."
+
+ppds-migrate migrate --schema ./schema.xml
+```
+
+**Priority:** Command-line arguments take precedence over environment variables.
+
 ## Exit Codes
 
 | Code | Meaning |

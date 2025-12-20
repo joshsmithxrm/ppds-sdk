@@ -29,11 +29,12 @@ public class ExportCommandTests
     }
 
     [Fact]
-    public void Create_HasRequiredConnectionOption()
+    public void Create_HasConnectionOption()
     {
         var option = _command.Options.FirstOrDefault(o => o.Name == "connection");
         Assert.NotNull(option);
-        Assert.True(option.IsRequired);
+        // Not required at parse time - can come from environment variable
+        Assert.False(option.IsRequired);
         Assert.Contains("-c", option.Aliases);
         Assert.Contains("--connection", option.Aliases);
     }
@@ -119,10 +120,11 @@ public class ExportCommandTests
     }
 
     [Fact]
-    public void Parse_MissingConnection_HasError()
+    public void Parse_MissingConnection_NoParseError()
     {
+        // Connection can come from environment variable, so no parse error
         var result = _command.Parse("--schema schema.xml --output data.zip");
-        Assert.NotEmpty(result.Errors);
+        Assert.Empty(result.Errors);
     }
 
     [Fact]

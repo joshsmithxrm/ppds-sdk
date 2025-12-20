@@ -156,6 +156,93 @@ Console.WriteLine($"Throttled: {stats.ThrottledConnections}");
 Console.WriteLine($"Requests: {stats.RequestsServed}");
 ```
 
+## Security
+
+### Connection String Handling
+
+Connection strings contain sensitive credentials. This library provides built-in protection:
+
+**Automatic Redaction:** Connection strings are automatically redacted in logs and error messages:
+
+```csharp
+using PPDS.Dataverse.Security;
+
+// Redacts ClientSecret, Password, and other sensitive values
+var safe = ConnectionStringRedactor.Redact(connectionString);
+// "AuthType=ClientSecret;Url=https://org.crm.dynamics.com;ClientId=xxx;ClientSecret=***REDACTED***"
+```
+
+**Exception Safety:** Connection errors throw `DataverseConnectionException` with sanitized messages:
+
+```csharp
+try
+{
+    await using var client = await pool.GetClientAsync();
+}
+catch (DataverseConnectionException ex)
+{
+    // ex.Message is safe to log - credentials are redacted
+    logger.LogError(ex, "Connection failed for {Connection}", ex.ConnectionName);
+}
+```
+
+**Safe ToString:** `DataverseConnection.ToString()` excludes credentials:
+
+```csharp
+var connection = new DataverseConnection("Primary", connectionString);
+Console.WriteLine(connection); // "DataverseConnection { Name = Primary, MaxPoolSize = 10 }"
+```
+
+### Best Practices
+
+1. **Use Environment Variables** instead of hardcoding connection strings:
+
+   ```csharp
+   var connectionString = Environment.GetEnvironmentVariable("DATAVERSE_CONNECTION");
+   ```
+
+2. **Use Azure Key Vault** for production deployments:
+
+   ```csharp
+   builder.Configuration.AddAzureKeyVault(
+       new Uri("https://your-vault.vault.azure.net/"),
+       new DefaultAzureCredential());
+   ```
+
+3. **Use Managed Identity** when running in Azure:
+
+   ```
+   AuthType=OAuth;Url=https://org.crm.dynamics.com;
+   AppId=your-client-id;RedirectUri=http://localhost;
+   TokenCacheStorePath=token.cache;LoginPrompt=Never
+   ```
+
+4. **Never log connection strings directly:**
+
+   ```csharp
+   // DON'T
+   logger.LogInformation("Connecting with: {ConnectionString}", connectionString);
+
+   // DO
+   logger.LogInformation("Connecting to: {Name}", connection.Name);
+   // Or if you need the URL:
+   logger.LogInformation("Connecting with: {Redacted}", connection.GetRedactedConnectionString());
+   ```
+
+### Sensitive Data Attribute
+
+Properties containing sensitive data are marked with `[SensitiveData]` for documentation and static analysis:
+
+```csharp
+public class DataverseConnection
+{
+    public string Name { get; set; }
+
+    [SensitiveData(Reason = "Contains authentication credentials", DataType = "ConnectionString")]
+    public string ConnectionString { get; set; }
+}
+```
+
 ## Target Frameworks
 
 - `net8.0`

@@ -9,12 +9,9 @@ public static class ImportCommand
 {
     public static Command Create()
     {
-        var connectionOption = new Option<string>(
+        var connectionOption = new Option<string?>(
             aliases: ["--connection", "-c"],
-            description: "Dataverse connection string")
-        {
-            IsRequired = true
-        };
+            description: ConnectionResolver.GetHelpDescription(ConnectionResolver.ConnectionEnvVar));
 
         var dataOption = new Option<FileInfo>(
             aliases: ["--data", "-d"],
@@ -73,7 +70,7 @@ public static class ImportCommand
 
         command.SetHandler(async (context) =>
         {
-            var connection = context.ParseResult.GetValueForOption(connectionOption)!;
+            var connectionArg = context.ParseResult.GetValueForOption(connectionOption);
             var data = context.ParseResult.GetValueForOption(dataOption)!;
             var batchSize = context.ParseResult.GetValueForOption(batchSizeOption);
             var bypassPlugins = context.ParseResult.GetValueForOption(bypassPluginsOption);
@@ -82,6 +79,22 @@ public static class ImportCommand
             var mode = context.ParseResult.GetValueForOption(modeOption);
             var json = context.ParseResult.GetValueForOption(jsonOption);
             var verbose = context.ParseResult.GetValueForOption(verboseOption);
+
+            // Resolve connection string from argument or environment variable
+            string connection;
+            try
+            {
+                connection = ConnectionResolver.Resolve(
+                    connectionArg,
+                    ConnectionResolver.ConnectionEnvVar,
+                    "connection");
+            }
+            catch (InvalidOperationException ex)
+            {
+                ConsoleOutput.WriteError(ex.Message, json);
+                context.ExitCode = ExitCodes.InvalidArguments;
+                return;
+            }
 
             context.ExitCode = await ExecuteAsync(
                 connection, data, batchSize, bypassPlugins, bypassFlows,
