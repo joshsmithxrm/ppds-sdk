@@ -220,10 +220,10 @@ namespace PPDS.Migration.Formats
                 "int" or "integer" => int.TryParse(value, out var i) ? i : null,
                 "decimal" or "money" => decimal.TryParse(value, NumberStyles.Any, CultureInfo.InvariantCulture, out var d) ? d : null,
                 "float" or "double" => double.TryParse(value, NumberStyles.Any, CultureInfo.InvariantCulture, out var f) ? f : null,
-                "bool" or "boolean" => bool.TryParse(value, out var b) ? b : null,
+                "bool" or "boolean" => value == "1" || (bool.TryParse(value, out var b) && b),
                 "datetime" => DateTime.TryParse(value, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out var dt) ? dt : null,
                 "guid" or "uniqueidentifier" => Guid.TryParse(value, out var g) ? g : null,
-                "lookup" or "customer" or "owner" => ParseEntityReference(element),
+                "lookup" or "customer" or "owner" or "entityreference" => ParseEntityReference(element),
                 "optionset" or "picklist" => ParseOptionSetValue(value),
                 "state" or "status" => ParseOptionSetValue(value),
                 _ => value // Return as string for unknown types
@@ -232,9 +232,16 @@ namespace PPDS.Migration.Formats
 
         private EntityReference? ParseEntityReference(XElement element)
         {
-            var idValue = element.Attribute("value")?.Value ?? element.Attribute("id")?.Value;
-            var entityName = element.Attribute("lookupentity")?.Value ?? element.Attribute("type")?.Value;
-            var name = element.Attribute("lookupentityname")?.Value ?? element.Attribute("name")?.Value;
+            // CMT format: GUID is element content, entity name is lookupentity attribute
+            var idValue = element.Value;  // Element content (CMT format)
+            if (string.IsNullOrEmpty(idValue))
+            {
+                // Fallback for other formats
+                idValue = element.Attribute("value")?.Value ?? element.Attribute("id")?.Value;
+            }
+
+            var entityName = element.Attribute("lookupentity")?.Value;
+            var name = element.Attribute("lookupentityname")?.Value;
 
             if (string.IsNullOrEmpty(idValue) || !Guid.TryParse(idValue, out var id))
             {
