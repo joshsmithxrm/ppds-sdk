@@ -184,7 +184,7 @@ namespace PPDS.Plugins.Enums;        // Enums
 |------|---------|
 | Major versions | Sync with ppds-tools when attributes have breaking changes |
 | Minor/patch | Independent |
-| Pre-release format | `-alpha.N`, `-beta.N`, `-rc.N` suffix in git tag |
+| Pre-release format | `-alphaN`, `-betaN`, `-rcN` suffix in git tag |
 
 ### Breaking Changes Requiring Coordination
 

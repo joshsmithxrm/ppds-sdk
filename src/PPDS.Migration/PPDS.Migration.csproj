@@ -16,7 +16,7 @@
 
     <!-- NuGet Package Metadata -->
     <PackageId>PPDS.Migration</PackageId>
-    <Version>1.0.0-alpha.1</Version>
+    <Version>1.0.0-alpha1</Version>
     <Authors>Josh Smith</Authors>
     <Company>Power Platform Developer Suite</Company>
     <Description>High-performance Dataverse data migration engine. Provides parallel export,
