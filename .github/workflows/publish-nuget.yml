@@ -18,23 +18,36 @@ jobs:
           8.0.x
           10.0.x
 
-    - name: Get version from tag
-      id: version
+    - name: Show release tag
       shell: bash
       run: |
-        # Extract version from tag (v1.0.0-alpha.1 -> 1.0.0-alpha.1)
+        # Extract version from tag for logging
         VERSION=${GITHUB_REF#refs/tags/v}
-        echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
-        echo "Publishing version: $VERSION"
+        echo "Release triggered by tag: v$VERSION"
+
+    - name: Show package versions
+      shell: pwsh
+      run: |
+        Write-Host "Package versions from csproj files:" -ForegroundColor Cyan
+        Get-ChildItem -Path src -Filter "*.csproj" -Recurse | ForEach-Object {
+          $content = Get-Content $_.FullName -Raw
+          if ($content -match '<PackageId>([^<]+)</PackageId>') {
+            $packageId = $Matches[1]
+            if ($content -match '<Version>([^<]+)</Version>') {
+              $version = $Matches[1]
+              Write-Host "  $packageId : $version"
+            }
+          }
+        }
 
     - name: Restore dependencies
       run: dotnet restore
 
     - name: Build
-      run: dotnet build --configuration Release --no-restore -p:Version=${{ steps.version.outputs.VERSION }}
+      run: dotnet build --configuration Release --no-restore
 
     - name: Pack
-      run: dotnet pack --configuration Release --no-build --output ./nupkgs -p:Version=${{ steps.version.outputs.VERSION }}
+      run: dotnet pack --configuration Release --no-build --output ./nupkgs
 
     - name: List packages
       shell: bash
