@@ -106,20 +106,22 @@ namespace PPDS.Migration.Formats
             await dataStream.CopyToAsync(dataMemoryStream, cancellationToken).ConfigureAwait(false);
             dataMemoryStream.Position = 0;
 
-            var entityData = await ParseDataXmlAsync(dataMemoryStream, schema, progress, cancellationToken).ConfigureAwait(false);
+            var (entityData, relationshipData) = await ParseDataXmlAsync(dataMemoryStream, schema, progress, cancellationToken).ConfigureAwait(false);
 
-            _logger?.LogInformation("Parsed data with {RecordCount} total records", entityData.Values.Sum(v => v.Count));
+            _logger?.LogInformation("Parsed data with {RecordCount} total records and {M2MCount} M2M relationship groups",
+                entityData.Values.Sum(v => v.Count),
+                relationshipData.Values.Sum(v => v.Count));
 
             return new MigrationData
             {
                 Schema = schema,
                 EntityData = entityData,
-                RelationshipData = new Dictionary<string, IReadOnlyList<ManyToManyAssociation>>(),
+                RelationshipData = relationshipData,
                 ExportedAt = DateTime.UtcNow
             };
         }
 
-        private async Task<IReadOnlyDictionary<string, IReadOnlyList<Entity>>> ParseDataXmlAsync(
+        private async Task<(IReadOnlyDictionary<string, IReadOnlyList<Entity>>, IReadOnlyDictionary<string, IReadOnlyList<ManyToManyRelationshipData>>)> ParseDataXmlAsync(
             Stream stream,
             MigrationSchema schema,
             IProgressReporter? progress,
@@ -137,7 +139,8 @@ namespace PPDS.Migration.Formats
                 ? root
                 : root.Element("entities") ?? throw new InvalidOperationException("Data XML has no <entities> element");
 
-            var result = new Dictionary<string, IReadOnlyList<Entity>>(StringComparer.OrdinalIgnoreCase);
+            var entityResult = new Dictionary<string, IReadOnlyList<Entity>>(StringComparer.OrdinalIgnoreCase);
+            var relationshipResult = new Dictionary<string, IReadOnlyList<ManyToManyRelationshipData>>(StringComparer.OrdinalIgnoreCase);
 
             foreach (var entityElement in entitiesElement.Elements("entity"))
             {
@@ -163,8 +166,66 @@ namespace PPDS.Migration.Formats
 
                 if (records.Count > 0)
                 {
-                    result[entityName] = records;
+                    entityResult[entityName] = records;
                     _logger?.LogDebug("Parsed {Count} records for entity {Entity}", records.Count, entityName);
+                }
+
+                // Parse M2M relationships
+                var m2mElement = entityElement.Element("m2mrelationships");
+                if (m2mElement != null)
+                {
+                    var m2mData = ParseM2MRelationships(m2mElement, entityName);
+                    if (m2mData.Count > 0)
+                    {
+                        relationshipResult[entityName] = m2mData;
+                        _logger?.LogDebug("Parsed {Count} M2M relationship groups for entity {Entity}", m2mData.Count, entityName);
+                    }
+                }
+            }
+
+            return (entityResult, relationshipResult);
+        }
+
+        private List<ManyToManyRelationshipData> ParseM2MRelationships(XElement element, string sourceEntityName)
+        {
+            var result = new List<ManyToManyRelationshipData>();
+
+            foreach (var m2mRel in element.Elements("m2mrelationship"))
+            {
+                var sourceId = m2mRel.Attribute("sourceid")?.Value;
+                var targetEntityName = m2mRel.Attribute("targetentityname")?.Value;
+                var targetEntityPrimaryKey = m2mRel.Attribute("targetentitynameidfield")?.Value;
+                var relationshipName = m2mRel.Attribute("m2mrelationshipname")?.Value;
+
+                if (string.IsNullOrEmpty(sourceId) || !Guid.TryParse(sourceId, out var sourceGuid))
+                {
+                    continue;
+                }
+
+                var targetIds = new List<Guid>();
+                var targetIdsElement = m2mRel.Element("targetids");
+                if (targetIdsElement != null)
+                {
+                    foreach (var targetIdElement in targetIdsElement.Elements("targetid"))
+                    {
+                        if (Guid.TryParse(targetIdElement.Value, out var targetGuid))
+                        {
+                            targetIds.Add(targetGuid);
+                        }
+                    }
+                }
+
+                if (targetIds.Count > 0)
+                {
+                    result.Add(new ManyToManyRelationshipData
+                    {
+                        RelationshipName = relationshipName ?? string.Empty,
+                        SourceEntityName = sourceEntityName,
+                        SourceId = sourceGuid,
+                        TargetEntityName = targetEntityName ?? string.Empty,
+                        TargetEntityPrimaryKey = targetEntityPrimaryKey ?? string.Empty,
+                        TargetIds = targetIds
+                    });
                 }
             }
 

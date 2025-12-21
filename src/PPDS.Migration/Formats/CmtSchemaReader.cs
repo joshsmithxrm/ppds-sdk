@@ -180,18 +180,27 @@ namespace PPDS.Migration.Formats
         {
             var name = element.Attribute("name")?.Value ?? string.Empty;
             var isManyToMany = ParseBool(element.Attribute("manyToMany")?.Value);
+            var isReflexive = ParseBool(element.Attribute("isreflexive")?.Value);
             var relatedEntity = element.Attribute("relatedEntityName")?.Value ?? string.Empty;
             var intersectEntity = element.Attribute("intersectEntityName")?.Value;
 
             string entity1, entity1Attribute, entity2, entity2Attribute;
+            string? targetEntityPrimaryKey = null;
 
             if (isManyToMany)
             {
                 // M2M relationship
+                // In CMT format: relatedEntityName is the intersect entity, m2mTargetEntity is the target
                 entity1 = parentEntity;
                 entity1Attribute = string.Empty;
                 entity2 = element.Attribute("m2mTargetEntity")?.Value ?? relatedEntity;
-                entity2Attribute = element.Attribute("m2mTargetEntityPrimaryKey")?.Value ?? string.Empty;
+                entity2Attribute = string.Empty;
+                targetEntityPrimaryKey = element.Attribute("m2mTargetEntityPrimaryKey")?.Value;
+                // If intersectEntity not explicitly set, use relatedEntityName for M2M
+                if (string.IsNullOrEmpty(intersectEntity))
+                {
+                    intersectEntity = relatedEntity;
+                }
             }
             else
             {
@@ -210,7 +219,9 @@ namespace PPDS.Migration.Formats
                 Entity2 = entity2,
                 Entity2Attribute = entity2Attribute,
                 IsManyToMany = isManyToMany,
-                IntersectEntity = intersectEntity
+                IsReflexive = isReflexive,
+                IntersectEntity = intersectEntity,
+                TargetEntityPrimaryKey = targetEntityPrimaryKey
             };
         }
 

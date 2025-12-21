@@ -147,21 +147,22 @@ namespace PPDS.Migration.Formats
             await writer.WriteStartElementAsync(null, "relationship", null).ConfigureAwait(false);
             await writer.WriteAttributeStringAsync(null, "name", null, rel.Name).ConfigureAwait(false);
             await writer.WriteAttributeStringAsync(null, "manyToMany", null, rel.IsManyToMany.ToString().ToLowerInvariant()).ConfigureAwait(false);
-            await writer.WriteAttributeStringAsync(null, "relatedEntityName", null, rel.Entity2).ConfigureAwait(false);
 
             if (rel.IsManyToMany)
             {
-                // M2M relationship attributes
+                // M2M relationship attributes - CMT format
+                // relatedEntityName = intersect entity (e.g., "systemuserroles")
+                // m2mTargetEntity = target entity (e.g., "role")
+                // m2mTargetEntityPrimaryKey = target entity's PK (e.g., "roleid")
+                await writer.WriteAttributeStringAsync(null, "isreflexive", null, rel.IsReflexive.ToString().ToLowerInvariant()).ConfigureAwait(false);
+                await writer.WriteAttributeStringAsync(null, "relatedEntityName", null, rel.IntersectEntity ?? rel.Name).ConfigureAwait(false);
                 await writer.WriteAttributeStringAsync(null, "m2mTargetEntity", null, rel.Entity2).ConfigureAwait(false);
-                await writer.WriteAttributeStringAsync(null, "m2mTargetEntityPrimaryKey", null, rel.Entity2Attribute).ConfigureAwait(false);
-                if (!string.IsNullOrEmpty(rel.IntersectEntity))
-                {
-                    await writer.WriteAttributeStringAsync(null, "intersectEntityName", null, rel.IntersectEntity).ConfigureAwait(false);
-                }
+                await writer.WriteAttributeStringAsync(null, "m2mTargetEntityPrimaryKey", null, rel.TargetEntityPrimaryKey ?? $"{rel.Entity2}id").ConfigureAwait(false);
             }
             else
             {
                 // One-to-many relationship attributes
+                await writer.WriteAttributeStringAsync(null, "relatedEntityName", null, rel.Entity2).ConfigureAwait(false);
                 await writer.WriteAttributeStringAsync(null, "referencingEntity", null, rel.Entity1).ConfigureAwait(false);
                 await writer.WriteAttributeStringAsync(null, "referencingAttribute", null, rel.Entity1Attribute).ConfigureAwait(false);
                 await writer.WriteAttributeStringAsync(null, "referencedEntity", null, rel.Entity2).ConfigureAwait(false);

@@ -164,8 +164,18 @@ namespace PPDS.Migration.Formats
                 }
 
                 await writer.WriteEndElementAsync().ConfigureAwait(false); // records
+
+                // Write m2mrelationships
                 await writer.WriteStartElementAsync(null, "m2mrelationships", null).ConfigureAwait(false);
+                if (data.RelationshipData.TryGetValue(entityName, out var m2mList))
+                {
+                    foreach (var m2m in m2mList)
+                    {
+                        await WriteM2MRelationshipAsync(writer, m2m).ConfigureAwait(false);
+                    }
+                }
                 await writer.WriteEndElementAsync().ConfigureAwait(false); // m2mrelationships
+
                 await writer.WriteEndElementAsync().ConfigureAwait(false); // entity
             }
 
@@ -250,6 +260,24 @@ namespace PPDS.Migration.Formats
             }
 
             await writer.WriteEndElementAsync().ConfigureAwait(false); // field
+        }
+
+        private async Task WriteM2MRelationshipAsync(XmlWriter writer, ManyToManyRelationshipData m2m)
+        {
+            await writer.WriteStartElementAsync(null, "m2mrelationship", null).ConfigureAwait(false);
+            await writer.WriteAttributeStringAsync(null, "sourceid", null, m2m.SourceId.ToString()).ConfigureAwait(false);
+            await writer.WriteAttributeStringAsync(null, "targetentityname", null, m2m.TargetEntityName).ConfigureAwait(false);
+            await writer.WriteAttributeStringAsync(null, "targetentitynameidfield", null, m2m.TargetEntityPrimaryKey).ConfigureAwait(false);
+            await writer.WriteAttributeStringAsync(null, "m2mrelationshipname", null, m2m.RelationshipName).ConfigureAwait(false);
+
+            await writer.WriteStartElementAsync(null, "targetids", null).ConfigureAwait(false);
+            foreach (var targetId in m2m.TargetIds)
+            {
+                await writer.WriteElementStringAsync(null, "targetid", null, targetId.ToString()).ConfigureAwait(false);
+            }
+            await writer.WriteEndElementAsync().ConfigureAwait(false); // targetids
+
+            await writer.WriteEndElementAsync().ConfigureAwait(false); // m2mrelationship
         }
 
         private async Task WriteSchemaXmlAsync(MigrationSchema schema, Stream stream, CancellationToken cancellationToken)
