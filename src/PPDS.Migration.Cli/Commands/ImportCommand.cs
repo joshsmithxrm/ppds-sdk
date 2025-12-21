@@ -1,7 +1,9 @@
 using System.CommandLine;
 using Microsoft.Extensions.DependencyInjection;
 using PPDS.Migration.Cli.Infrastructure;
+using PPDS.Migration.Formats;
 using PPDS.Migration.Import;
+using PPDS.Migration.Models;
 
 namespace PPDS.Migration.Cli.Commands;
 
@@ -48,6 +50,10 @@ public static class ImportCommand
             getDefaultValue: () => ImportMode.Upsert,
             description: "Import mode: Create, Update, or Upsert");
 
+        var userMappingOption = new Option<FileInfo?>(
+            aliases: ["--user-mapping", "-u"],
+            description: "Path to user mapping XML file for remapping user references");
+
         var jsonOption = new Option<bool>(
             name: "--json",
             getDefaultValue: () => false,
@@ -67,6 +73,7 @@ public static class ImportCommand
             bypassFlowsOption,
             continueOnErrorOption,
             modeOption,
+            userMappingOption,
             jsonOption,
             verboseOption
         };
@@ -80,6 +87,7 @@ public static class ImportCommand
             var bypassFlows = context.ParseResult.GetValueForOption(bypassFlowsOption);
             var continueOnError = context.ParseResult.GetValueForOption(continueOnErrorOption);
             var mode = context.ParseResult.GetValueForOption(modeOption);
+            var userMappingFile = context.ParseResult.GetValueForOption(userMappingOption);
             var json = context.ParseResult.GetValueForOption(jsonOption);
             var verbose = context.ParseResult.GetValueForOption(verboseOption);
 
@@ -87,6 +95,14 @@ public static class ImportCommand
             if (!data.Exists)
             {
                 ConsoleOutput.WriteError($"Data file not found: {data.FullName}", json);
+                context.ExitCode = ExitCodes.InvalidArguments;
+                return;
+            }
+
+            // Validate user mapping file if specified
+            if (userMappingFile != null && !userMappingFile.Exists)
+            {
+                ConsoleOutput.WriteError($"User mapping file not found: {userMappingFile.FullName}", json);
                 context.ExitCode = ExitCodes.InvalidArguments;
                 return;
             }
@@ -109,7 +125,7 @@ public static class ImportCommand
 
             context.ExitCode = await ExecuteAsync(
                 connection, data, batchSize, bypassPlugins, bypassFlows,
-                continueOnError, mode, json, verbose, context.GetCancellationToken());
+                continueOnError, mode, userMappingFile, json, verbose, context.GetCancellationToken());
         });
 
         return command;
@@ -123,6 +139,7 @@ public static class ImportCommand
         bool bypassFlows,
         bool continueOnError,
         ImportMode mode,
+        FileInfo? userMappingFile,
         bool json,
         bool verbose,
         CancellationToken cancellationToken)
@@ -134,6 +151,24 @@ public static class ImportCommand
             var importer = serviceProvider.GetRequiredService<IImporter>();
             var progressReporter = ServiceFactory.CreateProgressReporter(json);
 
+            // Load user mappings if provided
+            UserMappingCollection? userMappings = null;
+            if (userMappingFile != null)
+            {
+                if (!json)
+                {
+                    Console.WriteLine($"Loading user mappings from {userMappingFile.FullName}...");
+                }
+
+                var mappingReader = new UserMappingReader();
+                userMappings = await mappingReader.ReadAsync(userMappingFile.FullName, cancellationToken);
+
+                if (!json)
+                {
+                    Console.WriteLine($"Loaded {userMappings.Mappings.Count} user mapping(s).");
+                }
+            }
+
             // Configure import options
             var importOptions = new ImportOptions
             {
@@ -141,7 +176,8 @@ public static class ImportCommand
                 BypassCustomPluginExecution = bypassPlugins,
                 BypassPowerAutomateFlows = bypassFlows,
                 ContinueOnError = continueOnError,
-                Mode = MapImportMode(mode)
+                Mode = MapImportMode(mode),
+                UserMappings = userMappings
             };
 
             // Execute import

@@ -58,6 +58,7 @@ namespace PPDS.Migration.DependencyInjection
             services.AddTransient<IExporter, ParallelExporter>();
 
             // Import
+            services.AddTransient<IPluginStepManager, PluginStepManager>();
             services.AddTransient<IImporter, TieredImporter>();
 
             // Progress reporters

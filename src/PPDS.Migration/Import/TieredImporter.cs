@@ -28,6 +28,7 @@ namespace PPDS.Migration.Import
         private readonly ICmtDataReader _dataReader;
         private readonly IDependencyGraphBuilder _graphBuilder;
         private readonly IExecutionPlanBuilder _planBuilder;
+        private readonly IPluginStepManager? _pluginStepManager;
         private readonly ILogger<TieredImporter>? _logger;
 
         /// <summary>
@@ -56,9 +57,11 @@ namespace PPDS.Migration.Import
             ICmtDataReader dataReader,
             IDependencyGraphBuilder graphBuilder,
             IExecutionPlanBuilder planBuilder,
-            ILogger<TieredImporter> logger)
+            IPluginStepManager? pluginStepManager = null,
+            ILogger<TieredImporter>? logger = null)
             : this(connectionPool, bulkExecutor, dataReader, graphBuilder, planBuilder)
         {
+            _pluginStepManager = pluginStepManager;
             _logger = logger;
         }
 
@@ -109,6 +112,36 @@ namespace PPDS.Migration.Import
 
             _logger?.LogInformation("Starting tiered import: {Tiers} tiers, {Records} records",
                 plan.TierCount, data.TotalRecordCount);
+
+            // Disable plugins on entities with disableplugins=true
+            IReadOnlyList<Guid> disabledPluginSteps = Array.Empty<Guid>();
+            if (options.RespectDisablePluginsSetting && _pluginStepManager != null)
+            {
+                var entitiesToDisablePlugins = data.Schema.Entities
+                    .Where(e => e.DisablePlugins)
+                    .Select(e => e.LogicalName)
+                    .ToList();
+
+                if (entitiesToDisablePlugins.Count > 0)
+                {
+                    progress?.Report(new ProgressEventArgs
+                    {
+                        Phase = MigrationPhase.Analyzing,
+                        Message = $"Disabling plugins for {entitiesToDisablePlugins.Count} entities..."
+                    });
+
+                    disabledPluginSteps = await _pluginStepManager.GetActivePluginStepsAsync(
+                        entitiesToDisablePlugins, cancellationToken).ConfigureAwait(false);
+
+                    if (disabledPluginSteps.Count > 0)
+                    {
+                        await _pluginStepManager.DisablePluginStepsAsync(
+                            disabledPluginSteps, cancellationToken).ConfigureAwait(false);
+
+                        _logger?.LogInformation("Disabled {Count} plugin steps", disabledPluginSteps.Count);
+                    }
+                }
+            }
 
             try
             {
@@ -236,6 +269,30 @@ namespace PPDS.Migration.Import
                     }
                 };
             }
+            finally
+            {
+                // Re-enable plugins that were disabled
+                if (disabledPluginSteps.Count > 0 && _pluginStepManager != null)
+                {
+                    progress?.Report(new ProgressEventArgs
+                    {
+                        Phase = MigrationPhase.Complete,
+                        Message = $"Re-enabling {disabledPluginSteps.Count} plugin steps..."
+                    });
+
+                    try
+                    {
+                        await _pluginStepManager.EnablePluginStepsAsync(
+                            disabledPluginSteps, CancellationToken.None).ConfigureAwait(false);
+
+                        _logger?.LogInformation("Re-enabled {Count} plugin steps", disabledPluginSteps.Count);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger?.LogWarning(ex, "Failed to re-enable some plugin steps");
+                    }
+                }
+            }
         }
 
         private async Task<EntityImportResult> ImportEntityAsync(
@@ -261,7 +318,7 @@ namespace PPDS.Migration.Import
             var preparedRecords = new List<Entity>();
             foreach (var record in records)
             {
-                var prepared = PrepareRecordForImport(record, deferredSet, idMappings);
+                var prepared = PrepareRecordForImport(record, deferredSet, idMappings, options);
                 preparedRecords.Add(prepared);
             }
 
@@ -317,7 +374,8 @@ namespace PPDS.Migration.Import
         private Entity PrepareRecordForImport(
             Entity record,
             HashSet<string> deferredFields,
-            IdMappingCollection idMappings)
+            IdMappingCollection idMappings,
+            ImportOptions options)
         {
             var prepared = new Entity(record.LogicalName);
             prepared.Id = record.Id; // Keep original ID for mapping
@@ -333,11 +391,12 @@ namespace PPDS.Migration.Import
                 // Remap entity references
                 if (attr.Value is EntityReference er)
                 {
-                    if (idMappings.TryGetNewId(er.LogicalName, er.Id, out var newId))
+                    var mappedRef = RemapEntityReference(er, idMappings, options);
+                    if (mappedRef != null)
                     {
-                        prepared[attr.Key] = new EntityReference(er.LogicalName, newId);
+                        prepared[attr.Key] = mappedRef;
                     }
-                    // If not mapped yet, keep original (will be processed in deferred phase)
+                    // If null, skip the field (can't be mapped)
                 }
                 else
                 {
@@ -346,6 +405,39 @@ namespace PPDS.Migration.Import
             }
 
             return prepared;
+        }
+
+        private EntityReference? RemapEntityReference(
+            EntityReference er,
+            IdMappingCollection idMappings,
+            ImportOptions options)
+        {
+            // Check if this is a user reference that should use user mapping
+            if (IsUserReference(er.LogicalName) && options.UserMappings != null)
+            {
+                if (options.UserMappings.TryGetMappedUserId(er.Id, out var mappedUserId))
+                {
+                    return new EntityReference(er.LogicalName, mappedUserId);
+                }
+                // User mapping exists but no mapping found for this user
+                // Return original if no default, otherwise the default would have been returned
+                return new EntityReference(er.LogicalName, er.Id);
+            }
+
+            // Standard ID mapping for non-user references
+            if (idMappings.TryGetNewId(er.LogicalName, er.Id, out var newId))
+            {
+                return new EntityReference(er.LogicalName, newId);
+            }
+
+            // Return original - will be processed in deferred phase if needed
+            return new EntityReference(er.LogicalName, er.Id);
+        }
+
+        private static bool IsUserReference(string entityLogicalName)
+        {
+            return entityLogicalName.Equals("systemuser", StringComparison.OrdinalIgnoreCase) ||
+                   entityLogicalName.Equals("team", StringComparison.OrdinalIgnoreCase);
         }
 
         private async Task<BatchImportResult> ImportBatchAsync(

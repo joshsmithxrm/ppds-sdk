@@ -190,6 +190,14 @@ namespace PPDS.Migration.Schema
                     continue;
                 }
 
+                var isPrimaryKey = attr.LogicalName == metadata.PrimaryIdAttribute;
+
+                // Apply attribute filtering (primary key is always included)
+                if (!options.ShouldIncludeAttribute(attr.LogicalName, isPrimaryKey))
+                {
+                    continue;
+                }
+
                 // Skip system fields unless requested
                 if (!options.IncludeSystemFields && IsSystemField(attr.LogicalName))
                 {
@@ -204,7 +212,6 @@ namespace PPDS.Migration.Schema
 
                 var fieldType = GetFieldType(attr);
                 var lookupTargets = GetLookupTargets(attr);
-                var isPrimaryKey = attr.LogicalName == metadata.PrimaryIdAttribute;
 
                 yield return new FieldSchema
                 {

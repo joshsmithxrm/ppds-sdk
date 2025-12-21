@@ -57,6 +57,27 @@ public static class SchemaCommand
             getDefaultValue: () => false,
             description: "Set disableplugins=true on all entities");
 
+        var includeAttributesOption = new Option<string[]?>(
+            aliases: ["--include-attributes", "-a"],
+            description: "Only include these attributes (whitelist, comma-separated or multiple flags)")
+        {
+            AllowMultipleArgumentsPerToken = true
+        };
+
+        var excludeAttributesOption = new Option<string[]?>(
+            name: "--exclude-attributes",
+            description: "Exclude these attributes (blacklist, comma-separated)")
+        {
+            AllowMultipleArgumentsPerToken = true
+        };
+
+        var excludePatternsOption = new Option<string[]?>(
+            name: "--exclude-patterns",
+            description: "Exclude attributes matching patterns (e.g., 'new_*', '*_base')")
+        {
+            AllowMultipleArgumentsPerToken = true
+        };
+
         var jsonOption = new Option<bool>(
             name: "--json",
             getDefaultValue: () => false,
@@ -75,6 +96,9 @@ public static class SchemaCommand
             includeSystemFieldsOption,
             includeRelationshipsOption,
             disablePluginsOption,
+            includeAttributesOption,
+            excludeAttributesOption,
+            excludePatternsOption,
             jsonOption,
             verboseOption
         };
@@ -87,6 +111,9 @@ public static class SchemaCommand
             var includeSystemFields = context.ParseResult.GetValueForOption(includeSystemFieldsOption);
             var includeRelationships = context.ParseResult.GetValueForOption(includeRelationshipsOption);
             var disablePlugins = context.ParseResult.GetValueForOption(disablePluginsOption);
+            var includeAttributes = context.ParseResult.GetValueForOption(includeAttributesOption);
+            var excludeAttributes = context.ParseResult.GetValueForOption(excludeAttributesOption);
+            var excludePatterns = context.ParseResult.GetValueForOption(excludePatternsOption);
             var json = context.ParseResult.GetValueForOption(jsonOption);
             var verbose = context.ParseResult.GetValueForOption(verboseOption);
 
@@ -120,9 +147,15 @@ public static class SchemaCommand
                 return;
             }
 
+            // Parse attribute lists (handle comma-separated)
+            var includeAttrList = ParseAttributeList(includeAttributes);
+            var excludeAttrList = ParseAttributeList(excludeAttributes);
+            var excludePatternList = ParseAttributeList(excludePatterns);
+
             context.ExitCode = await ExecuteGenerateAsync(
                 connection, entityList, output,
                 includeSystemFields, includeRelationships, disablePlugins,
+                includeAttrList, excludeAttrList, excludePatternList,
                 json, verbose, context.GetCancellationToken());
         });
 
@@ -187,6 +220,20 @@ public static class SchemaCommand
         return command;
     }
 
+    private static List<string>? ParseAttributeList(string[]? input)
+    {
+        if (input == null || input.Length == 0)
+        {
+            return null;
+        }
+
+        return input
+            .SelectMany(a => a.Split(',', StringSplitOptions.RemoveEmptyEntries))
+            .Select(a => a.Trim())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+    }
+
     private static async Task<int> ExecuteGenerateAsync(
         string connection,
         List<string> entities,
@@ -194,6 +241,9 @@ public static class SchemaCommand
         bool includeSystemFields,
         bool includeRelationships,
         bool disablePlugins,
+        List<string>? includeAttributes,
+        List<string>? excludeAttributes,
+        List<string>? excludePatterns,
         bool json,
         bool verbose,
         CancellationToken cancellationToken)
@@ -203,6 +253,18 @@ public static class SchemaCommand
             if (!json)
             {
                 Console.WriteLine($"Generating schema for {entities.Count} entities...");
+                if (includeAttributes != null)
+                {
+                    Console.WriteLine($"  Including only: {string.Join(", ", includeAttributes)}");
+                }
+                if (excludeAttributes != null)
+                {
+                    Console.WriteLine($"  Excluding: {string.Join(", ", excludeAttributes)}");
+                }
+                if (excludePatterns != null)
+                {
+                    Console.WriteLine($"  Excluding patterns: {string.Join(", ", excludePatterns)}");
+                }
             }
 
             await using var serviceProvider = ServiceFactory.CreateProvider(connection);
@@ -214,7 +276,10 @@ public static class SchemaCommand
             {
                 IncludeSystemFields = includeSystemFields,
                 IncludeRelationships = includeRelationships,
-                DisablePluginsByDefault = disablePlugins
+                DisablePluginsByDefault = disablePlugins,
+                IncludeAttributes = includeAttributes,
+                ExcludeAttributes = excludeAttributes,
+                ExcludeAttributePatterns = excludePatterns
             };
 
             var schema = await generator.GenerateAsync(

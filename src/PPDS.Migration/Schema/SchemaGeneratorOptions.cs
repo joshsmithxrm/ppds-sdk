@@ -1,3 +1,7 @@
+using System;
+using System.Collections.Generic;
+using System.Text.RegularExpressions;
+
 namespace PPDS.Migration.Schema
 {
     /// <summary>
@@ -29,5 +33,84 @@ namespace PPDS.Migration.Schema
         /// Gets or sets the default value for disabling plugins during import. Default: false.
         /// </summary>
         public bool DisablePluginsByDefault { get; set; } = false;
+
+        /// <summary>
+        /// Gets or sets the attributes to include (whitelist). If set, only these attributes are included.
+        /// Takes precedence over ExcludeAttributes. Primary key is always included.
+        /// </summary>
+        public IReadOnlyList<string>? IncludeAttributes { get; set; }
+
+        /// <summary>
+        /// Gets or sets the attributes to exclude (blacklist). If set, these attributes are excluded.
+        /// Ignored if IncludeAttributes is set.
+        /// </summary>
+        public IReadOnlyList<string>? ExcludeAttributes { get; set; }
+
+        /// <summary>
+        /// Gets or sets attribute name patterns to exclude (e.g., "new_*", "*_base").
+        /// Uses glob-style wildcards (* matches any characters).
+        /// </summary>
+        public IReadOnlyList<string>? ExcludeAttributePatterns { get; set; }
+
+        /// <summary>
+        /// Determines if an attribute should be included based on the filtering options.
+        /// </summary>
+        /// <param name="attributeName">The attribute logical name.</param>
+        /// <param name="isPrimaryKey">Whether this attribute is the primary key.</param>
+        /// <returns>True if the attribute should be included.</returns>
+        public bool ShouldIncludeAttribute(string attributeName, bool isPrimaryKey)
+        {
+            // Primary key is always included
+            if (isPrimaryKey)
+            {
+                return true;
+            }
+
+            // Whitelist mode: only include specified attributes
+            if (IncludeAttributes != null && IncludeAttributes.Count > 0)
+            {
+                foreach (var attr in IncludeAttributes)
+                {
+                    if (attr.Equals(attributeName, StringComparison.OrdinalIgnoreCase))
+                    {
+                        return true;
+                    }
+                }
+                return false;
+            }
+
+            // Blacklist mode: exclude specified attributes
+            if (ExcludeAttributes != null)
+            {
+                foreach (var attr in ExcludeAttributes)
+                {
+                    if (attr.Equals(attributeName, StringComparison.OrdinalIgnoreCase))
+                    {
+                        return false;
+                    }
+                }
+            }
+
+            // Pattern exclusion
+            if (ExcludeAttributePatterns != null)
+            {
+                foreach (var pattern in ExcludeAttributePatterns)
+                {
+                    if (MatchesPattern(attributeName, pattern))
+                    {
+                        return false;
+                    }
+                }
+            }
+
+            return true;
+        }
+
+        private static bool MatchesPattern(string value, string pattern)
+        {
+            // Convert glob pattern to regex
+            var regexPattern = "^" + Regex.Escape(pattern).Replace("\\*", ".*") + "$";
+            return Regex.IsMatch(value, regexPattern, RegexOptions.IgnoreCase);
+        }
     }
 }
