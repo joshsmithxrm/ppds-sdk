@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
@@ -50,41 +51,59 @@ namespace PPDS.Dataverse.BulkOperations
             options ??= _options.BulkOperations;
             var entityList = entities.ToList();
 
-            _logger.LogInformation("CreateMultiple starting. Entity: {Entity}, Count: {Count}, ElasticTable: {ElasticTable}",
-                entityLogicalName, entityList.Count, options.ElasticTable);
+            _logger.LogInformation(
+                "CreateMultiple starting. Entity: {Entity}, Count: {Count}, ElasticTable: {ElasticTable}, Parallel: {Parallel}",
+                entityLogicalName, entityList.Count, options.ElasticTable, options.MaxParallelBatches);
 
             var stopwatch = Stopwatch.StartNew();
-            var allCreatedIds = new List<Guid>();
-            var allErrors = new List<BulkOperationError>();
-            var successCount = 0;
+            var batches = Batch(entityList, options.BatchSize).ToList();
 
-            foreach (var batch in Batch(entityList, options.BatchSize))
+            BulkOperationResult result;
+            if (options.MaxParallelBatches > 1 && batches.Count > 1)
             {
-                var batchResult = await ExecuteCreateMultipleBatchAsync(
-                    entityLogicalName, batch, options, cancellationToken);
+                result = await ExecuteBatchesParallelAsync(
+                    batches,
+                    batch => ExecuteCreateMultipleBatchAsync(entityLogicalName, batch, options, cancellationToken),
+                    options.MaxParallelBatches,
+                    cancellationToken);
+            }
+            else
+            {
+                var allCreatedIds = new List<Guid>();
+                var allErrors = new List<BulkOperationError>();
+                var successCount = 0;
 
-                successCount += batchResult.SuccessCount;
-                allErrors.AddRange(batchResult.Errors);
-                if (batchResult.CreatedIds != null)
+                foreach (var batch in batches)
                 {
-                    allCreatedIds.AddRange(batchResult.CreatedIds);
+                    var batchResult = await ExecuteCreateMultipleBatchAsync(
+                        entityLogicalName, batch, options, cancellationToken);
+
+                    successCount += batchResult.SuccessCount;
+                    allErrors.AddRange(batchResult.Errors);
+                    if (batchResult.CreatedIds != null)
+                    {
+                        allCreatedIds.AddRange(batchResult.CreatedIds);
+                    }
                 }
+
+                result = new BulkOperationResult
+                {
+                    SuccessCount = successCount,
+                    FailureCount = allErrors.Count,
+                    Errors = allErrors,
+                    Duration = stopwatch.Elapsed,
+                    CreatedIds = allCreatedIds.Count > 0 ? allCreatedIds : null
+                };
             }
 
             stopwatch.Stop();
+            result = result with { Duration = stopwatch.Elapsed };
 
             _logger.LogInformation(
                 "CreateMultiple completed. Entity: {Entity}, Success: {Success}, Failed: {Failed}, Duration: {Duration}ms",
-                entityLogicalName, successCount, allErrors.Count, stopwatch.ElapsedMilliseconds);
+                entityLogicalName, result.SuccessCount, result.FailureCount, stopwatch.ElapsedMilliseconds);
 
-            return new BulkOperationResult
-            {
-                SuccessCount = successCount,
-                FailureCount = allErrors.Count,
-                Errors = allErrors,
-                Duration = stopwatch.Elapsed,
-                CreatedIds = allCreatedIds.Count > 0 ? allCreatedIds : null
-            };
+            return result;
         }
 
         /// <inheritdoc />
@@ -97,35 +116,53 @@ namespace PPDS.Dataverse.BulkOperations
             options ??= _options.BulkOperations;
             var entityList = entities.ToList();
 
-            _logger.LogInformation("UpdateMultiple starting. Entity: {Entity}, Count: {Count}, ElasticTable: {ElasticTable}",
-                entityLogicalName, entityList.Count, options.ElasticTable);
+            _logger.LogInformation(
+                "UpdateMultiple starting. Entity: {Entity}, Count: {Count}, ElasticTable: {ElasticTable}, Parallel: {Parallel}",
+                entityLogicalName, entityList.Count, options.ElasticTable, options.MaxParallelBatches);
 
             var stopwatch = Stopwatch.StartNew();
-            var allErrors = new List<BulkOperationError>();
-            var successCount = 0;
+            var batches = Batch(entityList, options.BatchSize).ToList();
 
-            foreach (var batch in Batch(entityList, options.BatchSize))
+            BulkOperationResult result;
+            if (options.MaxParallelBatches > 1 && batches.Count > 1)
             {
-                var batchResult = await ExecuteUpdateMultipleBatchAsync(
-                    entityLogicalName, batch, options, cancellationToken);
+                result = await ExecuteBatchesParallelAsync(
+                    batches,
+                    batch => ExecuteUpdateMultipleBatchAsync(entityLogicalName, batch, options, cancellationToken),
+                    options.MaxParallelBatches,
+                    cancellationToken);
+            }
+            else
+            {
+                var allErrors = new List<BulkOperationError>();
+                var successCount = 0;
 
-                successCount += batchResult.SuccessCount;
-                allErrors.AddRange(batchResult.Errors);
+                foreach (var batch in batches)
+                {
+                    var batchResult = await ExecuteUpdateMultipleBatchAsync(
+                        entityLogicalName, batch, options, cancellationToken);
+
+                    successCount += batchResult.SuccessCount;
+                    allErrors.AddRange(batchResult.Errors);
+                }
+
+                result = new BulkOperationResult
+                {
+                    SuccessCount = successCount,
+                    FailureCount = allErrors.Count,
+                    Errors = allErrors,
+                    Duration = stopwatch.Elapsed
+                };
             }
 
             stopwatch.Stop();
+            result = result with { Duration = stopwatch.Elapsed };
 
             _logger.LogInformation(
                 "UpdateMultiple completed. Entity: {Entity}, Success: {Success}, Failed: {Failed}, Duration: {Duration}ms",
-                entityLogicalName, successCount, allErrors.Count, stopwatch.ElapsedMilliseconds);
+                entityLogicalName, result.SuccessCount, result.FailureCount, stopwatch.ElapsedMilliseconds);
 
-            return new BulkOperationResult
-            {
-                SuccessCount = successCount,
-                FailureCount = allErrors.Count,
-                Errors = allErrors,
-                Duration = stopwatch.Elapsed
-            };
+            return result;
         }
 
         /// <inheritdoc />
@@ -138,35 +175,53 @@ namespace PPDS.Dataverse.BulkOperations
             options ??= _options.BulkOperations;
             var entityList = entities.ToList();
 
-            _logger.LogInformation("UpsertMultiple starting. Entity: {Entity}, Count: {Count}, ElasticTable: {ElasticTable}",
-                entityLogicalName, entityList.Count, options.ElasticTable);
+            _logger.LogInformation(
+                "UpsertMultiple starting. Entity: {Entity}, Count: {Count}, ElasticTable: {ElasticTable}, Parallel: {Parallel}",
+                entityLogicalName, entityList.Count, options.ElasticTable, options.MaxParallelBatches);
 
             var stopwatch = Stopwatch.StartNew();
-            var allErrors = new List<BulkOperationError>();
-            var successCount = 0;
+            var batches = Batch(entityList, options.BatchSize).ToList();
 
-            foreach (var batch in Batch(entityList, options.BatchSize))
+            BulkOperationResult result;
+            if (options.MaxParallelBatches > 1 && batches.Count > 1)
             {
-                var batchResult = await ExecuteUpsertMultipleBatchAsync(
-                    entityLogicalName, batch, options, cancellationToken);
+                result = await ExecuteBatchesParallelAsync(
+                    batches,
+                    batch => ExecuteUpsertMultipleBatchAsync(entityLogicalName, batch, options, cancellationToken),
+                    options.MaxParallelBatches,
+                    cancellationToken);
+            }
+            else
+            {
+                var allErrors = new List<BulkOperationError>();
+                var successCount = 0;
 
-                successCount += batchResult.SuccessCount;
-                allErrors.AddRange(batchResult.Errors);
+                foreach (var batch in batches)
+                {
+                    var batchResult = await ExecuteUpsertMultipleBatchAsync(
+                        entityLogicalName, batch, options, cancellationToken);
+
+                    successCount += batchResult.SuccessCount;
+                    allErrors.AddRange(batchResult.Errors);
+                }
+
+                result = new BulkOperationResult
+                {
+                    SuccessCount = successCount,
+                    FailureCount = allErrors.Count,
+                    Errors = allErrors,
+                    Duration = stopwatch.Elapsed
+                };
             }
 
             stopwatch.Stop();
+            result = result with { Duration = stopwatch.Elapsed };
 
             _logger.LogInformation(
                 "UpsertMultiple completed. Entity: {Entity}, Success: {Success}, Failed: {Failed}, Duration: {Duration}ms",
-                entityLogicalName, successCount, allErrors.Count, stopwatch.ElapsedMilliseconds);
+                entityLogicalName, result.SuccessCount, result.FailureCount, stopwatch.ElapsedMilliseconds);
 
-            return new BulkOperationResult
-            {
-                SuccessCount = successCount,
-                FailureCount = allErrors.Count,
-                Errors = allErrors,
-                Duration = stopwatch.Elapsed
-            };
+            return result;
         }
 
         /// <inheritdoc />
@@ -179,44 +234,52 @@ namespace PPDS.Dataverse.BulkOperations
             options ??= _options.BulkOperations;
             var idList = ids.ToList();
 
-            _logger.LogInformation("DeleteMultiple starting. Entity: {Entity}, Count: {Count}, ElasticTable: {ElasticTable}",
-                entityLogicalName, idList.Count, options.ElasticTable);
+            _logger.LogInformation(
+                "DeleteMultiple starting. Entity: {Entity}, Count: {Count}, ElasticTable: {ElasticTable}, Parallel: {Parallel}",
+                entityLogicalName, idList.Count, options.ElasticTable, options.MaxParallelBatches);
 
             var stopwatch = Stopwatch.StartNew();
-            var allErrors = new List<BulkOperationError>();
-            var successCount = 0;
+            var batches = Batch(idList, options.BatchSize).ToList();
 
-            foreach (var batch in Batch(idList, options.BatchSize))
+            // Select the appropriate batch execution function based on table type
+            Func<List<Guid>, Task<BulkOperationResult>> executeBatch = options.ElasticTable
+                ? batch => ExecuteElasticDeleteBatchAsync(entityLogicalName, batch, options, cancellationToken)
+                : batch => ExecuteStandardDeleteBatchAsync(entityLogicalName, batch, options, cancellationToken);
+
+            BulkOperationResult result;
+            if (options.MaxParallelBatches > 1 && batches.Count > 1)
             {
-                BulkOperationResult batchResult;
-                if (options.ElasticTable)
+                result = await ExecuteBatchesParallelAsync(batches, executeBatch, options.MaxParallelBatches, cancellationToken);
+            }
+            else
+            {
+                var allErrors = new List<BulkOperationError>();
+                var successCount = 0;
+
+                foreach (var batch in batches)
                 {
-                    batchResult = await ExecuteElasticDeleteBatchAsync(
-                        entityLogicalName, batch, options, cancellationToken);
-                }
-                else
-                {
-                    batchResult = await ExecuteStandardDeleteBatchAsync(
-                        entityLogicalName, batch, options, cancellationToken);
+                    var batchResult = await executeBatch(batch);
+                    successCount += batchResult.SuccessCount;
+                    allErrors.AddRange(batchResult.Errors);
                 }
 
-                successCount += batchResult.SuccessCount;
-                allErrors.AddRange(batchResult.Errors);
+                result = new BulkOperationResult
+                {
+                    SuccessCount = successCount,
+                    FailureCount = allErrors.Count,
+                    Errors = allErrors,
+                    Duration = stopwatch.Elapsed
+                };
             }
 
             stopwatch.Stop();
+            result = result with { Duration = stopwatch.Elapsed };
 
             _logger.LogInformation(
                 "DeleteMultiple completed. Entity: {Entity}, Success: {Success}, Failed: {Failed}, Duration: {Duration}ms",
-                entityLogicalName, successCount, allErrors.Count, stopwatch.ElapsedMilliseconds);
+                entityLogicalName, result.SuccessCount, result.FailureCount, stopwatch.ElapsedMilliseconds);
 
-            return new BulkOperationResult
-            {
-                SuccessCount = successCount,
-                FailureCount = allErrors.Count,
-                Errors = allErrors,
-                Duration = stopwatch.Elapsed
-            };
+            return result;
         }
 
         private async Task<BulkOperationResult> ExecuteCreateMultipleBatchAsync(
@@ -660,6 +723,58 @@ namespace PPDS.Dataverse.BulkOperations
             }
 
             return false;
+        }
+
+        /// <summary>
+        /// Executes batches in parallel with bounded concurrency.
+        /// </summary>
+        private static async Task<BulkOperationResult> ExecuteBatchesParallelAsync<T>(
+            List<List<T>> batches,
+            Func<List<T>, Task<BulkOperationResult>> executeBatch,
+            int maxParallelism,
+            CancellationToken cancellationToken)
+        {
+            var allErrors = new ConcurrentBag<BulkOperationError>();
+            var allCreatedIds = new ConcurrentBag<Guid>();
+            var successCount = 0;
+            var failureCount = 0;
+
+            await Parallel.ForEachAsync(
+                batches,
+                new ParallelOptions
+                {
+                    MaxDegreeOfParallelism = maxParallelism,
+                    CancellationToken = cancellationToken
+                },
+                async (batch, ct) =>
+                {
+                    var batchResult = await executeBatch(batch).ConfigureAwait(false);
+
+                    Interlocked.Add(ref successCount, batchResult.SuccessCount);
+                    Interlocked.Add(ref failureCount, batchResult.FailureCount);
+
+                    foreach (var error in batchResult.Errors)
+                    {
+                        allErrors.Add(error);
+                    }
+
+                    if (batchResult.CreatedIds != null)
+                    {
+                        foreach (var id in batchResult.CreatedIds)
+                        {
+                            allCreatedIds.Add(id);
+                        }
+                    }
+                }).ConfigureAwait(false);
+
+            return new BulkOperationResult
+            {
+                SuccessCount = successCount,
+                FailureCount = failureCount,
+                Errors = allErrors.ToList(),
+                Duration = TimeSpan.Zero,
+                CreatedIds = allCreatedIds.Count > 0 ? allCreatedIds.ToList() : null
+            };
         }
 
         private static IEnumerable<List<T>> Batch<T>(IEnumerable<T> source, int batchSize)

@@ -79,5 +79,23 @@ namespace PPDS.Dataverse.BulkOperations
         /// Default: false
         /// </summary>
         public bool SuppressDuplicateDetection { get; set; } = false;
+
+        /// <summary>
+        /// Gets or sets the maximum number of batches to process in parallel.
+        /// <para>
+        /// When set to 1 (default), batches are processed sequentially.
+        /// Higher values enable parallel processing for improved throughput.
+        /// </para>
+        /// <para>
+        /// Recommended values:
+        /// <list type="bullet">
+        /// <item>1 - Sequential processing (safest, default)</item>
+        /// <item>4-8 - Good balance of throughput and resource usage</item>
+        /// <item>Higher values may hit Dataverse service protection limits</item>
+        /// </list>
+        /// </para>
+        /// Default: 1
+        /// </summary>
+        public int MaxParallelBatches { get; set; } = 1;
     }
 }

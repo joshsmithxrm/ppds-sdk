@@ -233,13 +233,17 @@ namespace PPDS.Migration.Import
                     Errors = errors.ToArray()
                 };
 
+                // Calculate record-level failure count from entity results
+                var recordFailureCount = entityResults.Sum(r => r.FailureCount);
+
                 progress?.Complete(new MigrationResult
                 {
                     Success = result.Success,
-                    RecordsProcessed = result.RecordsImported + result.RecordsUpdated,
-                    SuccessCount = result.RecordsImported,
-                    FailureCount = errors.Count,
-                    Duration = result.Duration
+                    RecordsProcessed = result.RecordsImported + result.RecordsUpdated + recordFailureCount,
+                    SuccessCount = result.RecordsImported + result.RecordsUpdated,
+                    FailureCount = recordFailureCount,
+                    Duration = result.Duration,
+                    Errors = errors.ToArray()
                 });
 
                 return result;
@@ -353,6 +357,8 @@ namespace PPDS.Migration.Import
                     TierNumber = tierNumber,
                     Current = successCount + failureCount,
                     Total = records.Count,
+                    SuccessCount = successCount,
+                    FailureCount = failureCount,
                     RecordsPerSecond = rps
                 });
             }
@@ -379,6 +385,14 @@ namespace PPDS.Migration.Import
         {
             var prepared = new Entity(record.LogicalName);
             prepared.Id = record.Id; // Keep original ID for mapping
+
+            // UpsertMultiple requires the primary key as an attribute, not just Entity.Id
+            // Entity.Id is ignored during creation; must add as attribute for deterministic IDs
+            if (record.Id != Guid.Empty)
+            {
+                var primaryKeyName = $"{record.LogicalName}id";
+                prepared[primaryKeyName] = record.Id;
+            }
 
             foreach (var attr in record.Attributes)
             {
@@ -537,12 +551,9 @@ namespace PPDS.Migration.Import
                     continue;
                 }
 
-                progress?.Report(new ProgressEventArgs
-                {
-                    Phase = MigrationPhase.ProcessingDeferredFields,
-                    Entity = entityName,
-                    Message = $"Updating deferred fields: {string.Join(", ", fields)}"
-                });
+                var fieldList = string.Join(", ", fields);
+                var processed = 0;
+                var updated = 0;
 
                 foreach (var record in records)
                 {
@@ -550,6 +561,7 @@ namespace PPDS.Migration.Import
 
                     if (!idMappings.TryGetNewId(entityName, record.Id, out var newId))
                     {
+                        processed++;
                         continue;
                     }
 
@@ -573,6 +585,24 @@ namespace PPDS.Migration.Import
                         await using var client = await _connectionPool.GetClientAsync(null, cancellationToken).ConfigureAwait(false);
                         await client.UpdateAsync(update).ConfigureAwait(false);
                         totalUpdated++;
+                        updated++;
+                    }
+
+                    processed++;
+
+                    // Report progress periodically (every 100 records or at completion)
+                    if (processed % 100 == 0 || processed == records.Count)
+                    {
+                        progress?.Report(new ProgressEventArgs
+                        {
+                            Phase = MigrationPhase.ProcessingDeferredFields,
+                            Entity = entityName,
+                            Field = fieldList,
+                            Current = processed,
+                            Total = records.Count,
+                            SuccessCount = updated,
+                            Message = $"Updating deferred fields: {fieldList}"
+                        });
                     }
                 }
             }
