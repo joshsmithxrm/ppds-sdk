@@ -315,6 +315,9 @@ namespace PPDS.Dataverse.BulkOperations
             BulkOperationOptions options,
             CancellationToken cancellationToken)
         {
+            _logger.LogDebug("Executing CreateMultiple batch. Entity: {Entity}, BatchSize: {BatchSize}",
+                entityLogicalName, batch.Count);
+
             await using var client = await _connectionPool.GetClientAsync(cancellationToken: cancellationToken);
 
             var targets = new EntityCollection(batch) { EntityName = entityLogicalName };
@@ -325,6 +328,9 @@ namespace PPDS.Dataverse.BulkOperations
             try
             {
                 var response = (CreateMultipleResponse)await client.ExecuteAsync(request, cancellationToken);
+
+                _logger.LogDebug("CreateMultiple batch completed. Entity: {Entity}, Created: {Created}",
+                    entityLogicalName, response.Ids.Length);
 
                 return new BulkOperationResult
                 {
@@ -376,6 +382,9 @@ namespace PPDS.Dataverse.BulkOperations
             BulkOperationOptions options,
             CancellationToken cancellationToken)
         {
+            _logger.LogDebug("Executing UpdateMultiple batch. Entity: {Entity}, BatchSize: {BatchSize}",
+                entityLogicalName, batch.Count);
+
             await using var client = await _connectionPool.GetClientAsync(cancellationToken: cancellationToken);
 
             var targets = new EntityCollection(batch) { EntityName = entityLogicalName };
@@ -386,6 +395,9 @@ namespace PPDS.Dataverse.BulkOperations
             try
             {
                 await client.ExecuteAsync(request, cancellationToken);
+
+                _logger.LogDebug("UpdateMultiple batch completed. Entity: {Entity}, Updated: {Updated}",
+                    entityLogicalName, batch.Count);
 
                 return new BulkOperationResult
                 {
@@ -434,6 +446,9 @@ namespace PPDS.Dataverse.BulkOperations
             BulkOperationOptions options,
             CancellationToken cancellationToken)
         {
+            _logger.LogDebug("Executing UpsertMultiple batch. Entity: {Entity}, BatchSize: {BatchSize}",
+                entityLogicalName, batch.Count);
+
             await using var client = await _connectionPool.GetClientAsync(cancellationToken: cancellationToken);
 
             var targets = new EntityCollection(batch) { EntityName = entityLogicalName };
@@ -444,6 +459,9 @@ namespace PPDS.Dataverse.BulkOperations
             try
             {
                 var response = (UpsertMultipleResponse)await client.ExecuteAsync(request, cancellationToken);
+
+                _logger.LogDebug("UpsertMultiple batch completed. Entity: {Entity}, Success: {Success}",
+                    entityLogicalName, batch.Count);
 
                 return new BulkOperationResult
                 {
