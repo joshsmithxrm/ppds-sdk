@@ -32,6 +32,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Connection selection strategies: RoundRobin, LeastConnections, ThrottleAware
   - Throttle tracking with automatic routing away from throttled connections
   - Bulk operation wrappers: CreateMultiple, UpdateMultiple, UpsertMultiple, DeleteMultiple
+  - `IProgress<ProgressSnapshot>` support for real-time progress reporting during bulk operations
   - DI integration via `AddDataverseConnectionPool()` extension method
   - Affinity cookie disabled by default for improved throughput
   - Targets: `net8.0`, `net10.0`

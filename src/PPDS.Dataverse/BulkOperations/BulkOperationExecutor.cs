@@ -12,6 +12,7 @@ using Microsoft.Xrm.Sdk.Messages;
 using Newtonsoft.Json;
 using PPDS.Dataverse.DependencyInjection;
 using PPDS.Dataverse.Pooling;
+using PPDS.Dataverse.Progress;
 
 namespace PPDS.Dataverse.BulkOperations
 {
@@ -46,6 +47,7 @@ namespace PPDS.Dataverse.BulkOperations
             string entityLogicalName,
             IEnumerable<Entity> entities,
             BulkOperationOptions? options = null,
+            IProgress<ProgressSnapshot>? progress = null,
             CancellationToken cancellationToken = default)
         {
             options ??= _options.BulkOperations;
@@ -57,6 +59,7 @@ namespace PPDS.Dataverse.BulkOperations
 
             var stopwatch = Stopwatch.StartNew();
             var batches = Batch(entityList, options.BatchSize).ToList();
+            var tracker = new ProgressTracker(entityList.Count);
 
             BulkOperationResult result;
             if (options.MaxParallelBatches > 1 && batches.Count > 1)
@@ -65,6 +68,8 @@ namespace PPDS.Dataverse.BulkOperations
                     batches,
                     batch => ExecuteCreateMultipleBatchAsync(entityLogicalName, batch, options, cancellationToken),
                     options.MaxParallelBatches,
+                    tracker,
+                    progress,
                     cancellationToken);
             }
             else
@@ -84,6 +89,9 @@ namespace PPDS.Dataverse.BulkOperations
                     {
                         allCreatedIds.AddRange(batchResult.CreatedIds);
                     }
+
+                    tracker.RecordProgress(batchResult.SuccessCount, batchResult.FailureCount);
+                    progress?.Report(tracker.GetSnapshot());
                 }
 
                 result = new BulkOperationResult
@@ -111,6 +119,7 @@ namespace PPDS.Dataverse.BulkOperations
             string entityLogicalName,
             IEnumerable<Entity> entities,
             BulkOperationOptions? options = null,
+            IProgress<ProgressSnapshot>? progress = null,
             CancellationToken cancellationToken = default)
         {
             options ??= _options.BulkOperations;
@@ -122,6 +131,7 @@ namespace PPDS.Dataverse.BulkOperations
 
             var stopwatch = Stopwatch.StartNew();
             var batches = Batch(entityList, options.BatchSize).ToList();
+            var tracker = new ProgressTracker(entityList.Count);
 
             BulkOperationResult result;
             if (options.MaxParallelBatches > 1 && batches.Count > 1)
@@ -130,6 +140,8 @@ namespace PPDS.Dataverse.BulkOperations
                     batches,
                     batch => ExecuteUpdateMultipleBatchAsync(entityLogicalName, batch, options, cancellationToken),
                     options.MaxParallelBatches,
+                    tracker,
+                    progress,
                     cancellationToken);
             }
             else
@@ -144,6 +156,9 @@ namespace PPDS.Dataverse.BulkOperations
 
                     successCount += batchResult.SuccessCount;
                     allErrors.AddRange(batchResult.Errors);
+
+                    tracker.RecordProgress(batchResult.SuccessCount, batchResult.FailureCount);
+                    progress?.Report(tracker.GetSnapshot());
                 }
 
                 result = new BulkOperationResult
@@ -170,6 +185,7 @@ namespace PPDS.Dataverse.BulkOperations
             string entityLogicalName,
             IEnumerable<Entity> entities,
             BulkOperationOptions? options = null,
+            IProgress<ProgressSnapshot>? progress = null,
             CancellationToken cancellationToken = default)
         {
             options ??= _options.BulkOperations;
@@ -181,6 +197,7 @@ namespace PPDS.Dataverse.BulkOperations
 
             var stopwatch = Stopwatch.StartNew();
             var batches = Batch(entityList, options.BatchSize).ToList();
+            var tracker = new ProgressTracker(entityList.Count);
 
             BulkOperationResult result;
             if (options.MaxParallelBatches > 1 && batches.Count > 1)
@@ -189,6 +206,8 @@ namespace PPDS.Dataverse.BulkOperations
                     batches,
                     batch => ExecuteUpsertMultipleBatchAsync(entityLogicalName, batch, options, cancellationToken),
                     options.MaxParallelBatches,
+                    tracker,
+                    progress,
                     cancellationToken);
             }
             else
@@ -203,6 +222,9 @@ namespace PPDS.Dataverse.BulkOperations
 
                     successCount += batchResult.SuccessCount;
                     allErrors.AddRange(batchResult.Errors);
+
+                    tracker.RecordProgress(batchResult.SuccessCount, batchResult.FailureCount);
+                    progress?.Report(tracker.GetSnapshot());
                 }
 
                 result = new BulkOperationResult
@@ -229,6 +251,7 @@ namespace PPDS.Dataverse.BulkOperations
             string entityLogicalName,
             IEnumerable<Guid> ids,
             BulkOperationOptions? options = null,
+            IProgress<ProgressSnapshot>? progress = null,
             CancellationToken cancellationToken = default)
         {
             options ??= _options.BulkOperations;
@@ -240,6 +263,7 @@ namespace PPDS.Dataverse.BulkOperations
 
             var stopwatch = Stopwatch.StartNew();
             var batches = Batch(idList, options.BatchSize).ToList();
+            var tracker = new ProgressTracker(idList.Count);
 
             // Select the appropriate batch execution function based on table type
             Func<List<Guid>, Task<BulkOperationResult>> executeBatch = options.ElasticTable
@@ -249,7 +273,7 @@ namespace PPDS.Dataverse.BulkOperations
             BulkOperationResult result;
             if (options.MaxParallelBatches > 1 && batches.Count > 1)
             {
-                result = await ExecuteBatchesParallelAsync(batches, executeBatch, options.MaxParallelBatches, cancellationToken);
+                result = await ExecuteBatchesParallelAsync(batches, executeBatch, options.MaxParallelBatches, tracker, progress, cancellationToken);
             }
             else
             {
@@ -261,6 +285,9 @@ namespace PPDS.Dataverse.BulkOperations
                     var batchResult = await executeBatch(batch);
                     successCount += batchResult.SuccessCount;
                     allErrors.AddRange(batchResult.Errors);
+
+                    tracker.RecordProgress(batchResult.SuccessCount, batchResult.FailureCount);
+                    progress?.Report(tracker.GetSnapshot());
                 }
 
                 result = new BulkOperationResult
@@ -732,6 +759,8 @@ namespace PPDS.Dataverse.BulkOperations
             List<List<T>> batches,
             Func<List<T>, Task<BulkOperationResult>> executeBatch,
             int maxParallelism,
+            ProgressTracker tracker,
+            IProgress<ProgressSnapshot>? progress,
             CancellationToken cancellationToken)
         {
             var allErrors = new ConcurrentBag<BulkOperationError>();
@@ -765,6 +794,10 @@ namespace PPDS.Dataverse.BulkOperations
                             allCreatedIds.Add(id);
                         }
                     }
+
+                    // Report progress after each batch
+                    tracker.RecordProgress(batchResult.SuccessCount, batchResult.FailureCount);
+                    progress?.Report(tracker.GetSnapshot());
                 }).ConfigureAwait(false);
 
             return new BulkOperationResult
