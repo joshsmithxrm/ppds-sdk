@@ -43,14 +43,23 @@ namespace PPDS.Dataverse.Progress
         public TimeSpan Elapsed { get; init; }
 
         /// <summary>
+        /// Gets the processing rate (records per second) - total records divided by elapsed time.
+        /// Use this rate for display and throughput reporting.
+        /// </summary>
+        public double RatePerSecond => OverallRatePerSecond;
+
+        /// <summary>
         /// Gets the overall processing rate (records per second) since start.
-        /// This is the stable rate used for ETA calculations.
+        /// This is the stable rate used for ETA calculations. Same as <see cref="RatePerSecond"/>.
         /// </summary>
         public double OverallRatePerSecond { get; init; }
 
         /// <summary>
         /// Gets the instantaneous processing rate (records per second) based on a rolling window.
-        /// This reflects recent performance and may fluctuate.
+        /// <para>
+        /// <b>Warning:</b> This value can fluctuate wildly in batch operations when multiple
+        /// batches complete at once. For most display purposes, use <see cref="RatePerSecond"/> instead.
+        /// </para>
         /// </summary>
         public double InstantRatePerSecond { get; init; }
 
