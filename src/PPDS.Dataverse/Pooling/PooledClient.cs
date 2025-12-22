@@ -18,7 +18,7 @@ namespace PPDS.Dataverse.Pooling
         private readonly Guid? _originalCallerAADObjectId;
         private readonly int _originalMaxRetryCount;
         private readonly TimeSpan _originalRetryPauseTime;
-        private bool _disposed;
+        private int _returned;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="PooledClient"/> class.
@@ -118,7 +118,7 @@ namespace PPDS.Dataverse.Pooling
         }
 
         /// <summary>
-        /// Resets the client to its original state.
+        /// Resets the client to its original state and marks it available for reuse.
         /// </summary>
         internal void Reset()
         {
@@ -126,6 +126,9 @@ namespace PPDS.Dataverse.Pooling
             _client.CallerAADObjectId = _originalCallerAADObjectId;
             _client.MaxRetryCount = _originalMaxRetryCount;
             _client.RetryPauseTime = _originalRetryPauseTime;
+
+            // Reset the returned flag so this client can be returned again on next use
+            Interlocked.Exchange(ref _returned, 0);
         }
 
         /// <summary>
@@ -270,12 +273,14 @@ namespace PPDS.Dataverse.Pooling
         /// <inheritdoc />
         public void Dispose()
         {
-            if (_disposed)
+            // Use Interlocked.Exchange to ensure we only return to pool once per checkout.
+            // This prevents double-release of the semaphore if Dispose is called multiple times.
+            // The flag is reset in Reset() when the connection is returned to the pool.
+            if (Interlocked.Exchange(ref _returned, 1) != 0)
             {
                 return;
             }
 
-            _disposed = true;
             _returnToPool(this);
         }
 

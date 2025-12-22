@@ -30,12 +30,13 @@ namespace PPDS.Dataverse.Pooling
         private readonly ConcurrentDictionary<string, int> _activeConnections;
         private readonly ConcurrentDictionary<string, long> _requestCounts;
         private readonly SemaphoreSlim _connectionSemaphore;
+        private readonly object _poolLock = new();
 
         private readonly CancellationTokenSource _validationCts;
         private readonly Task _validationTask;
 
         private long _totalRequestsServed;
-        private bool _disposed;
+        private int _disposed;
         private static bool _performanceSettingsApplied;
         private static readonly object _performanceSettingsLock = new();
 
@@ -168,63 +169,45 @@ namespace PPDS.Dataverse.Pooling
             var connectionName = SelectConnection();
             var pool = _pools[connectionName];
 
-            // Try to get from pool with spin-wait for in-flight returns
-            const int maxAttempts = 10;
-            const int spinWaitMs = 5;
-
-            for (int attempt = 0; attempt < maxAttempts; attempt++)
+            // Try to get from pool under lock to prevent race conditions
+            PooledClient? existingClient = null;
+            lock (_poolLock)
             {
-                if (pool.TryDequeue(out var existingClient))
+                if (!pool.IsEmpty && pool.TryDequeue(out existingClient))
                 {
-                    if (IsValidConnection(existingClient))
-                    {
-                        _activeConnections.AddOrUpdate(connectionName, 1, (_, v) => v + 1);
-                        Interlocked.Increment(ref _totalRequestsServed);
-                        _requestCounts.AddOrUpdate(connectionName, 1, (_, v) => v + 1);
-
-                        existingClient.UpdateLastUsed();
-                        if (options != null)
-                        {
-                            existingClient.ApplyOptions(options);
-                        }
-
-                        _logger.LogDebug(
-                            "Retrieved connection from pool. ConnectionId: {ConnectionId}, Name: {ConnectionName}",
-                            existingClient.ConnectionId,
-                            connectionName);
-
-                        return existingClient;
-                    }
-
-                    // Invalid connection, dispose and try again
-                    existingClient.ForceDispose();
-                    _logger.LogDebug("Disposed invalid connection. ConnectionId: {ConnectionId}", existingClient.ConnectionId);
-                }
-                else
-                {
-                    // Pool is empty - if we have active connections that will return soon,
-                    // do a brief spin-wait to avoid creating unnecessary new connections.
-                    // This handles the race condition where a connection is being returned
-                    // by another thread but hasn't been enqueued yet.
-                    var activeCount = _activeConnections.GetValueOrDefault(connectionName, 0);
-                    var totalConnections = pool.Count + activeCount;
-
-                    if (activeCount > 0 && totalConnections >= _options.Pool.MinPoolSize && attempt < maxAttempts - 1)
-                    {
-                        // Brief wait for in-flight connection return
-                        var waited = SpinWait.SpinUntil(() => !pool.IsEmpty, spinWaitMs);
-                        if (waited)
-                        {
-                            continue; // Try to dequeue again
-                        }
-                    }
-
-                    // Pool is still empty, break and create new
-                    break;
+                    // Got a connection from pool
                 }
             }
 
-            // Create new connection
+            if (existingClient != null)
+            {
+                if (IsValidConnection(existingClient))
+                {
+                    _activeConnections.AddOrUpdate(connectionName, 1, (_, v) => v + 1);
+                    Interlocked.Increment(ref _totalRequestsServed);
+                    _requestCounts.AddOrUpdate(connectionName, 1, (_, v) => v + 1);
+
+                    existingClient.UpdateLastUsed();
+                    if (options != null)
+                    {
+                        existingClient.ApplyOptions(options);
+                    }
+
+                    _logger.LogDebug(
+                        "Retrieved connection from pool. ConnectionId: {ConnectionId}, Name: {ConnectionName}",
+                        existingClient.ConnectionId,
+                        connectionName);
+
+                    return existingClient;
+                }
+
+                // Invalid connection, dispose and recursively retry
+                existingClient.ForceDispose();
+                _logger.LogDebug("Disposed invalid connection. ConnectionId: {ConnectionId}", existingClient.ConnectionId);
+                return GetConnectionFromPool(options);
+            }
+
+            // Pool is empty, create new connection
             var newClient = CreateNewConnection(connectionName);
             _activeConnections.AddOrUpdate(connectionName, 1, (_, v) => v + 1);
             Interlocked.Increment(ref _totalRequestsServed);
@@ -317,7 +300,7 @@ namespace PPDS.Dataverse.Pooling
 
         private void ReturnConnection(PooledClient client)
         {
-            if (_disposed)
+            if (Volatile.Read(ref _disposed) != 0)
             {
                 client.ForceDispose();
                 return;
@@ -325,6 +308,7 @@ namespace PPDS.Dataverse.Pooling
 
             try
             {
+                // Decrement active connections counter first
                 _activeConnections.AddOrUpdate(client.ConnectionName, 0, (_, v) => Math.Max(0, v - 1));
 
                 var pool = _pools.GetValueOrDefault(client.ConnectionName);
@@ -334,26 +318,30 @@ namespace PPDS.Dataverse.Pooling
                     return;
                 }
 
-                // Reset client to original state
+                // Reset client to original state (this also resets the _returned flag for reuse)
                 client.Reset();
                 client.UpdateLastUsed();
 
-                // Check if pool is full
-                if (pool.Count < _options.Connections.First(c => c.Name == client.ConnectionName).MaxPoolSize)
+                // Lock around pool enqueue to synchronize with GetConnectionFromPool
+                lock (_poolLock)
                 {
-                    pool.Enqueue(client);
-                    _logger.LogDebug(
-                        "Returned connection to pool. ConnectionId: {ConnectionId}, Name: {ConnectionName}",
-                        client.ConnectionId,
-                        client.ConnectionName);
-                }
-                else
-                {
-                    client.ForceDispose();
-                    _logger.LogDebug(
-                        "Pool full, disposed connection. ConnectionId: {ConnectionId}, Name: {ConnectionName}",
-                        client.ConnectionId,
-                        client.ConnectionName);
+                    // Check if pool is full
+                    if (pool.Count < _options.Connections.First(c => c.Name == client.ConnectionName).MaxPoolSize)
+                    {
+                        pool.Enqueue(client);
+                        _logger.LogDebug(
+                            "Returned connection to pool. ConnectionId: {ConnectionId}, Name: {ConnectionName}",
+                            client.ConnectionId,
+                            client.ConnectionName);
+                    }
+                    else
+                    {
+                        client.ForceDispose();
+                        _logger.LogDebug(
+                            "Pool full, disposed connection. ConnectionId: {ConnectionId}, Name: {ConnectionName}",
+                            client.ConnectionId,
+                            client.ConnectionName);
+                    }
                 }
             }
             finally
@@ -658,7 +646,7 @@ namespace PPDS.Dataverse.Pooling
 
         private void ThrowIfDisposed()
         {
-            if (_disposed)
+            if (Volatile.Read(ref _disposed) != 0)
             {
                 throw new ObjectDisposedException(nameof(DataverseConnectionPool));
             }
@@ -667,12 +655,12 @@ namespace PPDS.Dataverse.Pooling
         /// <inheritdoc />
         public void Dispose()
         {
-            if (_disposed)
+            // Use Interlocked.Exchange for atomic disposal check
+            if (Interlocked.Exchange(ref _disposed, 1) != 0)
             {
                 return;
             }
 
-            _disposed = true;
             _validationCts.Cancel();
 
             foreach (var pool in _pools.Values)
@@ -690,12 +678,12 @@ namespace PPDS.Dataverse.Pooling
         /// <inheritdoc />
         public async ValueTask DisposeAsync()
         {
-            if (_disposed)
+            // Use Interlocked.Exchange for atomic disposal check
+            if (Interlocked.Exchange(ref _disposed, 1) != 0)
             {
                 return;
             }
 
-            _disposed = true;
             _validationCts.Cancel();
 
             try

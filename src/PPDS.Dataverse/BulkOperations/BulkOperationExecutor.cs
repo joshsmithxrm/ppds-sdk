@@ -71,7 +71,7 @@ namespace PPDS.Dataverse.BulkOperations
             {
                 result = await ExecuteBatchesParallelAsync(
                     batches,
-                    batch => ExecuteCreateMultipleBatchAsync(entityLogicalName, batch, options, cancellationToken),
+                    (batch, ct) => ExecuteCreateMultipleBatchAsync(entityLogicalName, batch, options, ct),
                     options.MaxParallelBatches,
                     tracker,
                     progress,
@@ -143,7 +143,7 @@ namespace PPDS.Dataverse.BulkOperations
             {
                 result = await ExecuteBatchesParallelAsync(
                     batches,
-                    batch => ExecuteUpdateMultipleBatchAsync(entityLogicalName, batch, options, cancellationToken),
+                    (batch, ct) => ExecuteUpdateMultipleBatchAsync(entityLogicalName, batch, options, ct),
                     options.MaxParallelBatches,
                     tracker,
                     progress,
@@ -209,7 +209,7 @@ namespace PPDS.Dataverse.BulkOperations
             {
                 result = await ExecuteBatchesParallelAsync(
                     batches,
-                    batch => ExecuteUpsertMultipleBatchAsync(entityLogicalName, batch, options, cancellationToken),
+                    (batch, ct) => ExecuteUpsertMultipleBatchAsync(entityLogicalName, batch, options, ct),
                     options.MaxParallelBatches,
                     tracker,
                     progress,
@@ -271,9 +271,9 @@ namespace PPDS.Dataverse.BulkOperations
             var tracker = new ProgressTracker(idList.Count);
 
             // Select the appropriate batch execution function based on table type
-            Func<List<Guid>, Task<BulkOperationResult>> executeBatch = options.ElasticTable
-                ? batch => ExecuteElasticDeleteBatchAsync(entityLogicalName, batch, options, cancellationToken)
-                : batch => ExecuteStandardDeleteBatchAsync(entityLogicalName, batch, options, cancellationToken);
+            Func<List<Guid>, CancellationToken, Task<BulkOperationResult>> executeBatch = options.ElasticTable
+                ? (batch, ct) => ExecuteElasticDeleteBatchAsync(entityLogicalName, batch, options, ct)
+                : (batch, ct) => ExecuteStandardDeleteBatchAsync(entityLogicalName, batch, options, ct);
 
             BulkOperationResult result;
             if (options.MaxParallelBatches > 1 && batches.Count > 1)
@@ -287,7 +287,7 @@ namespace PPDS.Dataverse.BulkOperations
 
                 foreach (var batch in batches)
                 {
-                    var batchResult = await executeBatch(batch);
+                    var batchResult = await executeBatch(batch, cancellationToken);
                     successCount += batchResult.SuccessCount;
                     allErrors.AddRange(batchResult.Errors);
 
@@ -811,7 +811,7 @@ namespace PPDS.Dataverse.BulkOperations
         /// </summary>
         private static async Task<BulkOperationResult> ExecuteBatchesParallelAsync<T>(
             List<List<T>> batches,
-            Func<List<T>, Task<BulkOperationResult>> executeBatch,
+            Func<List<T>, CancellationToken, Task<BulkOperationResult>> executeBatch,
             int maxParallelism,
             ProgressTracker tracker,
             IProgress<ProgressSnapshot>? progress,
@@ -831,7 +831,8 @@ namespace PPDS.Dataverse.BulkOperations
                 },
                 async (batch, ct) =>
                 {
-                    var batchResult = await executeBatch(batch).ConfigureAwait(false);
+                    // Use the combined cancellation token (ct) which includes Parallel.ForEachAsync's internal cancellation
+                    var batchResult = await executeBatch(batch, ct).ConfigureAwait(false);
 
                     Interlocked.Add(ref successCount, batchResult.SuccessCount);
                     Interlocked.Add(ref failureCount, batchResult.FailureCount);
