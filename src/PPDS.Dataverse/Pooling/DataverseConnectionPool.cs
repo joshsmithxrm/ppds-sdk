@@ -168,8 +168,10 @@ namespace PPDS.Dataverse.Pooling
             var connectionName = SelectConnection();
             var pool = _pools[connectionName];
 
-            // Try to get from pool (bounded iteration, not recursion)
+            // Try to get from pool with spin-wait for in-flight returns
             const int maxAttempts = 10;
+            const int spinWaitMs = 5;
+
             for (int attempt = 0; attempt < maxAttempts; attempt++)
             {
                 if (pool.TryDequeue(out var existingClient))
@@ -200,7 +202,24 @@ namespace PPDS.Dataverse.Pooling
                 }
                 else
                 {
-                    // Pool is empty, break and create new
+                    // Pool is empty - if we have active connections that will return soon,
+                    // do a brief spin-wait to avoid creating unnecessary new connections.
+                    // This handles the race condition where a connection is being returned
+                    // by another thread but hasn't been enqueued yet.
+                    var activeCount = _activeConnections.GetValueOrDefault(connectionName, 0);
+                    var totalConnections = pool.Count + activeCount;
+
+                    if (activeCount > 0 && totalConnections >= _options.Pool.MinPoolSize && attempt < maxAttempts - 1)
+                    {
+                        // Brief wait for in-flight connection return
+                        var waited = SpinWait.SpinUntil(() => !pool.IsEmpty, spinWaitMs);
+                        if (waited)
+                        {
+                            continue; // Try to dequeue again
+                        }
+                    }
+
+                    // Pool is still empty, break and create new
                     break;
                 }
             }
