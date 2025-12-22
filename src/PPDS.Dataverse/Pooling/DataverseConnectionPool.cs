@@ -520,6 +520,72 @@ namespace PPDS.Dataverse.Pooling
                     throw new InvalidOperationException($"Connection string for '{connection.Name}' cannot be empty.");
                 }
             }
+
+            // Warn if multiple connections target different organizations
+            WarnIfMultipleOrganizations();
+        }
+
+        private void WarnIfMultipleOrganizations()
+        {
+            if (_options.Connections.Count < 2)
+            {
+                return;
+            }
+
+            var orgUrls = new Dictionary<string, string>(); // connectionName -> orgUrl
+
+            foreach (var connection in _options.Connections)
+            {
+                var orgUrl = ExtractOrgUrl(connection.ConnectionString);
+                if (!string.IsNullOrEmpty(orgUrl))
+                {
+                    orgUrls[connection.Name] = orgUrl;
+                }
+            }
+
+            var distinctOrgs = orgUrls.Values.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+
+            if (distinctOrgs.Count > 1)
+            {
+                _logger.LogWarning(
+                    "Connection pool contains connections to {OrgCount} different organizations: {Orgs}. " +
+                    "Requests will be load-balanced across these organizations, which is likely unintended. " +
+                    "For multi-environment scenarios (Dev/QA/Prod), create separate service providers per environment. " +
+                    "See documentation for the recommended pattern.",
+                    distinctOrgs.Count,
+                    string.Join(", ", distinctOrgs));
+            }
+        }
+
+        private static string? ExtractOrgUrl(string connectionString)
+        {
+            // Parse connection string to extract Url parameter
+            // Format: "AuthType=...;Url=https://org.crm.dynamics.com;..."
+            if (string.IsNullOrEmpty(connectionString))
+            {
+                return null;
+            }
+
+            var parts = connectionString.Split(';', StringSplitOptions.RemoveEmptyEntries);
+            foreach (var part in parts)
+            {
+                var keyValue = part.Split('=', 2);
+                if (keyValue.Length == 2 &&
+                    keyValue[0].Trim().Equals("Url", StringComparison.OrdinalIgnoreCase))
+                {
+                    var url = keyValue[1].Trim();
+
+                    // Extract just the host for comparison
+                    if (Uri.TryCreate(url, UriKind.Absolute, out var uri))
+                    {
+                        return uri.Host.ToLowerInvariant();
+                    }
+
+                    return url.ToLowerInvariant();
+                }
+            }
+
+            return null;
         }
 
         private PoolStatistics GetStatistics()
