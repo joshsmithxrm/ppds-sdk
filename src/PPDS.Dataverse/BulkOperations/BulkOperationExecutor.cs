@@ -47,6 +47,31 @@ namespace PPDS.Dataverse.BulkOperations
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
 
+        /// <summary>
+        /// Resolves the parallelism to use for batch processing.
+        /// Uses the explicit value if provided, otherwise queries the ServiceClient's RecommendedDegreesOfParallelism.
+        /// </summary>
+        private async Task<int> ResolveParallelismAsync(int? maxParallelBatches, CancellationToken cancellationToken)
+        {
+            if (maxParallelBatches.HasValue)
+            {
+                return maxParallelBatches.Value;
+            }
+
+            // Get RecommendedDegreesOfParallelism from a connection
+            await using var client = await _connectionPool.GetClientAsync(cancellationToken: cancellationToken);
+            var recommended = client.RecommendedDegreesOfParallelism;
+
+            if (recommended > 0)
+            {
+                _logger.LogDebug("Using RecommendedDegreesOfParallelism: {Parallelism}", recommended);
+                return recommended;
+            }
+
+            _logger.LogWarning("RecommendedDegreesOfParallelism unavailable or zero, using sequential processing");
+            return 1;
+        }
+
         /// <inheritdoc />
         public async Task<BulkOperationResult> CreateMultipleAsync(
             string entityLogicalName,
@@ -57,22 +82,23 @@ namespace PPDS.Dataverse.BulkOperations
         {
             options ??= _options.BulkOperations;
             var entityList = entities.ToList();
+            var parallelism = await ResolveParallelismAsync(options.MaxParallelBatches, cancellationToken);
 
             _logger.LogInformation(
                 "CreateMultiple starting. Entity: {Entity}, Count: {Count}, ElasticTable: {ElasticTable}, Parallel: {Parallel}",
-                entityLogicalName, entityList.Count, options.ElasticTable, options.MaxParallelBatches);
+                entityLogicalName, entityList.Count, options.ElasticTable, parallelism);
 
             var stopwatch = Stopwatch.StartNew();
             var batches = Batch(entityList, options.BatchSize).ToList();
             var tracker = new ProgressTracker(entityList.Count);
 
             BulkOperationResult result;
-            if (options.MaxParallelBatches > 1 && batches.Count > 1)
+            if (parallelism > 1 && batches.Count > 1)
             {
                 result = await ExecuteBatchesParallelAsync(
                     batches,
                     (batch, ct) => ExecuteCreateMultipleBatchAsync(entityLogicalName, batch, options, ct),
-                    options.MaxParallelBatches,
+                    parallelism,
                     tracker,
                     progress,
                     cancellationToken);
@@ -129,22 +155,23 @@ namespace PPDS.Dataverse.BulkOperations
         {
             options ??= _options.BulkOperations;
             var entityList = entities.ToList();
+            var parallelism = await ResolveParallelismAsync(options.MaxParallelBatches, cancellationToken);
 
             _logger.LogInformation(
                 "UpdateMultiple starting. Entity: {Entity}, Count: {Count}, ElasticTable: {ElasticTable}, Parallel: {Parallel}",
-                entityLogicalName, entityList.Count, options.ElasticTable, options.MaxParallelBatches);
+                entityLogicalName, entityList.Count, options.ElasticTable, parallelism);
 
             var stopwatch = Stopwatch.StartNew();
             var batches = Batch(entityList, options.BatchSize).ToList();
             var tracker = new ProgressTracker(entityList.Count);
 
             BulkOperationResult result;
-            if (options.MaxParallelBatches > 1 && batches.Count > 1)
+            if (parallelism > 1 && batches.Count > 1)
             {
                 result = await ExecuteBatchesParallelAsync(
                     batches,
                     (batch, ct) => ExecuteUpdateMultipleBatchAsync(entityLogicalName, batch, options, ct),
-                    options.MaxParallelBatches,
+                    parallelism,
                     tracker,
                     progress,
                     cancellationToken);
@@ -195,22 +222,23 @@ namespace PPDS.Dataverse.BulkOperations
         {
             options ??= _options.BulkOperations;
             var entityList = entities.ToList();
+            var parallelism = await ResolveParallelismAsync(options.MaxParallelBatches, cancellationToken);
 
             _logger.LogInformation(
                 "UpsertMultiple starting. Entity: {Entity}, Count: {Count}, ElasticTable: {ElasticTable}, Parallel: {Parallel}",
-                entityLogicalName, entityList.Count, options.ElasticTable, options.MaxParallelBatches);
+                entityLogicalName, entityList.Count, options.ElasticTable, parallelism);
 
             var stopwatch = Stopwatch.StartNew();
             var batches = Batch(entityList, options.BatchSize).ToList();
             var tracker = new ProgressTracker(entityList.Count);
 
             BulkOperationResult result;
-            if (options.MaxParallelBatches > 1 && batches.Count > 1)
+            if (parallelism > 1 && batches.Count > 1)
             {
                 result = await ExecuteBatchesParallelAsync(
                     batches,
                     (batch, ct) => ExecuteUpsertMultipleBatchAsync(entityLogicalName, batch, options, ct),
-                    options.MaxParallelBatches,
+                    parallelism,
                     tracker,
                     progress,
                     cancellationToken);
@@ -261,10 +289,11 @@ namespace PPDS.Dataverse.BulkOperations
         {
             options ??= _options.BulkOperations;
             var idList = ids.ToList();
+            var parallelism = await ResolveParallelismAsync(options.MaxParallelBatches, cancellationToken);
 
             _logger.LogInformation(
                 "DeleteMultiple starting. Entity: {Entity}, Count: {Count}, ElasticTable: {ElasticTable}, Parallel: {Parallel}",
-                entityLogicalName, idList.Count, options.ElasticTable, options.MaxParallelBatches);
+                entityLogicalName, idList.Count, options.ElasticTable, parallelism);
 
             var stopwatch = Stopwatch.StartNew();
             var batches = Batch(idList, options.BatchSize).ToList();
@@ -276,9 +305,9 @@ namespace PPDS.Dataverse.BulkOperations
                 : (batch, ct) => ExecuteStandardDeleteBatchAsync(entityLogicalName, batch, options, ct);
 
             BulkOperationResult result;
-            if (options.MaxParallelBatches > 1 && batches.Count > 1)
+            if (parallelism > 1 && batches.Count > 1)
             {
-                result = await ExecuteBatchesParallelAsync(batches, executeBatch, options.MaxParallelBatches, tracker, progress, cancellationToken);
+                result = await ExecuteBatchesParallelAsync(batches, executeBatch, parallelism, tracker, progress, cancellationToken);
             }
             else
             {
