@@ -1,0 +1,7 @@
+<Project>
+  <PropertyGroup>
+    <!-- Shared settings for all projects -->
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+</Project>
