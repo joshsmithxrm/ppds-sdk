@@ -248,18 +248,18 @@ namespace PPDS.Dataverse.Pooling
         {
             var pool = _pools[connectionName];
 
-            // Try to get from pool under lock to prevent race conditions
-            PooledClient? existingClient = null;
-            lock (_poolLock)
+            // Loop to find valid connection, draining any invalid ones
+            while (true)
             {
-                if (!pool.IsEmpty && pool.TryDequeue(out existingClient))
+                PooledClient? existingClient = null;
+                lock (_poolLock)
                 {
-                    // Got a connection from pool
+                    if (pool.IsEmpty || !pool.TryDequeue(out existingClient))
+                    {
+                        break; // Pool empty, exit to create new connection
+                    }
                 }
-            }
 
-            if (existingClient != null)
-            {
                 if (IsValidConnection(existingClient))
                 {
                     _activeConnections.AddOrUpdate(connectionName, 1, (_, v) => v + 1);
@@ -280,13 +280,12 @@ namespace PPDS.Dataverse.Pooling
                     return existingClient;
                 }
 
-                // Invalid connection, dispose and recursively retry
+                // Invalid connection, dispose and continue loop to try next
                 existingClient.ForceDispose();
                 _logger.LogDebug("Disposed invalid connection. ConnectionId: {ConnectionId}", existingClient.ConnectionId);
-                return GetConnectionFromPoolCore(connectionName, options);
             }
 
-            // Pool is empty, create new connection
+            // Pool is empty (or drained of invalid connections), create new connection
             var newClient = CreateNewConnection(connectionName);
             _activeConnections.AddOrUpdate(connectionName, 1, (_, v) => v + 1);
             Interlocked.Increment(ref _totalRequestsServed);
