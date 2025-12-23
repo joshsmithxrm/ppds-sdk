@@ -33,11 +33,6 @@ namespace PPDS.Dataverse.BulkOperations
         private const int MaxPoolExhaustionRetries = 3;
 
         /// <summary>
-        /// Maximum number of retries when service protection limits are hit.
-        /// </summary>
-        private const int MaxThrottleRetries = 3;
-
-        /// <summary>
         /// Maximum number of retries for TVP race condition errors on new tables.
         /// </summary>
         private const int MaxTvpRetries = 3;
@@ -58,7 +53,6 @@ namespace PPDS.Dataverse.BulkOperations
         private static readonly TimeSpan FallbackRetryAfter = TimeSpan.FromSeconds(30);
 
         private readonly IDataverseConnectionPool _connectionPool;
-        private readonly IThrottleTracker _throttleTracker;
         private readonly DataverseOptions _options;
         private readonly ILogger<BulkOperationExecutor> _logger;
 
@@ -66,7 +60,7 @@ namespace PPDS.Dataverse.BulkOperations
         /// Initializes a new instance of the <see cref="BulkOperationExecutor"/> class.
         /// </summary>
         /// <param name="connectionPool">The connection pool.</param>
-        /// <param name="throttleTracker">The throttle tracker for recording service protection events.</param>
+        /// <param name="throttleTracker">The throttle tracker. No longer used - pool handles throttle recording via PooledClient callback. Parameter kept for backwards compatibility.</param>
         /// <param name="options">Configuration options.</param>
         /// <param name="logger">Logger instance.</param>
         public BulkOperationExecutor(
@@ -76,7 +70,8 @@ namespace PPDS.Dataverse.BulkOperations
             ILogger<BulkOperationExecutor> logger)
         {
             _connectionPool = connectionPool ?? throw new ArgumentNullException(nameof(connectionPool));
-            _throttleTracker = throttleTracker ?? throw new ArgumentNullException(nameof(throttleTracker));
+            // throttleTracker parameter kept for backwards compatibility - pool now handles throttle recording
+            _ = throttleTracker ?? throw new ArgumentNullException(nameof(throttleTracker));
             _options = options?.Value ?? throw new ArgumentNullException(nameof(options));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
@@ -111,15 +106,16 @@ namespace PPDS.Dataverse.BulkOperations
                 }
             }
 
-            // Warn if parallelism exceeds pool size
+            // Cap parallelism to pool size - can't run more parallel operations than available connections
             var maxPoolSize = _options.Pool.MaxPoolSize;
             if (parallelism > maxPoolSize)
             {
                 _logger.LogWarning(
                     "MaxParallelBatches ({Parallelism}) exceeds MaxPoolSize ({MaxPoolSize}). " +
-                    "Effective parallelism will be limited to {MaxPoolSize}. " +
+                    "Capping parallelism to {MaxPoolSize}. " +
                     "Consider increasing MaxPoolSize for optimal throughput.",
                     parallelism, maxPoolSize, maxPoolSize);
+                parallelism = maxPoolSize;
             }
 
             return parallelism;
@@ -552,8 +548,26 @@ namespace PPDS.Dataverse.BulkOperations
         {
             return exception is HttpRequestException ||
                    exception is SocketException ||
+                   exception is DataverseConnectionException ||
                    exception.InnerException is SocketException ||
                    exception.InnerException is HttpRequestException;
+        }
+
+        /// <summary>
+        /// Extracts the connection name from an exception when the client is null.
+        /// This handles the case where connection creation itself failed.
+        /// </summary>
+        /// <param name="exception">The exception to extract from.</param>
+        /// <param name="fallback">The fallback value if connection name cannot be extracted.</param>
+        /// <returns>The connection name or fallback.</returns>
+        private static string GetConnectionNameFromException(Exception exception, string fallback)
+        {
+            if (exception is DataverseConnectionException dce && !string.IsNullOrEmpty(dce.ConnectionName))
+            {
+                return dce.ConnectionName;
+            }
+
+            return fallback;
         }
 
         /// <summary>
@@ -612,80 +626,25 @@ namespace PPDS.Dataverse.BulkOperations
         }
 
         /// <summary>
-        /// Checks if there are any connections available (not currently throttled).
-        /// </summary>
-        /// <param name="totalConnections">The total number of configured connections.</param>
-        /// <returns>True if at least one connection is available.</returns>
-        private bool HasAvailableConnections(int totalConnections)
-        {
-            var throttledCount = _throttleTracker.ThrottledConnectionCount;
-            return throttledCount < totalConnections;
-        }
-
-        /// <summary>
-        /// Handles a throttle error by recording it and determining if retry is possible.
+        /// Logs a throttle error. The pool handles retry timing via GetClientAsync.
+        /// PooledClient automatically records the throttle via callback.
         /// </summary>
         /// <param name="connectionName">The name of the connection that was throttled.</param>
         /// <param name="retryAfter">The Retry-After duration.</param>
         /// <param name="errorCode">The service protection error code.</param>
-        /// <param name="attempt">The current attempt number.</param>
-        /// <param name="cancellationToken">The cancellation token.</param>
-        /// <returns>True if the operation should be retried.</returns>
-        private async Task<bool> HandleThrottleAsync(
-            string connectionName,
-            TimeSpan retryAfter,
-            int errorCode,
-            int attempt,
-            CancellationToken cancellationToken)
+        private void LogThrottle(string connectionName, TimeSpan retryAfter, int errorCode)
         {
-            // Record the throttle event
-            _throttleTracker.RecordThrottle(connectionName, retryAfter);
-
+            // Note: PooledClient already recorded this throttle via callback.
+            // We just log for visibility - pool handles waiting via GetClientAsync.
             _logger.LogWarning(
                 "Service protection limit hit. Connection: {Connection}, ErrorCode: {ErrorCode}, " +
-                "RetryAfter: {RetryAfter}, Attempt: {Attempt}/{MaxRetries}",
-                connectionName, errorCode, retryAfter, attempt, MaxThrottleRetries);
-
-            // Check if we should retry
-            if (attempt >= MaxThrottleRetries)
-            {
-                _logger.LogError(
-                    "Max throttle retries exceeded. Connection: {Connection}, Attempts: {Attempts}",
-                    connectionName, attempt);
-                return false;
-            }
-
-            // Get total connection count from pool statistics
-            var stats = _connectionPool.Statistics;
-            var totalConnections = stats.TotalConnections;
-
-            // Check if other connections are available
-            if (HasAvailableConnections(totalConnections))
-            {
-                _logger.LogDebug(
-                    "Other connections available. Retrying immediately on different connection.");
-                return true; // Retry immediately with different connection
-            }
-
-            // All connections throttled - wait for shortest expiry
-            var shortestExpiry = _throttleTracker.GetShortestExpiry();
-            if (shortestExpiry > TimeSpan.Zero)
-            {
-                // Add a small buffer to account for timing
-                var waitTime = shortestExpiry + TimeSpan.FromSeconds(1);
-                _logger.LogInformation(
-                    "All connections throttled. Waiting {WaitTime} before retry.",
-                    waitTime);
-                await Task.Delay(waitTime, cancellationToken);
-            }
-
-            return true;
+                "RetryAfter: {RetryAfter}. Pool will wait for non-throttled connection.",
+                connectionName, errorCode, retryAfter);
         }
 
         /// <summary>
         /// Executes a batch operation with throttle detection, connection health management, and intelligent retry.
-        /// On throttle, records the event and either retries immediately on a different connection
-        /// or waits for the shortest throttle expiry if all connections are throttled.
+        /// Service protection errors retry indefinitely - the pool handles waiting for non-throttled connections.
         /// On auth/connection failure, marks the connection as invalid and retries with a new connection.
         /// </summary>
         private async Task<BulkOperationResult> ExecuteBatchWithThrottleHandlingAsync<T>(
@@ -697,10 +656,12 @@ namespace PPDS.Dataverse.BulkOperations
             CancellationToken cancellationToken)
         {
             var attempt = 0;
-            var maxRetries = Math.Max(MaxThrottleRetries, _options.Pool.MaxConnectionRetries);
+            var maxRetries = _options.Pool.MaxConnectionRetries;
             Exception? lastException = null;
 
-            while (attempt < maxRetries)
+            // Loop indefinitely for service protection errors - only CancellationToken stops us.
+            // Other transient errors (auth, connection, TVP, deadlock) have finite retry limits.
+            while (true)
             {
                 attempt++;
                 IPooledClient? client = null;
@@ -715,28 +676,25 @@ namespace PPDS.Dataverse.BulkOperations
                 }
                 catch (Exception ex) when (TryGetThrottleInfo(ex, out var retryAfter, out var errorCode))
                 {
-                    lastException = ex;
+                    // Service protection is transient - always retry, never fail.
+                    // PooledClient already recorded the throttle via callback.
+                    // GetClientAsync will wait for a non-throttled connection.
+                    LogThrottle(connectionName, retryAfter, errorCode);
 
-                    // Handle throttle and determine if we should retry
-                    var shouldRetry = await HandleThrottleAsync(
-                        connectionName, retryAfter, errorCode, attempt, cancellationToken);
-
-                    if (!shouldRetry)
-                    {
-                        // Max retries exceeded - throw as ServiceProtectionException
-                        throw new ServiceProtectionException(connectionName, retryAfter, errorCode, ex);
-                    }
-
-                    // Continue to next iteration to retry
+                    // Continue to next iteration - pool handles the waiting
                 }
                 catch (Exception ex) when (IsAuthFailure(ex))
                 {
                     lastException = ex;
 
+                    // Extract connection name from exception if client is null
+                    var failedConnection = client?.ConnectionName
+                        ?? GetConnectionNameFromException(ex, connectionName);
+
                     _logger.LogWarning(
                         "Authentication failure on connection {Connection}. " +
                         "Marking invalid and retrying. Attempt: {Attempt}/{MaxRetries}. Error: {Error}",
-                        connectionName, attempt, maxRetries, ex.Message);
+                        failedConnection, attempt, maxRetries, ex.Message);
 
                     // Mark connection as invalid - it won't be returned to pool
                     client?.MarkInvalid($"Auth failure: {ex.Message}");
@@ -747,7 +705,7 @@ namespace PPDS.Dataverse.BulkOperations
                     if (attempt >= maxRetries)
                     {
                         throw new DataverseConnectionException(
-                            connectionName,
+                            failedConnection,
                             $"Authentication failure after {attempt} attempts",
                             ex);
                     }
@@ -758,12 +716,16 @@ namespace PPDS.Dataverse.BulkOperations
                 {
                     lastException = ex;
 
+                    // Extract connection name from exception if client is null (connection creation failed)
+                    var failedConnection = client?.ConnectionName
+                        ?? GetConnectionNameFromException(ex, connectionName);
+
                     _logger.LogWarning(
                         "Connection failure on {Connection}. " +
                         "Marking invalid and retrying. Attempt: {Attempt}/{MaxRetries}. Error: {Error}",
-                        connectionName, attempt, maxRetries, ex.Message);
+                        failedConnection, attempt, maxRetries, ex.Message);
 
-                    // Mark connection as invalid
+                    // Mark connection as invalid (only if we have a client instance)
                     client?.MarkInvalid($"Connection failure: {ex.Message}");
 
                     // Record the failure for statistics
@@ -772,7 +734,7 @@ namespace PPDS.Dataverse.BulkOperations
                     if (attempt >= maxRetries)
                     {
                         throw new DataverseConnectionException(
-                            connectionName,
+                            failedConnection,
                             $"Connection failure after {attempt} attempts",
                             ex);
                     }
@@ -829,6 +791,23 @@ namespace PPDS.Dataverse.BulkOperations
 
                     // Continue to next iteration to retry
                 }
+                catch (Exception ex) when (ex is TaskCanceledException or OperationCanceledException)
+                {
+                    // Cancellation is expected when Parallel.ForEachAsync cancels remaining operations
+                    // after one batch fails. Don't log as error - just return a canceled result.
+                    _logger.LogDebug(
+                        "{Operation} batch canceled. Entity: {Entity}, BatchSize: {BatchSize}",
+                        operationName, entityLogicalName, batch.Count);
+
+                    // Return empty result - the batch wasn't processed, not failed
+                    return new BulkOperationResult
+                    {
+                        SuccessCount = 0,
+                        FailureCount = 0,
+                        Errors = Array.Empty<BulkOperationError>(),
+                        Duration = TimeSpan.Zero
+                    };
+                }
                 catch (Exception ex)
                 {
                     // Non-retryable error - convert to failure result
@@ -859,12 +838,8 @@ namespace PPDS.Dataverse.BulkOperations
                 }
             }
 
-            // This shouldn't be reached, but handle it gracefully
-            throw new ServiceProtectionException(
-                "unknown",
-                FallbackRetryAfter,
-                0,
-                lastException ?? new InvalidOperationException($"Max retries ({maxRetries}) exceeded for {operationName}"));
+            // Unreachable: loop only exits via return (success/failure result),
+            // throw (non-retryable error), or cancellation (throws OperationCanceledException)
         }
 
         private Task<BulkOperationResult> ExecuteCreateMultipleBatchAsync(

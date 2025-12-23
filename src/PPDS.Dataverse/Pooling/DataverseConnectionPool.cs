@@ -3,11 +3,13 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net;
+using System.ServiceModel;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Microsoft.PowerPlatform.Dataverse.Client;
+using Microsoft.Xrm.Sdk;
 using PPDS.Dataverse.Client;
 using PPDS.Dataverse.DependencyInjection;
 using PPDS.Dataverse.Pooling.Strategies;
@@ -108,6 +110,7 @@ namespace PPDS.Dataverse.Pooling
         /// <inheritdoc />
         public async Task<IPooledClient> GetClientAsync(
             DataverseClientOptions? options = null,
+            string? excludeConnectionName = null,
             CancellationToken cancellationToken = default)
         {
             ThrowIfDisposed();
@@ -117,23 +120,46 @@ namespace PPDS.Dataverse.Pooling
                 return CreateDirectClient(options);
             }
 
-            var acquired = await _connectionSemaphore.WaitAsync(_options.Pool.AcquireTimeout, cancellationToken);
-            if (!acquired)
+            // Loop until we get a connection
+            while (true)
             {
-                throw new PoolExhaustedException(
-                    GetTotalActiveConnections(),
-                    _options.Pool.MaxPoolSize,
-                    _options.Pool.AcquireTimeout);
-            }
+                cancellationToken.ThrowIfCancellationRequested();
 
-            try
-            {
-                return GetConnectionFromPool(options);
-            }
-            catch
-            {
-                _connectionSemaphore.Release();
-                throw;
+                // Phase 1: Wait for non-throttled connection BEFORE acquiring semaphore
+                // This prevents holding semaphore slots while waiting for throttle to clear
+                await WaitForNonThrottledConnectionAsync(excludeConnectionName, cancellationToken);
+
+                // Phase 2: Acquire semaphore
+                var acquired = await _connectionSemaphore.WaitAsync(_options.Pool.AcquireTimeout, cancellationToken);
+                if (!acquired)
+                {
+                    throw new PoolExhaustedException(
+                        GetTotalActiveConnections(),
+                        _options.Pool.MaxPoolSize,
+                        _options.Pool.AcquireTimeout);
+                }
+
+                try
+                {
+                    // Phase 3: Select connection and check throttle (quick, no waiting)
+                    var connectionName = SelectConnection(excludeConnectionName);
+
+                    // Race check: throttle status could have changed while waiting for semaphore
+                    if (_throttleTracker.IsThrottled(connectionName))
+                    {
+                        // Connection became throttled - release semaphore and retry
+                        _connectionSemaphore.Release();
+                        continue;
+                    }
+
+                    // Phase 4: Get the actual connection from pool
+                    return GetConnectionFromPoolCore(connectionName, options);
+                }
+                catch
+                {
+                    _connectionSemaphore.Release();
+                    throw;
+                }
             }
         }
 
@@ -167,9 +193,59 @@ namespace PPDS.Dataverse.Pooling
             }
         }
 
+        /// <summary>
+        /// Waits until at least one connection is not throttled.
+        /// This method does NOT hold the semaphore, allowing other requests to also wait.
+        /// </summary>
+        private async Task WaitForNonThrottledConnectionAsync(
+            string? excludeConnectionName,
+            CancellationToken cancellationToken)
+        {
+            while (true)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+
+                // Check if any non-excluded connection is available (not throttled)
+                var hasAvailable = _options.Connections
+                    .Where(c => string.IsNullOrEmpty(excludeConnectionName) ||
+                                !string.Equals(c.Name, excludeConnectionName, StringComparison.OrdinalIgnoreCase))
+                    .Any(c => !_throttleTracker.IsThrottled(c.Name));
+
+                if (hasAvailable)
+                {
+                    return; // At least one connection is available
+                }
+
+                // All connections are throttled - wait for shortest expiry
+                var waitTime = _throttleTracker.GetShortestExpiry();
+                if (waitTime <= TimeSpan.Zero)
+                {
+                    return; // Throttle already expired
+                }
+
+                // Add a small buffer for timing
+                waitTime += TimeSpan.FromMilliseconds(100);
+
+                _logger.LogInformation(
+                    "All connections throttled. Waiting {WaitTime} for throttle to clear...",
+                    waitTime);
+
+                await Task.Delay(waitTime, cancellationToken);
+
+                _logger.LogInformation("Throttle wait completed. Resuming operations.");
+
+                // Loop back and check again
+            }
+        }
+
         private PooledClient GetConnectionFromPool(DataverseClientOptions? options)
         {
-            var connectionName = SelectConnection();
+            var connectionName = SelectConnection(excludeConnectionName: null);
+            return GetConnectionFromPoolCore(connectionName, options);
+        }
+
+        private PooledClient GetConnectionFromPoolCore(string connectionName, DataverseClientOptions? options)
+        {
             var pool = _pools[connectionName];
 
             // Try to get from pool under lock to prevent race conditions
@@ -207,7 +283,7 @@ namespace PPDS.Dataverse.Pooling
                 // Invalid connection, dispose and recursively retry
                 existingClient.ForceDispose();
                 _logger.LogDebug("Disposed invalid connection. ConnectionId: {ConnectionId}", existingClient.ConnectionId);
-                return GetConnectionFromPool(options);
+                return GetConnectionFromPoolCore(connectionName, options);
             }
 
             // Pool is empty, create new connection
@@ -224,12 +300,33 @@ namespace PPDS.Dataverse.Pooling
             return newClient;
         }
 
-        private string SelectConnection()
+        private string SelectConnection(string? excludeConnectionName)
         {
             var connections = _options.Connections.AsReadOnly();
+
+            // If an exclusion is requested and we have multiple connections, filter
+            IReadOnlyList<DataverseConnection> filteredConnections;
+            if (!string.IsNullOrEmpty(excludeConnectionName) && connections.Count > 1)
+            {
+                filteredConnections = connections
+                    .Where(c => !string.Equals(c.Name, excludeConnectionName, StringComparison.OrdinalIgnoreCase))
+                    .ToList()
+                    .AsReadOnly();
+
+                // If filtering would leave no connections, use all
+                if (filteredConnections.Count == 0)
+                {
+                    filteredConnections = connections;
+                }
+            }
+            else
+            {
+                filteredConnections = connections;
+            }
+
             var activeDict = _activeConnections.ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
 
-            return _selectionStrategy.SelectConnection(connections, _throttleTracker, activeDict);
+            return _selectionStrategy.SelectConnection(filteredConnections, _throttleTracker, activeDict);
         }
 
         private PooledClient CreateNewConnection(string connectionName)
@@ -273,8 +370,13 @@ namespace PPDS.Dataverse.Pooling
                 serviceClient.EnableAffinityCookie = false;
             }
 
+            // Disable SDK internal retry - we handle throttling ourselves for visibility
+            // Without this, ServiceClient silently waits on 429 and retries internally,
+            // giving no visibility into throttle events
+            serviceClient.MaxRetryCount = 0;
+
             var client = new DataverseClient(serviceClient);
-            var pooledClient = new PooledClient(client, connectionName, ReturnConnection);
+            var pooledClient = new PooledClient(client, connectionName, ReturnConnection, OnThrottleDetected);
 
             _logger.LogDebug(
                 "Created new connection. ConnectionId: {ConnectionId}, Name: {ConnectionName}, IsReady: {IsReady}",
@@ -283,6 +385,14 @@ namespace PPDS.Dataverse.Pooling
                 pooledClient.IsReady);
 
             return pooledClient;
+        }
+
+        /// <summary>
+        /// Called by PooledClient when a throttle is detected.
+        /// </summary>
+        private void OnThrottleDetected(string connectionName, TimeSpan retryAfter)
+        {
+            _throttleTracker.RecordThrottle(connectionName, retryAfter);
         }
 
         private PooledClient CreateDirectClient(DataverseClientOptions? options)
@@ -685,6 +795,36 @@ namespace PPDS.Dataverse.Pooling
             if (Volatile.Read(ref _disposed) != 0)
             {
                 throw new ObjectDisposedException(nameof(DataverseConnectionPool));
+            }
+        }
+
+        /// <inheritdoc />
+        public async Task<OrganizationResponse> ExecuteAsync(OrganizationRequest request, CancellationToken cancellationToken = default)
+        {
+            ThrowIfDisposed();
+
+            // Retry forever on service protection errors - only CancellationToken stops us
+            while (true)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+
+                await using var client = await GetClientAsync(cancellationToken: cancellationToken);
+
+                try
+                {
+                    return await client.ExecuteAsync(request, cancellationToken);
+                }
+                catch (FaultException<OrganizationServiceFault> faultEx)
+                    when (ServiceProtectionException.IsServiceProtectionError(faultEx.Detail.ErrorCode))
+                {
+                    // Throttle was already recorded by PooledClient via callback.
+                    // Log and retry - GetClientAsync will wait for non-throttled connection.
+                    _logger.LogDebug(
+                        "Request throttled on connection {Connection}. Will retry with next available connection.",
+                        client.ConnectionName);
+
+                    // Loop continues - GetClientAsync will wait for a non-throttled connection
+                }
             }
         }
 

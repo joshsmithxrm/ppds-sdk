@@ -263,6 +263,19 @@ ServicePointManager.UseNagleAlgorithm = false;
 - [Service protection API limits](https://learn.microsoft.com/en-us/power-apps/developer/data-platform/api-limits)
 - [Use bulk operation messages](https://learn.microsoft.com/en-us/power-apps/developer/data-platform/bulk-operations)
 
+### Throttle Recovery (Known Limitation)
+
+The pool handles service protection errors transparently (waits and retries). However, it currently resumes at **full parallelism** after recovery, which can cause re-throttling with extended `Retry-After` durations.
+
+**Microsoft recommends** gradual ramp-up after throttle recovery. This is planned for a future enhancement (see ADR-0004).
+
+**Workaround**: Use lower `MaxParallelBatches` to reduce throttle frequency:
+
+```csharp
+var options = new BulkOperationOptions { MaxParallelBatches = 10 };
+await executor.UpsertMultipleAsync(entities, options);
+```
+
 ---
 
 ## 🧪 Testing Requirements

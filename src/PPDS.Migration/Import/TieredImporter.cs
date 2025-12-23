@@ -490,7 +490,7 @@ namespace PPDS.Migration.Import
                 var successCount = 0;
                 var failureCount = 0;
 
-                await using var client = await _connectionPool.GetClientAsync(null, cancellationToken).ConfigureAwait(false);
+                await using var client = await _connectionPool.GetClientAsync(null, cancellationToken: cancellationToken).ConfigureAwait(false);
 
                 foreach (var record in batch)
                 {
@@ -582,7 +582,7 @@ namespace PPDS.Migration.Import
 
                     if (hasUpdates)
                     {
-                        await using var client = await _connectionPool.GetClientAsync(null, cancellationToken).ConfigureAwait(false);
+                        await using var client = await _connectionPool.GetClientAsync(null, cancellationToken: cancellationToken).ConfigureAwait(false);
                         await client.UpdateAsync(update).ConfigureAwait(false);
                         totalUpdated++;
                         updated++;
@@ -683,7 +683,7 @@ namespace PPDS.Migration.Import
                     }
 
                     // Create association request
-                    await using var client = await _connectionPool.GetClientAsync(null, cancellationToken).ConfigureAwait(false);
+                    await using var client = await _connectionPool.GetClientAsync(null, cancellationToken: cancellationToken).ConfigureAwait(false);
 
                     var relatedEntities = new EntityReferenceCollection();
                     foreach (var targetId in mappedTargetIds)
@@ -727,7 +727,7 @@ namespace PPDS.Migration.Import
 
             try
             {
-                await using var client = await _connectionPool.GetClientAsync(null, cancellationToken).ConfigureAwait(false);
+                await using var client = await _connectionPool.GetClientAsync(null, cancellationToken: cancellationToken).ConfigureAwait(false);
 
                 var fetchXml = @"<fetch>
                     <entity name='role'>
@@ -768,7 +768,7 @@ namespace PPDS.Migration.Import
             // Since we only have the source ID, we need to query for it
             try
             {
-                await using var client = await _connectionPool.GetClientAsync(null, cancellationToken).ConfigureAwait(false);
+                await using var client = await _connectionPool.GetClientAsync(null, cancellationToken: cancellationToken).ConfigureAwait(false);
 
                 // Try to retrieve the role by ID - if it exists in target, we can use it directly
                 var fetchXml = $@"<fetch top='1'>

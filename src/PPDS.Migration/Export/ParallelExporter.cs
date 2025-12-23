@@ -229,7 +229,7 @@ namespace PPDS.Migration.Export
             {
                 _logger?.LogDebug("Exporting entity {Entity}", entitySchema.LogicalName);
 
-                await using var client = await _connectionPool.GetClientAsync(null, cancellationToken).ConfigureAwait(false);
+                await using var client = await _connectionPool.GetClientAsync(null, cancellationToken: cancellationToken).ConfigureAwait(false);
 
                 // Build FetchXML
                 var fetchXml = BuildFetchXml(entitySchema, options.PageSize);
@@ -375,7 +375,7 @@ namespace PPDS.Migration.Export
             ExportOptions options,
             CancellationToken cancellationToken)
         {
-            await using var client = await _connectionPool.GetClientAsync(null, cancellationToken).ConfigureAwait(false);
+            await using var client = await _connectionPool.GetClientAsync(null, cancellationToken: cancellationToken).ConfigureAwait(false);
 
             // Query intersect entity to get all associations
             var intersectEntity = rel.IntersectEntity ?? rel.Name;
