@@ -17,8 +17,6 @@ namespace PPDS.Dataverse.Pooling
         /// </summary>
         public string Name { get; set; } = string.Empty;
 
-        #region Raw Connection String (Legacy)
-
         /// <summary>
         /// Gets or sets the Dataverse connection string.
         /// If set, this takes precedence over typed configuration properties.
@@ -27,15 +25,12 @@ namespace PPDS.Dataverse.Pooling
         /// This property contains sensitive credentials and should never be logged directly.
         /// Use <see cref="ConnectionStringRedactor.Redact"/> if you need to include
         /// connection string information in logs or error messages.
-        /// Prefer using typed configuration (Url, ClientId, etc.) with secret resolution.
         /// </remarks>
         /// <example>
         /// AuthType=ClientSecret;Url=https://org.crm.dynamics.com;ClientId=xxx;ClientSecret=xxx
         /// </example>
         [SensitiveData(Reason = "Contains authentication credentials", DataType = "ConnectionString")]
         public string ConnectionString { get; set; } = string.Empty;
-
-        #endregion
 
         #region Typed Configuration
 

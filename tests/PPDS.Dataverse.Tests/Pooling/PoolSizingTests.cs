@@ -1,11 +1,7 @@
 using FluentAssertions;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using Moq;
 using PPDS.Dataverse.DependencyInjection;
 using PPDS.Dataverse.Pooling;
-using PPDS.Dataverse.Resilience;
 using Xunit;
 
 namespace PPDS.Dataverse.Tests.Pooling;
@@ -33,10 +29,8 @@ public class PoolSizingTests
         // Arrange & Act
         var options = new ConnectionPoolOptions();
 
-        // Assert - suppress obsolete warning for test
-#pragma warning disable CS0618
+        // Assert
         options.MaxPoolSize.Should().Be(0);
-#pragma warning restore CS0618
     }
 
     [Theory]
@@ -62,16 +56,10 @@ public class PoolSizingTests
             dataverseOptions.Connections.Add(new DataverseConnection($"Connection{i}", $"AuthType=ClientSecret;Url=https://test{i}.crm.dynamics.com;ClientId=test;ClientSecret=test"));
         }
 
-        // Use reflection to access the private CalculateTotalPoolCapacity logic
-        // by checking what value the semaphore would be initialized with
-        var options = Options.Create(dataverseOptions);
-
         // Calculate expected capacity directly
-#pragma warning disable CS0618
         var actualCapacity = dataverseOptions.Pool.MaxPoolSize > 0
             ? dataverseOptions.Pool.MaxPoolSize
             : dataverseOptions.Connections.Count * dataverseOptions.Pool.MaxConnectionsPerUser;
-#pragma warning restore CS0618
 
         // Assert
         actualCapacity.Should().Be(expectedCapacity);
@@ -81,7 +69,7 @@ public class PoolSizingTests
     [InlineData(50)]
     [InlineData(100)]
     [InlineData(25)]
-    public void PoolCapacity_LegacyMaxPoolSize_OverridesPerConnectionSizing(int legacyMaxPoolSize)
+    public void PoolCapacity_MaxPoolSize_OverridesPerConnectionSizing(int maxPoolSize)
     {
         // Arrange
         var dataverseOptions = new DataverseOptions
@@ -89,31 +77,26 @@ public class PoolSizingTests
             Pool = new ConnectionPoolOptions
             {
                 MaxConnectionsPerUser = 52, // This should be ignored
+                MaxPoolSize = maxPoolSize,
                 Enabled = false
             }
         };
-
-#pragma warning disable CS0618
-        dataverseOptions.Pool.MaxPoolSize = legacyMaxPoolSize;
-#pragma warning restore CS0618
 
         // Add multiple connections
         dataverseOptions.Connections.Add(new DataverseConnection("Primary", "AuthType=ClientSecret;Url=https://test.crm.dynamics.com;ClientId=test;ClientSecret=test"));
         dataverseOptions.Connections.Add(new DataverseConnection("Secondary", "AuthType=ClientSecret;Url=https://test.crm.dynamics.com;ClientId=test;ClientSecret=test"));
 
         // Calculate capacity using the same logic as CalculateTotalPoolCapacity
-#pragma warning disable CS0618
         var actualCapacity = dataverseOptions.Pool.MaxPoolSize > 0
             ? dataverseOptions.Pool.MaxPoolSize
             : dataverseOptions.Connections.Count * dataverseOptions.Pool.MaxConnectionsPerUser;
-#pragma warning restore CS0618
 
-        // Assert - legacy MaxPoolSize should take precedence
-        actualCapacity.Should().Be(legacyMaxPoolSize);
+        // Assert - MaxPoolSize should take precedence
+        actualCapacity.Should().Be(maxPoolSize);
     }
 
     [Fact]
-    public void PoolCapacity_ZeroLegacyMaxPoolSize_UsesPerConnectionSizing()
+    public void PoolCapacity_ZeroMaxPoolSize_UsesPerConnectionSizing()
     {
         // Arrange
         var dataverseOptions = new DataverseOptions
@@ -121,25 +104,19 @@ public class PoolSizingTests
             Pool = new ConnectionPoolOptions
             {
                 MaxConnectionsPerUser = 52,
+                MaxPoolSize = 0, // Default - should use per-connection sizing
                 Enabled = false
             }
         };
-
-        // Explicitly set to zero (default) - should NOT override
-#pragma warning disable CS0618
-        dataverseOptions.Pool.MaxPoolSize = 0;
-#pragma warning restore CS0618
 
         // Add 2 connections
         dataverseOptions.Connections.Add(new DataverseConnection("Primary", "AuthType=ClientSecret;Url=https://test.crm.dynamics.com;ClientId=test;ClientSecret=test"));
         dataverseOptions.Connections.Add(new DataverseConnection("Secondary", "AuthType=ClientSecret;Url=https://test.crm.dynamics.com;ClientId=test;ClientSecret=test"));
 
         // Calculate capacity
-#pragma warning disable CS0618
         var actualCapacity = dataverseOptions.Pool.MaxPoolSize > 0
             ? dataverseOptions.Pool.MaxPoolSize
             : dataverseOptions.Connections.Count * dataverseOptions.Pool.MaxConnectionsPerUser;
-#pragma warning restore CS0618
 
         // Assert - should use per-connection sizing
         actualCapacity.Should().Be(104); // 2 × 52
@@ -168,18 +145,13 @@ public class PoolSizingTests
         // Arrange & Act
         var options = new ConnectionPoolOptions
         {
-            MaxConnectionsPerUser = 52
+            MaxConnectionsPerUser = 52,
+            MaxPoolSize = 100 // Fixed override
         };
-
-#pragma warning disable CS0618
-        options.MaxPoolSize = 100; // Legacy override
-#pragma warning restore CS0618
 
         // Assert - both values are set
         options.MaxConnectionsPerUser.Should().Be(52);
-#pragma warning disable CS0618
         options.MaxPoolSize.Should().Be(100);
-#pragma warning restore CS0618
     }
 
     #endregion

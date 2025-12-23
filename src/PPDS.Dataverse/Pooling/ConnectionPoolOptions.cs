@@ -26,11 +26,11 @@ namespace PPDS.Dataverse.Pooling
         public int MaxConnectionsPerUser { get; set; } = 52;
 
         /// <summary>
-        /// Gets or sets the total maximum connections across all configurations.
-        /// If set to non-zero, overrides MaxConnectionsPerUser calculation.
+        /// Gets or sets a fixed total pool size, overriding per-connection calculation.
+        /// When 0 (default), uses MaxConnectionsPerUser × connection count.
+        /// Set to a positive value to enforce a specific total pool size.
         /// Default: 0 (use per-connection sizing).
         /// </summary>
-        [Obsolete("Use MaxConnectionsPerUser for optimal throughput. This property is maintained for backwards compatibility.")]
         public int MaxPoolSize { get; set; } = 0;
 
         /// <summary>

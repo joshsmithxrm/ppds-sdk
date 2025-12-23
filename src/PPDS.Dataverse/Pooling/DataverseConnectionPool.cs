@@ -658,19 +658,17 @@ namespace PPDS.Dataverse.Pooling
         /// <summary>
         /// Calculates the total pool capacity based on configuration.
         /// Uses per-connection sizing (MaxConnectionsPerUser × connection count) unless
-        /// legacy MaxPoolSize override is set.
+        /// MaxPoolSize override is set.
         /// </summary>
         private int CalculateTotalPoolCapacity()
         {
-            // Legacy override takes precedence for backwards compatibility
-#pragma warning disable CS0618 // Type or member is obsolete
+            // Fixed pool size override
             if (_options.Pool.MaxPoolSize > 0)
             {
                 return _options.Pool.MaxPoolSize;
             }
-#pragma warning restore CS0618
 
-            // Per-connection sizing (recommended)
+            // Per-connection sizing
             return _options.Connections.Count * _options.Pool.MaxConnectionsPerUser;
         }
 
@@ -682,11 +680,9 @@ namespace PPDS.Dataverse.Pooling
             }
 
             // Calculate capacity for validation (before _totalPoolCapacity is set)
-#pragma warning disable CS0618 // Type or member is obsolete
             var effectiveCapacity = _options.Pool.MaxPoolSize > 0
                 ? _options.Pool.MaxPoolSize
                 : _options.Connections.Count * _options.Pool.MaxConnectionsPerUser;
-#pragma warning restore CS0618
 
             if (effectiveCapacity < _options.Pool.MinPoolSize)
             {
