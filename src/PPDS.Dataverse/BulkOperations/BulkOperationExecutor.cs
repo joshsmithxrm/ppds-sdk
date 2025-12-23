@@ -772,6 +772,27 @@ namespace PPDS.Dataverse.BulkOperations
 
                     // Continue to next iteration to retry
                 }
+                catch (Exception ex)
+                {
+                    // Non-retryable error - convert to failure result
+                    _logger.LogError(ex, "{Operation} batch failed with non-retryable error. Entity: {Entity}, BatchSize: {BatchSize}",
+                        operationName, entityLogicalName, batch.Count);
+
+                    // Create appropriate failure result based on batch type
+                    if (batch is List<Entity> entityBatch)
+                    {
+                        return CreateFailureResultForEntities(entityBatch, ex);
+                    }
+                    else if (batch is List<Guid> idBatch)
+                    {
+                        return CreateFailureResultForIds(idBatch, ex);
+                    }
+                    else
+                    {
+                        // Unknown batch type - rethrow
+                        throw;
+                    }
+                }
                 finally
                 {
                     if (client != null)
@@ -837,7 +858,7 @@ namespace PPDS.Dataverse.BulkOperations
             }
             catch (Exception ex) when (options.ElasticTable && TryExtractBulkApiErrors(ex, batch, out var errors, out var successCount))
             {
-                // Elastic tables support partial success
+                // Elastic tables support partial success - this is expected behavior, not an error
                 return new BulkOperationResult
                 {
                     SuccessCount = successCount,
@@ -846,29 +867,7 @@ namespace PPDS.Dataverse.BulkOperations
                     Duration = TimeSpan.Zero
                 };
             }
-            catch (Exception ex) when (!TryGetThrottleInfo(ex, out _, out _))
-            {
-                // Non-throttle error on standard tables: entire batch fails
-                _logger.LogError(ex, "CreateMultiple batch failed. Entity: {Entity}, BatchSize: {BatchSize}",
-                    entityLogicalName, batch.Count);
-
-                var errors = batch.Select((e, i) => new BulkOperationError
-                {
-                    Index = i,
-                    RecordId = e.Id != Guid.Empty ? e.Id : null,
-                    ErrorCode = -1,
-                    Message = ex.Message
-                }).ToList();
-
-                return new BulkOperationResult
-                {
-                    SuccessCount = 0,
-                    FailureCount = batch.Count,
-                    Errors = errors,
-                    Duration = TimeSpan.Zero
-                };
-            }
-            // Throttle exceptions are not caught here - they propagate to the wrapper for retry
+            // All other errors propagate to wrapper for retry or failure handling
         }
 
         private Task<BulkOperationResult> ExecuteUpdateMultipleBatchAsync(
@@ -918,6 +917,7 @@ namespace PPDS.Dataverse.BulkOperations
             }
             catch (Exception ex) when (options.ElasticTable && TryExtractBulkApiErrors(ex, batch, out var errors, out var successCount))
             {
+                // Elastic tables support partial success - this is expected behavior, not an error
                 return new BulkOperationResult
                 {
                     SuccessCount = successCount,
@@ -926,28 +926,7 @@ namespace PPDS.Dataverse.BulkOperations
                     Duration = TimeSpan.Zero
                 };
             }
-            catch (Exception ex) when (!TryGetThrottleInfo(ex, out _, out _))
-            {
-                _logger.LogError(ex, "UpdateMultiple batch failed. Entity: {Entity}, BatchSize: {BatchSize}",
-                    entityLogicalName, batch.Count);
-
-                var errors = batch.Select((e, i) => new BulkOperationError
-                {
-                    Index = i,
-                    RecordId = e.Id,
-                    ErrorCode = -1,
-                    Message = ex.Message
-                }).ToList();
-
-                return new BulkOperationResult
-                {
-                    SuccessCount = 0,
-                    FailureCount = batch.Count,
-                    Errors = errors,
-                    Duration = TimeSpan.Zero
-                };
-            }
-            // Throttle exceptions propagate to wrapper for retry
+            // All other errors propagate to wrapper for retry or failure handling
         }
 
         private Task<BulkOperationResult> ExecuteUpsertMultipleBatchAsync(
@@ -997,6 +976,7 @@ namespace PPDS.Dataverse.BulkOperations
             }
             catch (Exception ex) when (options.ElasticTable && TryExtractBulkApiErrors(ex, batch, out var errors, out var successCount))
             {
+                // Elastic tables support partial success - this is expected behavior, not an error
                 return new BulkOperationResult
                 {
                     SuccessCount = successCount,
@@ -1005,28 +985,7 @@ namespace PPDS.Dataverse.BulkOperations
                     Duration = TimeSpan.Zero
                 };
             }
-            catch (Exception ex) when (!TryGetThrottleInfo(ex, out _, out _))
-            {
-                _logger.LogError(ex, "UpsertMultiple batch failed. Entity: {Entity}, BatchSize: {BatchSize}",
-                    entityLogicalName, batch.Count);
-
-                var errors = batch.Select((e, i) => new BulkOperationError
-                {
-                    Index = i,
-                    RecordId = e.Id != Guid.Empty ? e.Id : null,
-                    ErrorCode = -1,
-                    Message = ex.Message
-                }).ToList();
-
-                return new BulkOperationResult
-                {
-                    SuccessCount = 0,
-                    FailureCount = batch.Count,
-                    Errors = errors,
-                    Duration = TimeSpan.Zero
-                };
-            }
-            // Throttle exceptions propagate to wrapper for retry
+            // All other errors propagate to wrapper for retry or failure handling
         }
 
         private Task<BulkOperationResult> ExecuteElasticDeleteBatchAsync(
@@ -1079,6 +1038,7 @@ namespace PPDS.Dataverse.BulkOperations
             }
             catch (Exception ex) when (TryExtractBulkApiErrorsForDelete(ex, batch, out var errors, out var successCount))
             {
+                // DeleteMultiple supports partial success - this is expected behavior, not an error
                 return new BulkOperationResult
                 {
                     SuccessCount = successCount,
@@ -1087,28 +1047,7 @@ namespace PPDS.Dataverse.BulkOperations
                     Duration = TimeSpan.Zero
                 };
             }
-            catch (Exception ex) when (!TryGetThrottleInfo(ex, out _, out _))
-            {
-                _logger.LogError(ex, "DeleteMultiple (elastic) batch failed. Entity: {Entity}, BatchSize: {BatchSize}",
-                    entityLogicalName, batch.Count);
-
-                var errors = batch.Select((id, i) => new BulkOperationError
-                {
-                    Index = i,
-                    RecordId = id,
-                    ErrorCode = -1,
-                    Message = ex.Message
-                }).ToList();
-
-                return new BulkOperationResult
-                {
-                    SuccessCount = 0,
-                    FailureCount = batch.Count,
-                    Errors = errors,
-                    Duration = TimeSpan.Zero
-                };
-            }
-            // Throttle exceptions propagate to wrapper for retry
+            // All other errors propagate to wrapper for retry or failure handling
         }
 
         private Task<BulkOperationResult> ExecuteStandardDeleteBatchAsync(
@@ -1388,6 +1327,50 @@ namespace PPDS.Dataverse.BulkOperations
                 Errors = allErrors.ToList(),
                 Duration = TimeSpan.Zero,
                 CreatedIds = allCreatedIds.Count > 0 ? allCreatedIds.ToList() : null
+            };
+        }
+
+        /// <summary>
+        /// Creates a failure result for a batch of entities that failed due to a non-retryable error.
+        /// </summary>
+        private static BulkOperationResult CreateFailureResultForEntities(List<Entity> batch, Exception ex)
+        {
+            var errors = batch.Select((e, i) => new BulkOperationError
+            {
+                Index = i,
+                RecordId = e.Id != Guid.Empty ? e.Id : null,
+                ErrorCode = -1,
+                Message = ex.Message
+            }).ToList();
+
+            return new BulkOperationResult
+            {
+                SuccessCount = 0,
+                FailureCount = batch.Count,
+                Errors = errors,
+                Duration = TimeSpan.Zero
+            };
+        }
+
+        /// <summary>
+        /// Creates a failure result for a batch of IDs that failed due to a non-retryable error.
+        /// </summary>
+        private static BulkOperationResult CreateFailureResultForIds(List<Guid> batch, Exception ex)
+        {
+            var errors = batch.Select((id, i) => new BulkOperationError
+            {
+                Index = i,
+                RecordId = id,
+                ErrorCode = -1,
+                Message = ex.Message
+            }).ToList();
+
+            return new BulkOperationResult
+            {
+                SuccessCount = 0,
+                FailureCount = batch.Count,
+                Errors = errors,
+                Duration = TimeSpan.Zero
             };
         }
 
