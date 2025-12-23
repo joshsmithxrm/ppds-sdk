@@ -43,6 +43,11 @@ namespace PPDS.Dataverse.BulkOperations
         private const int MaxTvpRetries = 3;
 
         /// <summary>
+        /// Maximum number of retries for SQL deadlock errors.
+        /// </summary>
+        private const int MaxDeadlockRetries = 3;
+
+        /// <summary>
         /// CRM error code for generic SQL error wrapper that may contain TVP race condition.
         /// </summary>
         private const int SqlErrorCode = unchecked((int)0x80044150);
@@ -580,6 +585,33 @@ namespace PPDS.Dataverse.BulkOperations
         }
 
         /// <summary>
+        /// Checks if an exception is a SQL deadlock error.
+        /// SQL Error 1205: Transaction was deadlocked on resources with another process and has been chosen as the deadlock victim.
+        /// These are transient errors that occur under high concurrency and should be retried.
+        /// </summary>
+        /// <param name="exception">The exception to check.</param>
+        /// <returns>True if this is a deadlock error.</returns>
+        private static bool IsDeadlockError(Exception exception)
+        {
+            if (exception is not FaultException<OrganizationServiceFault> faultEx)
+            {
+                return false;
+            }
+
+            var fault = faultEx.Detail;
+
+            // Check for the generic SQL error wrapper code (same as TVP)
+            if (fault.ErrorCode != SqlErrorCode)
+            {
+                return false;
+            }
+
+            // Check the message for SQL error 1205 (deadlock)
+            var message = fault.Message ?? string.Empty;
+            return message.Contains("1205") || message.Contains("deadlock", StringComparison.OrdinalIgnoreCase);
+        }
+
+        /// <summary>
         /// Checks if there are any connections available (not currently throttled).
         /// </summary>
         /// <param name="totalConnections">The total number of configured connections.</param>
@@ -765,6 +797,31 @@ namespace PPDS.Dataverse.BulkOperations
                             "TVP race condition persisted after {MaxRetries} retries for {Entity}. " +
                             "This may indicate a schema issue or concurrent schema modification.",
                             MaxTvpRetries, entityLogicalName);
+                        throw;
+                    }
+
+                    await Task.Delay(delay, cancellationToken);
+
+                    // Continue to next iteration to retry
+                }
+                catch (Exception ex) when (IsDeadlockError(ex))
+                {
+                    lastException = ex;
+
+                    // Exponential backoff: 500ms, 1s, 2s
+                    var delay = TimeSpan.FromMilliseconds(500 * Math.Pow(2, attempt - 1));
+
+                    _logger.LogWarning(
+                        "SQL deadlock detected for {Entity}. " +
+                        "This is transient under high concurrency. Retrying in {Delay}ms. Attempt: {Attempt}/{MaxDeadlockRetries}",
+                        entityLogicalName, delay.TotalMilliseconds, attempt, MaxDeadlockRetries);
+
+                    if (attempt >= MaxDeadlockRetries)
+                    {
+                        _logger.LogError(
+                            "SQL deadlock persisted after {MaxRetries} retries for {Entity}. " +
+                            "Consider reducing parallelism or batch size.",
+                            MaxDeadlockRetries, entityLogicalName);
                         throw;
                     }
 
