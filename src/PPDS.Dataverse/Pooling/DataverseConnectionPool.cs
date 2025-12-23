@@ -32,6 +32,7 @@ namespace PPDS.Dataverse.Pooling
         private readonly ConcurrentDictionary<string, int> _activeConnections;
         private readonly ConcurrentDictionary<string, long> _requestCounts;
         private readonly SemaphoreSlim _connectionSemaphore;
+        private readonly int _totalPoolCapacity;
         private readonly object _poolLock = new();
 
         private readonly CancellationTokenSource _validationCts;
@@ -65,7 +66,8 @@ namespace PPDS.Dataverse.Pooling
             _pools = new ConcurrentDictionary<string, ConcurrentQueue<PooledClient>>();
             _activeConnections = new ConcurrentDictionary<string, int>();
             _requestCounts = new ConcurrentDictionary<string, long>();
-            _connectionSemaphore = new SemaphoreSlim(_options.Pool.MaxPoolSize, _options.Pool.MaxPoolSize);
+            _totalPoolCapacity = CalculateTotalPoolCapacity();
+            _connectionSemaphore = new SemaphoreSlim(_totalPoolCapacity, _totalPoolCapacity);
 
             _selectionStrategy = CreateSelectionStrategy();
 
@@ -95,9 +97,10 @@ namespace PPDS.Dataverse.Pooling
             InitializeMinimumConnections();
 
             _logger.LogInformation(
-                "DataverseConnectionPool initialized. Connections: {ConnectionCount}, MaxPoolSize: {MaxPoolSize}, Strategy: {Strategy}",
+                "DataverseConnectionPool initialized. Connections: {ConnectionCount}, PoolCapacity: {PoolCapacity}, PerUser: {PerUser}, Strategy: {Strategy}",
                 _options.Connections.Count,
-                _options.Pool.MaxPoolSize,
+                _totalPoolCapacity,
+                _options.Pool.MaxConnectionsPerUser,
                 _options.Pool.SelectionStrategy);
         }
 
@@ -135,7 +138,7 @@ namespace PPDS.Dataverse.Pooling
                 {
                     throw new PoolExhaustedException(
                         GetTotalActiveConnections(),
-                        _options.Pool.MaxPoolSize,
+                        _totalPoolCapacity,
                         _options.Pool.AcquireTimeout);
                 }
 
@@ -178,7 +181,7 @@ namespace PPDS.Dataverse.Pooling
             {
                 throw new PoolExhaustedException(
                     GetTotalActiveConnections(),
-                    _options.Pool.MaxPoolSize,
+                    _totalPoolCapacity,
                     _options.Pool.AcquireTimeout);
             }
 
@@ -652,6 +655,25 @@ namespace PPDS.Dataverse.Pooling
             InitializeMinimumConnections();
         }
 
+        /// <summary>
+        /// Calculates the total pool capacity based on configuration.
+        /// Uses per-connection sizing (MaxConnectionsPerUser × connection count) unless
+        /// legacy MaxPoolSize override is set.
+        /// </summary>
+        private int CalculateTotalPoolCapacity()
+        {
+            // Legacy override takes precedence for backwards compatibility
+#pragma warning disable CS0618 // Type or member is obsolete
+            if (_options.Pool.MaxPoolSize > 0)
+            {
+                return _options.Pool.MaxPoolSize;
+            }
+#pragma warning restore CS0618
+
+            // Per-connection sizing (recommended)
+            return _options.Connections.Count * _options.Pool.MaxConnectionsPerUser;
+        }
+
         private void ValidateOptions()
         {
             if (_options.Connections == null || _options.Connections.Count == 0)
@@ -659,9 +681,16 @@ namespace PPDS.Dataverse.Pooling
                 throw new InvalidOperationException("At least one connection must be configured.");
             }
 
-            if (_options.Pool.MaxPoolSize < _options.Pool.MinPoolSize)
+            // Calculate capacity for validation (before _totalPoolCapacity is set)
+#pragma warning disable CS0618 // Type or member is obsolete
+            var effectiveCapacity = _options.Pool.MaxPoolSize > 0
+                ? _options.Pool.MaxPoolSize
+                : _options.Connections.Count * _options.Pool.MaxConnectionsPerUser;
+#pragma warning restore CS0618
+
+            if (effectiveCapacity < _options.Pool.MinPoolSize)
             {
-                throw new InvalidOperationException("MaxPoolSize must be >= MinPoolSize.");
+                throw new InvalidOperationException("Effective pool capacity must be >= MinPoolSize.");
             }
 
             foreach (var connection in _options.Connections)

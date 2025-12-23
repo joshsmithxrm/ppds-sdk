@@ -14,10 +14,24 @@ namespace PPDS.Dataverse.Pooling
         public bool Enabled { get; set; } = true;
 
         /// <summary>
-        /// Gets or sets the total maximum connections across all configurations.
-        /// Default: 50
+        /// Gets or sets the maximum concurrent connections per Application User (connection configuration).
+        /// Default: 52 (matches Microsoft's RecommendedDegreesOfParallelism).
+        /// Total pool capacity = this × number of configured connections.
         /// </summary>
-        public int MaxPoolSize { get; set; } = 50;
+        /// <remarks>
+        /// Microsoft's service protection limits are per Application User, not per environment.
+        /// Each Application User can handle 52 concurrent requests (from x-ms-dop-hint header).
+        /// Per-connection sizing ensures each user's quota is fully utilized.
+        /// </remarks>
+        public int MaxConnectionsPerUser { get; set; } = 52;
+
+        /// <summary>
+        /// Gets or sets the total maximum connections across all configurations.
+        /// If set to non-zero, overrides MaxConnectionsPerUser calculation.
+        /// Default: 0 (use per-connection sizing).
+        /// </summary>
+        [Obsolete("Use MaxConnectionsPerUser for optimal throughput. This property is maintained for backwards compatibility.")]
+        public int MaxPoolSize { get; set; } = 0;
 
         /// <summary>
         /// Gets or sets the minimum idle connections to maintain.

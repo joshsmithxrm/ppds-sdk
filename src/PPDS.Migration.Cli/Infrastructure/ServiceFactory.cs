@@ -37,7 +37,8 @@ public static class ServiceFactory
         {
             options.Connections.Add(new DataverseConnection(connectionName, connectionString));
             options.Pool.Enabled = true;
-            options.Pool.MaxPoolSize = Environment.ProcessorCount * 4;
+            // Use per-connection sizing with a reasonable default for CLI
+            options.Pool.MaxConnectionsPerUser = Math.Max(Environment.ProcessorCount * 4, 16);
             options.Pool.DisableAffinityCookie = true;
         });
 

@@ -106,16 +106,16 @@ namespace PPDS.Dataverse.BulkOperations
                 }
             }
 
-            // Cap parallelism to pool size - can't run more parallel operations than available connections
-            var maxPoolSize = _options.Pool.MaxPoolSize;
-            if (parallelism > maxPoolSize)
+            // Cap parallelism to pool capacity - can't run more parallel operations than available connections
+            var poolCapacity = _options.Connections.Count * _options.Pool.MaxConnectionsPerUser;
+            if (parallelism > poolCapacity)
             {
                 _logger.LogWarning(
-                    "MaxParallelBatches ({Parallelism}) exceeds MaxPoolSize ({MaxPoolSize}). " +
-                    "Capping parallelism to {MaxPoolSize}. " +
-                    "Consider increasing MaxPoolSize for optimal throughput.",
-                    parallelism, maxPoolSize, maxPoolSize);
-                parallelism = maxPoolSize;
+                    "MaxParallelBatches ({Parallelism}) exceeds pool capacity ({PoolCapacity}). " +
+                    "Capping parallelism to {PoolCapacity}. " +
+                    "Consider adding more Application Users for higher throughput.",
+                    parallelism, poolCapacity, poolCapacity);
+                parallelism = poolCapacity;
             }
 
             return parallelism;
