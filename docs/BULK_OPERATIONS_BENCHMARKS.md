@@ -9,11 +9,27 @@ Performance testing for bulk operations against Dataverse.
 - **Environment:** Developer environment (single tenant)
 - **Parallel workers:** 4
 
-## Microsoft's Recommendation
+## Microsoft's Reference Benchmarks
 
-From [Microsoft Docs](https://learn.microsoft.com/en-us/power-apps/developer/data-platform/bulk-operations):
+From [Microsoft Learn - Optimize performance for bulk operations](https://learn.microsoft.com/en-us/power-apps/developer/data-platform/optimize-performance-create-update):
+
+| Approach | Throughput | Notes |
+|----------|------------|-------|
+| Single requests | ~50K records/hour | Baseline |
+| ExecuteMultiple | ~2M records/hour | 40x improvement |
+| CreateMultiple/UpdateMultiple | ~10M records/hour | 5x over ExecuteMultiple |
+| Elastic tables (Cosmos DB) | ~120M writes/hour | Azure Cosmos DB backend |
+
+> "Bulk operation APIs like CreateMultiple, UpdateMultiple, and UpsertMultiple can provide throughput improvement of up to 5x, growing from 2 million records created per hour using ExecuteMultiple to the creation of 10 million records in less than an hour."
+
+## Microsoft's Batch Size Recommendation
+
+From [Microsoft Learn - Use bulk operation messages](https://learn.microsoft.com/en-us/power-apps/developer/data-platform/bulk-operations):
 
 > "Generally, we expect that **100 - 1,000 records per request** is a reasonable place to start if the size of the record data is small and there are no plug-ins."
+
+For elastic tables specifically:
+> "The recommended number of record operations to send with CreateMultiple and UpdateMultiple for elastic tables is **100**."
 
 ## Results: Creates (UpsertMultiple)
 
@@ -71,3 +87,20 @@ var options = new BulkOperationOptions
     MaxParallelBatches = 4
 };
 ```
+
+## Analysis: Our Results vs Microsoft Benchmarks
+
+Our measured throughput of **47.7 records/sec** (~172K records/hour) is significantly lower than Microsoft's reference of ~10M records/hour. This is expected due to:
+
+1. **Developer environment** - Single-tenant dev environments have lower resource allocation than production
+2. **Entity complexity** - Alternate key lookups add overhead
+3. **Parallel workers: 4** - Microsoft recommends using `RecommendedDegreesOfParallelism` from server (typically higher)
+
+**Key finding:** Batch size 100 outperformed batch size 1000 by 3% in our tests, aligning with Microsoft's recommendation for smaller batch sizes with higher parallelism.
+
+## References
+
+- [Optimize performance for bulk operations](https://learn.microsoft.com/en-us/power-apps/developer/data-platform/optimize-performance-create-update)
+- [Use bulk operation messages](https://learn.microsoft.com/en-us/power-apps/developer/data-platform/bulk-operations)
+- [Send parallel requests](https://learn.microsoft.com/en-us/power-apps/developer/data-platform/send-parallel-requests)
+- [Service protection API limits](https://learn.microsoft.com/en-us/power-apps/developer/data-platform/api-limits)
