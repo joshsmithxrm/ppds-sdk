@@ -25,18 +25,7 @@ public class ImportCommandTests
     [Fact]
     public void Create_ReturnsCommandWithDescription()
     {
-        Assert.Equal("Import data from a ZIP file into Dataverse", _command.Description);
-    }
-
-    [Fact]
-    public void Create_HasConnectionOption()
-    {
-        var option = _command.Options.FirstOrDefault(o => o.Name == "connection");
-        Assert.NotNull(option);
-        // Not required at parse time - can come from environment variable
-        Assert.False(option.IsRequired);
-        Assert.Contains("-c", option.Aliases);
-        Assert.Contains("--connection", option.Aliases);
+        Assert.StartsWith("Import data from a ZIP file into Dataverse", _command.Description);
     }
 
     [Fact]
@@ -114,57 +103,49 @@ public class ImportCommandTests
     [Fact]
     public void Parse_WithAllRequiredOptions_Succeeds()
     {
-        var result = _command.Parse("--connection conn --data data.zip");
+        var result = _command.Parse("--data data.zip");
         Assert.Empty(result.Errors);
     }
 
     [Fact]
     public void Parse_WithShortAliases_Succeeds()
     {
-        var result = _command.Parse("-c conn -d data.zip");
-        Assert.Empty(result.Errors);
-    }
-
-    [Fact]
-    public void Parse_MissingConnection_NoParseError()
-    {
-        // Connection can come from environment variable, so no parse error
-        var result = _command.Parse("--data data.zip");
+        var result = _command.Parse("-d data.zip");
         Assert.Empty(result.Errors);
     }
 
     [Fact]
     public void Parse_MissingData_HasError()
     {
-        var result = _command.Parse("--connection conn");
+        var result = _command.Parse("");
         Assert.NotEmpty(result.Errors);
     }
 
     [Fact]
     public void Parse_WithOptionalBatchSize_Succeeds()
     {
-        var result = _command.Parse("-c conn -d data.zip --batch-size 500");
+        var result = _command.Parse("-d data.zip --batch-size 500");
         Assert.Empty(result.Errors);
     }
 
     [Fact]
     public void Parse_WithOptionalBypassPlugins_Succeeds()
     {
-        var result = _command.Parse("-c conn -d data.zip --bypass-plugins");
+        var result = _command.Parse("-d data.zip --bypass-plugins");
         Assert.Empty(result.Errors);
     }
 
     [Fact]
     public void Parse_WithOptionalBypassFlows_Succeeds()
     {
-        var result = _command.Parse("-c conn -d data.zip --bypass-flows");
+        var result = _command.Parse("-d data.zip --bypass-flows");
         Assert.Empty(result.Errors);
     }
 
     [Fact]
     public void Parse_WithOptionalContinueOnError_Succeeds()
     {
-        var result = _command.Parse("-c conn -d data.zip --continue-on-error");
+        var result = _command.Parse("-d data.zip --continue-on-error");
         Assert.Empty(result.Errors);
     }
 
@@ -174,21 +155,21 @@ public class ImportCommandTests
     [InlineData("Upsert")]
     public void Parse_WithValidMode_Succeeds(string mode)
     {
-        var result = _command.Parse($"-c conn -d data.zip --mode {mode}");
+        var result = _command.Parse($"-d data.zip --mode {mode}");
         Assert.Empty(result.Errors);
     }
 
     [Fact]
     public void Parse_WithInvalidMode_HasError()
     {
-        var result = _command.Parse("-c conn -d data.zip --mode Invalid");
+        var result = _command.Parse("-d data.zip --mode Invalid");
         Assert.NotEmpty(result.Errors);
     }
 
     [Fact]
     public void Parse_WithAllBypassOptions_Succeeds()
     {
-        var result = _command.Parse("-c conn -d data.zip --bypass-plugins --bypass-flows");
+        var result = _command.Parse("-d data.zip --bypass-plugins --bypass-flows");
         Assert.Empty(result.Errors);
     }
 

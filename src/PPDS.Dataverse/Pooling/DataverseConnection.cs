@@ -5,9 +5,8 @@ using PPDS.Dataverse.Security;
 namespace PPDS.Dataverse.Pooling
 {
     /// <summary>
-    /// Configuration for a Dataverse connection source.
+    /// Configuration for a Dataverse connection (Application User / Service Principal).
     /// Multiple connections can be configured to distribute load across Application Users.
-    /// Supports both raw connection strings and typed configuration with secret resolution.
     /// </summary>
     public class DataverseConnection
     {
@@ -16,23 +15,6 @@ namespace PPDS.Dataverse.Pooling
         /// Used for logging, metrics, and identifying which Application User is handling requests.
         /// </summary>
         public string Name { get; set; } = string.Empty;
-
-        /// <summary>
-        /// Gets or sets the Dataverse connection string.
-        /// If set, this takes precedence over typed configuration properties.
-        /// </summary>
-        /// <remarks>
-        /// This property contains sensitive credentials and should never be logged directly.
-        /// Use <see cref="ConnectionStringRedactor.Redact"/> if you need to include
-        /// connection string information in logs or error messages.
-        /// </remarks>
-        /// <example>
-        /// AuthType=ClientSecret;Url=https://org.crm.dynamics.com;ClientId=xxx;ClientSecret=xxx
-        /// </example>
-        [SensitiveData(Reason = "Contains authentication credentials", DataType = "ConnectionString")]
-        public string ConnectionString { get; set; } = string.Empty;
-
-        #region Typed Configuration
 
         /// <summary>
         /// Gets or sets the authentication type.
@@ -69,13 +51,12 @@ namespace PPDS.Dataverse.Pooling
 
         /// <summary>
         /// Gets or sets the environment variable name containing the client secret.
-        /// Second priority for secret resolution.
         /// </summary>
         public string? ClientSecretVariable { get; set; }
 
         /// <summary>
         /// Gets or sets the client secret directly.
-        /// Lowest priority - not recommended for production.
+        /// Not recommended - use ClientSecretVariable or ClientSecretKeyVaultUri instead.
         /// </summary>
         [SensitiveData(Reason = "Contains client secret", DataType = "Secret")]
         public string? ClientSecret { get; set; }
@@ -119,18 +100,11 @@ namespace PPDS.Dataverse.Pooling
 
         #endregion
 
-        #endregion
-
         /// <summary>
         /// Gets or sets the maximum connections to create for this configuration.
         /// Default: 10
         /// </summary>
         public int MaxPoolSize { get; set; } = 10;
-
-        /// <summary>
-        /// Gets whether this connection uses typed configuration (vs raw connection string).
-        /// </summary>
-        public bool UsesTypedConfiguration => string.IsNullOrWhiteSpace(ConnectionString);
 
         /// <summary>
         /// Initializes a new instance of the <see cref="DataverseConnection"/> class.
@@ -143,42 +117,18 @@ namespace PPDS.Dataverse.Pooling
         /// Initializes a new instance of the <see cref="DataverseConnection"/> class.
         /// </summary>
         /// <param name="name">The unique name for this connection.</param>
-        /// <param name="connectionString">The Dataverse connection string.</param>
-        public DataverseConnection(string name, string connectionString)
+        public DataverseConnection(string name)
         {
             Name = name ?? throw new ArgumentNullException(nameof(name));
-            ConnectionString = connectionString ?? throw new ArgumentNullException(nameof(connectionString));
-        }
-
-        /// <summary>
-        /// Initializes a new instance of the <see cref="DataverseConnection"/> class.
-        /// </summary>
-        /// <param name="name">The unique name for this connection.</param>
-        /// <param name="connectionString">The Dataverse connection string.</param>
-        /// <param name="maxPoolSize">The maximum connections for this configuration.</param>
-        public DataverseConnection(string name, string connectionString, int maxPoolSize)
-            : this(name, connectionString)
-        {
-            MaxPoolSize = maxPoolSize;
         }
 
         /// <summary>
         /// Returns a string representation of the connection configuration.
-        /// The connection string is intentionally excluded to prevent credential leakage.
+        /// Credentials are intentionally excluded to prevent leakage.
         /// </summary>
-        /// <returns>A string containing the connection name and pool size.</returns>
         public override string ToString()
         {
-            return $"DataverseConnection {{ Name = {Name}, MaxPoolSize = {MaxPoolSize} }}";
-        }
-
-        /// <summary>
-        /// Gets a redacted version of the connection string safe for logging.
-        /// </summary>
-        /// <returns>The connection string with sensitive values replaced.</returns>
-        public string GetRedactedConnectionString()
-        {
-            return ConnectionStringRedactor.Redact(ConnectionString);
+            return $"DataverseConnection {{ Name = {Name}, Url = {Url}, AuthType = {AuthType} }}";
         }
     }
 }

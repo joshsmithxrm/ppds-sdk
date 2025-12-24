@@ -11,6 +11,7 @@ using Microsoft.Extensions.Options;
 using Microsoft.PowerPlatform.Dataverse.Client;
 using Microsoft.Xrm.Sdk;
 using PPDS.Dataverse.Client;
+using PPDS.Dataverse.Configuration;
 using PPDS.Dataverse.DependencyInjection;
 using PPDS.Dataverse.Pooling.Strategies;
 using PPDS.Dataverse.Resilience;
@@ -340,7 +341,15 @@ namespace PPDS.Dataverse.Pooling
             ServiceClient serviceClient;
             try
             {
-                serviceClient = new ServiceClient(connectionConfig.ConnectionString);
+                // Resolve secret from configured sources (env var, direct value)
+                var resolvedSecret = SecretResolver.ResolveSync(
+                    connectionConfig.ClientSecretKeyVaultUri,
+                    connectionConfig.ClientSecretVariable,
+                    connectionConfig.ClientSecret);
+
+                // Build connection string from typed configuration
+                var connectionString = ConnectionStringBuilder.Build(connectionConfig, resolvedSecret);
+                serviceClient = new ServiceClient(connectionString);
             }
             catch (Exception ex)
             {
@@ -696,9 +705,14 @@ namespace PPDS.Dataverse.Pooling
                     throw new InvalidOperationException("Connection name cannot be empty.");
                 }
 
-                if (string.IsNullOrWhiteSpace(connection.ConnectionString))
+                if (string.IsNullOrWhiteSpace(connection.Url))
                 {
-                    throw new InvalidOperationException($"Connection string for '{connection.Name}' cannot be empty.");
+                    throw new InvalidOperationException($"Url for connection '{connection.Name}' cannot be empty.");
+                }
+
+                if (string.IsNullOrWhiteSpace(connection.ClientId))
+                {
+                    throw new InvalidOperationException($"ClientId for connection '{connection.Name}' cannot be empty.");
                 }
             }
 
@@ -713,55 +727,30 @@ namespace PPDS.Dataverse.Pooling
                 return;
             }
 
-            var orgUrls = new Dictionary<string, string>(); // connectionName -> orgUrl
+            var orgHosts = _options.Connections
+                .Where(c => !string.IsNullOrWhiteSpace(c.Url))
+                .Select(c => ExtractHost(c.Url!))
+                .Where(h => h != null)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
 
-            foreach (var connection in _options.Connections)
-            {
-                var orgUrl = ExtractOrgUrl(connection.ConnectionString);
-                if (!string.IsNullOrEmpty(orgUrl))
-                {
-                    orgUrls[connection.Name] = orgUrl;
-                }
-            }
-
-            var distinctOrgs = orgUrls.Values.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
-
-            if (distinctOrgs.Count > 1)
+            if (orgHosts.Count > 1)
             {
                 _logger.LogWarning(
                     "Connection pool contains connections to {OrgCount} different organizations: {Orgs}. " +
                     "Requests will be load-balanced across these organizations, which is likely unintended. " +
                     "For multi-environment scenarios (Dev/QA/Prod), create separate service providers per environment. " +
                     "See documentation for the recommended pattern.",
-                    distinctOrgs.Count,
-                    string.Join(", ", distinctOrgs));
+                    orgHosts.Count,
+                    string.Join(", ", orgHosts));
             }
         }
 
-        private static string? ExtractOrgUrl(string connectionString)
+        private static string? ExtractHost(string url)
         {
-            // Parse connection string to extract Url parameter
-            // Format: "AuthType=...;Url=https://org.crm.dynamics.com;..."
-            if (string.IsNullOrEmpty(connectionString))
-            {
-                return null;
-            }
-
-            var url = connectionString.Split(';', StringSplitOptions.RemoveEmptyEntries)
-                .Select(part => part.Split('=', 2))
-                .Where(kv => kv.Length == 2 && kv[0].Trim().Equals("Url", StringComparison.OrdinalIgnoreCase))
-                .Select(kv => kv[1].Trim())
-                .FirstOrDefault();
-
-            if (url == null)
-            {
-                return null;
-            }
-
-            // Extract just the host for comparison
             return Uri.TryCreate(url, UriKind.Absolute, out var uri)
                 ? uri.Host.ToLowerInvariant()
-                : url.ToLowerInvariant();
+                : null;
         }
 
         private PoolStatistics GetStatistics()

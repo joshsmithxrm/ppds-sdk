@@ -132,7 +132,12 @@ public class EnvironmentResolverTests
     public void GetDefaultEnvironment_ReturnsVirtualEnvironment_WhenNoEnvironmentsDefined()
     {
         // Arrange
-        var connection = new DataverseConnection("Primary", "AuthType=...");
+        var connection = new DataverseConnection("Primary")
+        {
+            Url = "https://contoso.crm.dynamics.com",
+            ClientId = "test-client-id",
+            ClientSecret = "test-secret"
+        };
         var options = new DataverseOptions
         {
             Url = "https://contoso.crm.dynamics.com",
@@ -252,7 +257,12 @@ public class EnvironmentResolverTests
             Name = "dev",
             Connections = new List<DataverseConnection>
             {
-                new DataverseConnection("Primary", "...")
+                new DataverseConnection("Primary")
+                {
+                    Url = "https://dev.crm.dynamics.com",
+                    ClientId = "test-client-id",
+                    ClientSecret = "test-secret"
+                }
             }
         };
 
@@ -303,7 +313,12 @@ public class EnvironmentResolverTests
                     Url = "https://source.crm.dynamics.com",
                     Connections = new List<DataverseConnection>
                     {
-                        new DataverseConnection("SourceApp", "AuthType=...")
+                        new DataverseConnection("SourceApp")
+                        {
+                            Url = "https://source.crm.dynamics.com",
+                            ClientId = "source-client-id",
+                            ClientSecret = "source-secret"
+                        }
                     }
                 },
                 ["target"] = new DataverseEnvironmentOptions
@@ -312,7 +327,12 @@ public class EnvironmentResolverTests
                     Url = "https://target.crm.dynamics.com",
                     Connections = new List<DataverseConnection>
                     {
-                        new DataverseConnection("TargetApp", "AuthType=...")
+                        new DataverseConnection("TargetApp")
+                        {
+                            Url = "https://target.crm.dynamics.com",
+                            ClientId = "target-client-id",
+                            ClientSecret = "target-secret"
+                        }
                     }
                 }
             }

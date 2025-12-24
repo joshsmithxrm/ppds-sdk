@@ -11,48 +11,6 @@ namespace PPDS.Dataverse.Tests.Configuration;
 /// </summary>
 public class ConnectionStringBuilderTests
 {
-    #region Raw Connection String Tests
-
-    [Fact]
-    public void Build_WithRawConnectionString_ReturnsAsIs()
-    {
-        // Arrange
-        var connection = new DataverseConnection
-        {
-            Name = "Test",
-            ConnectionString = "AuthType=ClientSecret;Url=https://test.crm.dynamics.com;ClientId=xxx;ClientSecret=yyy"
-        };
-
-        // Act
-        var result = ConnectionStringBuilder.Build(connection);
-
-        // Assert
-        result.Should().Be(connection.ConnectionString);
-    }
-
-    [Fact]
-    public void Build_WithRawConnectionString_IgnoresTypedConfig()
-    {
-        // Arrange
-        var connection = new DataverseConnection
-        {
-            Name = "Test",
-            ConnectionString = "AuthType=ClientSecret;Url=https://test.crm.dynamics.com;ClientId=xxx;ClientSecret=yyy",
-            // These should be ignored
-            Url = "https://other.crm.dynamics.com",
-            ClientId = "other-client-id"
-        };
-
-        // Act
-        var result = ConnectionStringBuilder.Build(connection);
-
-        // Assert
-        result.Should().Be(connection.ConnectionString);
-        result.Should().Contain("https://test.crm.dynamics.com");
-    }
-
-    #endregion
-
     #region ClientSecret Authentication Tests
 
     [Fact]
@@ -199,6 +157,24 @@ public class ConnectionStringBuilderTests
         result.Should().Contain("StoreLocation=LocalMachine");
     }
 
+    [Fact]
+    public void Build_Certificate_ThrowsOnMissingThumbprint()
+    {
+        // Arrange
+        var connection = new DataverseConnection
+        {
+            Name = "Test",
+            AuthType = DataverseAuthType.Certificate,
+            Url = "https://contoso.crm.dynamics.com",
+            ClientId = "12345678-1234-1234-1234-123456789012"
+        };
+
+        // Act & Assert
+        var act = () => ConnectionStringBuilder.Build(connection);
+        act.Should().Throw<ConfigurationException>()
+            .Where(ex => ex.Message.Contains("CertificateThumbprint"));
+    }
+
     #endregion
 
     #region OAuth Authentication Tests
@@ -251,28 +227,34 @@ public class ConnectionStringBuilderTests
         result.Should().Contain($"LoginPrompt={expected}");
     }
 
-    #endregion
-
-    #region DataverseConnection Tests
-
     [Fact]
-    public void UsesTypedConfiguration_True_WhenConnectionStringEmpty()
+    public void Build_OAuth_ThrowsOnMissingRedirectUri()
     {
+        // Arrange
         var connection = new DataverseConnection
         {
             Name = "Test",
-            Url = "https://contoso.crm.dynamics.com"
+            AuthType = DataverseAuthType.OAuth,
+            Url = "https://contoso.crm.dynamics.com",
+            ClientId = "12345678-1234-1234-1234-123456789012"
         };
 
-        connection.UsesTypedConfiguration.Should().BeTrue();
+        // Act & Assert
+        var act = () => ConnectionStringBuilder.Build(connection);
+        act.Should().Throw<ConfigurationException>()
+            .Where(ex => ex.Message.Contains("RedirectUri"));
     }
 
-    [Fact]
-    public void UsesTypedConfiguration_False_WhenConnectionStringSet()
-    {
-        var connection = new DataverseConnection("Test", "AuthType=ClientSecret;...");
+    #endregion
 
-        connection.UsesTypedConfiguration.Should().BeFalse();
+    #region Null Connection Tests
+
+    [Fact]
+    public void Build_ThrowsOnNullConnection()
+    {
+        // Act & Assert
+        var act = () => ConnectionStringBuilder.Build(null!);
+        act.Should().Throw<ArgumentNullException>();
     }
 
     #endregion

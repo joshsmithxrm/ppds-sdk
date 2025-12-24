@@ -12,10 +12,6 @@ public static class ExportCommand
 {
     public static Command Create()
     {
-        var connectionOption = new Option<string?>(
-            aliases: ["--connection", "-c"],
-            description: ConnectionResolver.GetHelpDescription(ConnectionResolver.ConnectionEnvVar));
-
         var schemaOption = new Option<FileInfo>(
             aliases: ["--schema", "-s"],
             description: "Path to schema.xml file")
@@ -55,9 +51,8 @@ public static class ExportCommand
             getDefaultValue: () => false,
             description: "Verbose output");
 
-        var command = new Command("export", "Export data from Dataverse to a ZIP file")
+        var command = new Command("export", "Export data from Dataverse to a ZIP file. " + ConnectionResolver.GetHelpDescription())
         {
-            connectionOption,
             schemaOption,
             outputOption,
             parallelOption,
@@ -69,7 +64,6 @@ public static class ExportCommand
 
         command.SetHandler(async (context) =>
         {
-            var connectionArg = context.ParseResult.GetValueForOption(connectionOption);
             var schema = context.ParseResult.GetValueForOption(schemaOption)!;
             var output = context.ParseResult.GetValueForOption(outputOption)!;
             var parallel = context.ParseResult.GetValueForOption(parallelOption);
@@ -78,14 +72,11 @@ public static class ExportCommand
             var json = context.ParseResult.GetValueForOption(jsonOption);
             var verbose = context.ParseResult.GetValueForOption(verboseOption);
 
-            // Resolve connection string from argument or environment variable
-            string connection;
+            // Resolve connection from environment variables
+            ConnectionResolver.ConnectionConfig connection;
             try
             {
-                connection = ConnectionResolver.Resolve(
-                    connectionArg,
-                    ConnectionResolver.ConnectionEnvVar,
-                    "connection");
+                connection = ConnectionResolver.Resolve();
             }
             catch (InvalidOperationException ex)
             {
@@ -103,7 +94,7 @@ public static class ExportCommand
     }
 
     private static async Task<int> ExecuteAsync(
-        string connection,
+        ConnectionResolver.ConnectionConfig connection,
         FileInfo schema,
         FileInfo output,
         int parallel,

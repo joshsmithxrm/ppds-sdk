@@ -23,10 +23,6 @@ public static class SchemaCommand
 
     private static Command CreateGenerateCommand()
     {
-        var connectionOption = new Option<string?>(
-            aliases: ["--connection", "-c"],
-            description: ConnectionResolver.GetHelpDescription(ConnectionResolver.ConnectionEnvVar));
-
         var entitiesOption = new Option<string[]>(
             aliases: ["--entities", "-e"],
             description: "Entity logical names to include (comma-separated or multiple -e flags)")
@@ -88,9 +84,8 @@ public static class SchemaCommand
             getDefaultValue: () => false,
             description: "Verbose output");
 
-        var command = new Command("generate", "Generate a migration schema from Dataverse metadata")
+        var command = new Command("generate", "Generate a migration schema from Dataverse metadata. " + ConnectionResolver.GetHelpDescription())
         {
-            connectionOption,
             entitiesOption,
             outputOption,
             includeSystemFieldsOption,
@@ -105,7 +100,6 @@ public static class SchemaCommand
 
         command.SetHandler(async (context) =>
         {
-            var connectionArg = context.ParseResult.GetValueForOption(connectionOption);
             var entities = context.ParseResult.GetValueForOption(entitiesOption)!;
             var output = context.ParseResult.GetValueForOption(outputOption)!;
             var includeSystemFields = context.ParseResult.GetValueForOption(includeSystemFieldsOption);
@@ -117,14 +111,11 @@ public static class SchemaCommand
             var json = context.ParseResult.GetValueForOption(jsonOption);
             var verbose = context.ParseResult.GetValueForOption(verboseOption);
 
-            // Resolve connection string
-            string connection;
+            // Resolve connection from environment variables
+            ConnectionResolver.ConnectionConfig connection;
             try
             {
-                connection = ConnectionResolver.Resolve(
-                    connectionArg,
-                    ConnectionResolver.ConnectionEnvVar,
-                    "connection");
+                connection = ConnectionResolver.Resolve();
             }
             catch (InvalidOperationException ex)
             {
@@ -164,10 +155,6 @@ public static class SchemaCommand
 
     private static Command CreateListCommand()
     {
-        var connectionOption = new Option<string?>(
-            aliases: ["--connection", "-c"],
-            description: ConnectionResolver.GetHelpDescription(ConnectionResolver.ConnectionEnvVar));
-
         var filterOption = new Option<string?>(
             aliases: ["--filter", "-f"],
             description: "Filter entities by name pattern (e.g., 'account*' or '*custom*')");
@@ -182,9 +169,8 @@ public static class SchemaCommand
             getDefaultValue: () => false,
             description: "Output as JSON");
 
-        var command = new Command("list", "List available entities in Dataverse")
+        var command = new Command("list", "List available entities in Dataverse. " + ConnectionResolver.GetHelpDescription())
         {
-            connectionOption,
             filterOption,
             customOnlyOption,
             jsonOption
@@ -192,19 +178,15 @@ public static class SchemaCommand
 
         command.SetHandler(async (context) =>
         {
-            var connectionArg = context.ParseResult.GetValueForOption(connectionOption);
             var filter = context.ParseResult.GetValueForOption(filterOption);
             var customOnly = context.ParseResult.GetValueForOption(customOnlyOption);
             var json = context.ParseResult.GetValueForOption(jsonOption);
 
-            // Resolve connection string
-            string connection;
+            // Resolve connection from environment variables
+            ConnectionResolver.ConnectionConfig connection;
             try
             {
-                connection = ConnectionResolver.Resolve(
-                    connectionArg,
-                    ConnectionResolver.ConnectionEnvVar,
-                    "connection");
+                connection = ConnectionResolver.Resolve();
             }
             catch (InvalidOperationException ex)
             {
@@ -235,7 +217,7 @@ public static class SchemaCommand
     }
 
     private static async Task<int> ExecuteGenerateAsync(
-        string connection,
+        ConnectionResolver.ConnectionConfig connection,
         List<string> entities,
         FileInfo output,
         bool includeSystemFields,
@@ -318,7 +300,7 @@ public static class SchemaCommand
     }
 
     private static async Task<int> ExecuteListAsync(
-        string connection,
+        ConnectionResolver.ConnectionConfig connection,
         string? filter,
         bool customOnly,
         bool json,

@@ -22,13 +22,6 @@ namespace PPDS.Dataverse.Configuration
                 throw new ArgumentNullException(nameof(connection));
             }
 
-            // If a raw connection string is provided, use it directly
-            if (!string.IsNullOrWhiteSpace(connection.ConnectionString))
-            {
-                return connection.ConnectionString;
-            }
-
-            // Build from typed configuration
             return connection.AuthType switch
             {
                 DataverseAuthType.ClientSecret => BuildClientSecretConnectionString(connection, resolvedSecret),

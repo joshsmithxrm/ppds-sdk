@@ -1,6 +1,8 @@
+using System;
 using FluentAssertions;
 using Microsoft.Extensions.DependencyInjection;
 using PPDS.Dataverse.BulkOperations;
+using PPDS.Dataverse.Configuration;
 using PPDS.Dataverse.DependencyInjection;
 using PPDS.Dataverse.Pooling;
 using PPDS.Dataverse.Resilience;
@@ -20,7 +22,13 @@ public class ServiceCollectionExtensionsTests
         // Act
         services.AddDataverseConnectionPool(options =>
         {
-            options.Connections.Add(new DataverseConnection("Primary", "AuthType=ClientSecret;Url=https://test.crm.dynamics.com;ClientId=test;ClientSecret=test"));
+            options.Connections.Add(new DataverseConnection("Primary")
+            {
+                Url = "https://test.crm.dynamics.com",
+                ClientId = "test-client-id",
+                ClientSecret = "test-secret",
+                AuthType = DataverseAuthType.ClientSecret
+            });
         });
 
         // Assert
@@ -39,7 +47,13 @@ public class ServiceCollectionExtensionsTests
         services.AddLogging();
         services.AddDataverseConnectionPool(options =>
         {
-            options.Connections.Add(new DataverseConnection("Primary", "AuthType=ClientSecret;Url=https://test.crm.dynamics.com;ClientId=test;ClientSecret=test"));
+            options.Connections.Add(new DataverseConnection("Primary")
+            {
+                Url = "https://test.crm.dynamics.com",
+                ClientId = "test-client-id",
+                ClientSecret = "test-secret",
+                AuthType = DataverseAuthType.ClientSecret
+            });
         });
 
         // Act
@@ -59,7 +73,13 @@ public class ServiceCollectionExtensionsTests
         services.AddLogging();
         services.AddDataverseConnectionPool(options =>
         {
-            options.Connections.Add(new DataverseConnection("Primary", "AuthType=ClientSecret;Url=https://test.crm.dynamics.com;ClientId=test;ClientSecret=test"));
+            options.Connections.Add(new DataverseConnection("Primary")
+            {
+                Url = "https://test.crm.dynamics.com",
+                ClientId = "test-client-id",
+                ClientSecret = "test-secret",
+                AuthType = DataverseAuthType.ClientSecret
+            });
         });
 
         // Act
@@ -79,7 +99,13 @@ public class ServiceCollectionExtensionsTests
         services.AddLogging();
         services.AddDataverseConnectionPool(options =>
         {
-            options.Connections.Add(new DataverseConnection("Primary", "AuthType=ClientSecret;Url=https://test.crm.dynamics.com;ClientId=test;ClientSecret=test"));
+            options.Connections.Add(new DataverseConnection("Primary")
+            {
+                Url = "https://test.crm.dynamics.com",
+                ClientId = "test-client-id",
+                ClientSecret = "test-secret",
+                AuthType = DataverseAuthType.ClientSecret
+            });
         });
 
         // Act

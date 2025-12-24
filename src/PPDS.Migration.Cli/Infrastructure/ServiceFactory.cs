@@ -1,8 +1,10 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using PPDS.Dataverse.Configuration;
 using PPDS.Dataverse.DependencyInjection;
 using PPDS.Dataverse.Pooling;
 using PPDS.Migration.Analysis;
+using PPDS.Migration.Cli.Commands;
 using PPDS.Migration.DependencyInjection;
 using PPDS.Migration.Export;
 using PPDS.Migration.Formats;
@@ -17,12 +19,33 @@ namespace PPDS.Migration.Cli.Infrastructure;
 public static class ServiceFactory
 {
     /// <summary>
-    /// Creates a service provider configured with a single Dataverse connection.
+    /// Creates a service provider from resolved connection configuration.
     /// </summary>
-    /// <param name="connectionString">The Dataverse connection string.</param>
+    /// <param name="config">The connection configuration resolved from environment variables.</param>
     /// <param name="connectionName">Optional name for the connection. Default: "Primary"</param>
     /// <returns>A configured service provider.</returns>
-    public static ServiceProvider CreateProvider(string connectionString, string connectionName = "Primary")
+    public static ServiceProvider CreateProvider(
+        ConnectionResolver.ConnectionConfig config,
+        string connectionName = "Primary")
+    {
+        return CreateProvider(config.Url, config.ClientId, config.ClientSecret, config.TenantId, connectionName);
+    }
+
+    /// <summary>
+    /// Creates a service provider configured with a single Dataverse connection.
+    /// </summary>
+    /// <param name="url">The Dataverse environment URL.</param>
+    /// <param name="clientId">The Azure AD application (client) ID.</param>
+    /// <param name="clientSecret">The client secret value.</param>
+    /// <param name="tenantId">Optional Azure AD tenant ID.</param>
+    /// <param name="connectionName">Optional name for the connection. Default: "Primary"</param>
+    /// <returns>A configured service provider.</returns>
+    public static ServiceProvider CreateProvider(
+        string url,
+        string clientId,
+        string clientSecret,
+        string? tenantId = null,
+        string connectionName = "Primary")
     {
         var services = new ServiceCollection();
 
@@ -35,9 +58,15 @@ public static class ServiceFactory
         // Add Dataverse connection pool
         services.AddDataverseConnectionPool(options =>
         {
-            options.Connections.Add(new DataverseConnection(connectionName, connectionString));
+            options.Connections.Add(new DataverseConnection(connectionName)
+            {
+                Url = url,
+                ClientId = clientId,
+                ClientSecret = clientSecret,
+                TenantId = tenantId,
+                AuthType = DataverseAuthType.ClientSecret
+            });
             options.Pool.Enabled = true;
-            // Use per-connection sizing with a reasonable default for CLI
             options.Pool.MaxConnectionsPerUser = Math.Max(Environment.ProcessorCount * 4, 16);
             options.Pool.DisableAffinityCookie = true;
         });

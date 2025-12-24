@@ -1,87 +1,106 @@
 namespace PPDS.Migration.Cli.Commands;
 
 /// <summary>
-/// Resolves connection strings from command-line arguments or environment variables.
-/// This helps keep credentials out of command-line arguments where they may be visible
-/// in process listings or shell history.
+/// Resolves connection configuration from command-line arguments or environment variables.
+/// Uses typed configuration properties instead of connection strings.
 /// </summary>
 public static class ConnectionResolver
 {
     /// <summary>
-    /// Environment variable name for the default connection string.
-    /// Used by export and import commands.
+    /// Environment variable name for the Dataverse URL.
     /// </summary>
-    public const string ConnectionEnvVar = "PPDS_CONNECTION";
+    public const string UrlEnvVar = "PPDS_URL";
 
     /// <summary>
-    /// Environment variable name for the source connection string.
-    /// Used by the migrate command for the source environment.
+    /// Environment variable name for the client ID.
     /// </summary>
-    public const string SourceConnectionEnvVar = "PPDS_SOURCE_CONNECTION";
+    public const string ClientIdEnvVar = "PPDS_CLIENT_ID";
 
     /// <summary>
-    /// Environment variable name for the target connection string.
-    /// Used by the migrate command for the target environment.
+    /// Environment variable name for the client secret.
     /// </summary>
-    public const string TargetConnectionEnvVar = "PPDS_TARGET_CONNECTION";
+    public const string ClientSecretEnvVar = "PPDS_CLIENT_SECRET";
 
     /// <summary>
-    /// Resolves a connection string from the command-line argument or environment variable.
+    /// Environment variable name for the tenant ID.
     /// </summary>
-    /// <param name="argumentValue">The value provided via command-line argument (may be null).</param>
-    /// <param name="environmentVariable">The environment variable name to check as fallback.</param>
-    /// <param name="connectionName">A friendly name for error messages (e.g., "connection", "source", "target").</param>
-    /// <returns>The resolved connection string.</returns>
-    /// <exception cref="InvalidOperationException">Thrown when no connection string is provided.</exception>
-    public static string Resolve(string? argumentValue, string environmentVariable, string connectionName = "connection")
+    public const string TenantIdEnvVar = "PPDS_TENANT_ID";
+
+    /// <summary>
+    /// Environment variable prefix for source environment.
+    /// </summary>
+    public const string SourcePrefix = "PPDS_SOURCE_";
+
+    /// <summary>
+    /// Environment variable prefix for target environment.
+    /// </summary>
+    public const string TargetPrefix = "PPDS_TARGET_";
+
+    /// <summary>
+    /// Connection configuration resolved from environment or arguments.
+    /// </summary>
+    public record ConnectionConfig(string Url, string ClientId, string ClientSecret, string? TenantId);
+
+    /// <summary>
+    /// Resolves connection configuration from environment variables.
+    /// </summary>
+    /// <param name="prefix">Optional prefix for environment variable names (e.g., "PPDS_SOURCE_").</param>
+    /// <param name="connectionName">A friendly name for error messages.</param>
+    /// <returns>The resolved connection configuration.</returns>
+    public static ConnectionConfig Resolve(string? prefix = null, string connectionName = "connection")
     {
-        // Command-line argument takes precedence
-        if (!string.IsNullOrWhiteSpace(argumentValue))
+        var urlVar = string.IsNullOrEmpty(prefix) ? UrlEnvVar : $"{prefix}URL";
+        var clientIdVar = string.IsNullOrEmpty(prefix) ? ClientIdEnvVar : $"{prefix}CLIENT_ID";
+        var secretVar = string.IsNullOrEmpty(prefix) ? ClientSecretEnvVar : $"{prefix}CLIENT_SECRET";
+        var tenantVar = string.IsNullOrEmpty(prefix) ? TenantIdEnvVar : $"{prefix}TENANT_ID";
+
+        var url = Environment.GetEnvironmentVariable(urlVar);
+        var clientId = Environment.GetEnvironmentVariable(clientIdVar);
+        var clientSecret = Environment.GetEnvironmentVariable(secretVar);
+        var tenantId = Environment.GetEnvironmentVariable(tenantVar);
+
+        if (string.IsNullOrWhiteSpace(url))
         {
-            return argumentValue;
+            throw new InvalidOperationException(
+                $"No {connectionName} URL provided. Set the {urlVar} environment variable.");
         }
 
-        // Fall back to environment variable
-        var envValue = Environment.GetEnvironmentVariable(environmentVariable);
-        if (!string.IsNullOrWhiteSpace(envValue))
+        if (string.IsNullOrWhiteSpace(clientId))
         {
-            return envValue;
+            throw new InvalidOperationException(
+                $"No {connectionName} client ID provided. Set the {clientIdVar} environment variable.");
         }
 
-        throw new InvalidOperationException(
-            $"No {connectionName} string provided. " +
-            $"Use --{connectionName} argument or set the {environmentVariable} environment variable.");
+        if (string.IsNullOrWhiteSpace(clientSecret))
+        {
+            throw new InvalidOperationException(
+                $"No {connectionName} client secret provided. Set the {secretVar} environment variable.");
+        }
+
+        return new ConnectionConfig(url, clientId, clientSecret, tenantId);
     }
 
     /// <summary>
-    /// Attempts to resolve a connection string, returning null if not available.
+    /// Gets a description of required environment variables for help text.
     /// </summary>
-    /// <param name="argumentValue">The value provided via command-line argument (may be null).</param>
-    /// <param name="environmentVariable">The environment variable name to check as fallback.</param>
-    /// <returns>The resolved connection string, or null if not available.</returns>
-    public static string? TryResolve(string? argumentValue, string environmentVariable)
+    public static string GetHelpDescription()
     {
-        if (!string.IsNullOrWhiteSpace(argumentValue))
-        {
-            return argumentValue;
-        }
-
-        var envValue = Environment.GetEnvironmentVariable(environmentVariable);
-        if (!string.IsNullOrWhiteSpace(envValue))
-        {
-            return envValue;
-        }
-
-        return null;
+        return $"Connection configured via environment variables: {UrlEnvVar}, {ClientIdEnvVar}, {ClientSecretEnvVar}, and optionally {TenantIdEnvVar}.";
     }
 
     /// <summary>
-    /// Gets a description of where connection strings can be provided for help text.
+    /// Gets a description of required environment variables for source connection.
     /// </summary>
-    /// <param name="environmentVariable">The environment variable name.</param>
-    /// <returns>A description string for help text.</returns>
-    public static string GetHelpDescription(string environmentVariable)
+    public static string GetSourceHelpDescription()
     {
-        return $"Dataverse connection string. Can also be set via {environmentVariable} environment variable.";
+        return $"Source connection configured via: {SourcePrefix}URL, {SourcePrefix}CLIENT_ID, {SourcePrefix}CLIENT_SECRET, {SourcePrefix}TENANT_ID";
+    }
+
+    /// <summary>
+    /// Gets a description of required environment variables for target connection.
+    /// </summary>
+    public static string GetTargetHelpDescription()
+    {
+        return $"Target connection configured via: {TargetPrefix}URL, {TargetPrefix}CLIENT_ID, {TargetPrefix}CLIENT_SECRET, {TargetPrefix}TENANT_ID";
     }
 }

@@ -14,14 +14,6 @@ public static class MigrateCommand
 {
     public static Command Create()
     {
-        var sourceConnectionOption = new Option<string?>(
-            aliases: ["--source-connection", "--source"],
-            description: ConnectionResolver.GetHelpDescription(ConnectionResolver.SourceConnectionEnvVar));
-
-        var targetConnectionOption = new Option<string?>(
-            aliases: ["--target-connection", "--target"],
-            description: ConnectionResolver.GetHelpDescription(ConnectionResolver.TargetConnectionEnvVar));
-
         var schemaOption = new Option<FileInfo>(
             aliases: ["--schema", "-s"],
             description: "Path to schema.xml file")
@@ -58,10 +50,11 @@ public static class MigrateCommand
             getDefaultValue: () => false,
             description: "Verbose output");
 
-        var command = new Command("migrate", "Migrate data from source to target Dataverse environment")
+        var command = new Command("migrate",
+            "Migrate data from source to target Dataverse environment. " +
+            ConnectionResolver.GetSourceHelpDescription() + " " +
+            ConnectionResolver.GetTargetHelpDescription())
         {
-            sourceConnectionOption,
-            targetConnectionOption,
             schemaOption,
             tempDirOption,
             batchSizeOption,
@@ -73,8 +66,6 @@ public static class MigrateCommand
 
         command.SetHandler(async (context) =>
         {
-            var sourceArg = context.ParseResult.GetValueForOption(sourceConnectionOption);
-            var targetArg = context.ParseResult.GetValueForOption(targetConnectionOption);
             var schema = context.ParseResult.GetValueForOption(schemaOption)!;
             var tempDir = context.ParseResult.GetValueForOption(tempDirOption);
             var batchSize = context.ParseResult.GetValueForOption(batchSizeOption);
@@ -83,20 +74,13 @@ public static class MigrateCommand
             var json = context.ParseResult.GetValueForOption(jsonOption);
             var verbose = context.ParseResult.GetValueForOption(verboseOption);
 
-            // Resolve connection strings from arguments or environment variables
-            string sourceConnection;
-            string targetConnection;
+            // Resolve connection from environment variables
+            ConnectionResolver.ConnectionConfig sourceConnection;
+            ConnectionResolver.ConnectionConfig targetConnection;
             try
             {
-                sourceConnection = ConnectionResolver.Resolve(
-                    sourceArg,
-                    ConnectionResolver.SourceConnectionEnvVar,
-                    "source-connection");
-
-                targetConnection = ConnectionResolver.Resolve(
-                    targetArg,
-                    ConnectionResolver.TargetConnectionEnvVar,
-                    "target-connection");
+                sourceConnection = ConnectionResolver.Resolve(ConnectionResolver.SourcePrefix, "source");
+                targetConnection = ConnectionResolver.Resolve(ConnectionResolver.TargetPrefix, "target");
             }
             catch (InvalidOperationException ex)
             {
@@ -114,8 +98,8 @@ public static class MigrateCommand
     }
 
     private static async Task<int> ExecuteAsync(
-        string sourceConnection,
-        string targetConnection,
+        ConnectionResolver.ConnectionConfig sourceConnection,
+        ConnectionResolver.ConnectionConfig targetConnection,
         FileInfo schema,
         DirectoryInfo? tempDir,
         int batchSize,

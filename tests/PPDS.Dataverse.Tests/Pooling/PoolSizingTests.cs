@@ -1,5 +1,5 @@
 using FluentAssertions;
-using Microsoft.Extensions.Options;
+using PPDS.Dataverse.Configuration;
 using PPDS.Dataverse.DependencyInjection;
 using PPDS.Dataverse.Pooling;
 using Xunit;
@@ -53,7 +53,13 @@ public class PoolSizingTests
 
         for (int i = 0; i < connectionCount; i++)
         {
-            dataverseOptions.Connections.Add(new DataverseConnection($"Connection{i}", $"AuthType=ClientSecret;Url=https://test{i}.crm.dynamics.com;ClientId=test;ClientSecret=test"));
+            dataverseOptions.Connections.Add(new DataverseConnection($"Connection{i}")
+            {
+                Url = $"https://test{i}.crm.dynamics.com",
+                ClientId = "test-client-id",
+                ClientSecret = "test-secret",
+                AuthType = DataverseAuthType.ClientSecret
+            });
         }
 
         // Calculate expected capacity directly
@@ -83,8 +89,20 @@ public class PoolSizingTests
         };
 
         // Add multiple connections
-        dataverseOptions.Connections.Add(new DataverseConnection("Primary", "AuthType=ClientSecret;Url=https://test.crm.dynamics.com;ClientId=test;ClientSecret=test"));
-        dataverseOptions.Connections.Add(new DataverseConnection("Secondary", "AuthType=ClientSecret;Url=https://test.crm.dynamics.com;ClientId=test;ClientSecret=test"));
+        dataverseOptions.Connections.Add(new DataverseConnection("Primary")
+        {
+            Url = "https://test.crm.dynamics.com",
+            ClientId = "test-client-id",
+            ClientSecret = "test-secret",
+            AuthType = DataverseAuthType.ClientSecret
+        });
+        dataverseOptions.Connections.Add(new DataverseConnection("Secondary")
+        {
+            Url = "https://test.crm.dynamics.com",
+            ClientId = "test-client-id-2",
+            ClientSecret = "test-secret-2",
+            AuthType = DataverseAuthType.ClientSecret
+        });
 
         // Calculate capacity using the same logic as CalculateTotalPoolCapacity
         var actualCapacity = dataverseOptions.Pool.MaxPoolSize > 0
@@ -110,8 +128,20 @@ public class PoolSizingTests
         };
 
         // Add 2 connections
-        dataverseOptions.Connections.Add(new DataverseConnection("Primary", "AuthType=ClientSecret;Url=https://test.crm.dynamics.com;ClientId=test;ClientSecret=test"));
-        dataverseOptions.Connections.Add(new DataverseConnection("Secondary", "AuthType=ClientSecret;Url=https://test.crm.dynamics.com;ClientId=test;ClientSecret=test"));
+        dataverseOptions.Connections.Add(new DataverseConnection("Primary")
+        {
+            Url = "https://test.crm.dynamics.com",
+            ClientId = "test-client-id",
+            ClientSecret = "test-secret",
+            AuthType = DataverseAuthType.ClientSecret
+        });
+        dataverseOptions.Connections.Add(new DataverseConnection("Secondary")
+        {
+            Url = "https://test.crm.dynamics.com",
+            ClientId = "test-client-id-2",
+            ClientSecret = "test-secret-2",
+            AuthType = DataverseAuthType.ClientSecret
+        });
 
         // Calculate capacity
         var actualCapacity = dataverseOptions.Pool.MaxPoolSize > 0

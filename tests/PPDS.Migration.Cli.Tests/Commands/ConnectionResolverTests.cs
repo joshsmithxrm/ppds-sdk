@@ -5,145 +5,195 @@ namespace PPDS.Migration.Cli.Tests.Commands;
 
 public class ConnectionResolverTests
 {
-    private const string TestEnvVar = "PPDS_TEST_CONNECTION";
-
     [Fact]
-    public void Resolve_WithArgumentValue_ReturnsArgument()
-    {
-        var result = ConnectionResolver.Resolve("arg-value", TestEnvVar);
-
-        Assert.Equal("arg-value", result);
-    }
-
-    [Fact]
-    public void Resolve_WithNullArgument_ReadsEnvironmentVariable()
+    public void Resolve_WithAllEnvVars_ReturnsConfig()
     {
         try
         {
-            Environment.SetEnvironmentVariable(TestEnvVar, "env-value");
+            Environment.SetEnvironmentVariable(ConnectionResolver.UrlEnvVar, "https://test.crm.dynamics.com");
+            Environment.SetEnvironmentVariable(ConnectionResolver.ClientIdEnvVar, "test-client-id");
+            Environment.SetEnvironmentVariable(ConnectionResolver.ClientSecretEnvVar, "test-secret");
+            Environment.SetEnvironmentVariable(ConnectionResolver.TenantIdEnvVar, "test-tenant");
 
-            var result = ConnectionResolver.Resolve(null, TestEnvVar);
+            var result = ConnectionResolver.Resolve();
 
-            Assert.Equal("env-value", result);
+            Assert.Equal("https://test.crm.dynamics.com", result.Url);
+            Assert.Equal("test-client-id", result.ClientId);
+            Assert.Equal("test-secret", result.ClientSecret);
+            Assert.Equal("test-tenant", result.TenantId);
         }
         finally
         {
-            Environment.SetEnvironmentVariable(TestEnvVar, null);
+            Environment.SetEnvironmentVariable(ConnectionResolver.UrlEnvVar, null);
+            Environment.SetEnvironmentVariable(ConnectionResolver.ClientIdEnvVar, null);
+            Environment.SetEnvironmentVariable(ConnectionResolver.ClientSecretEnvVar, null);
+            Environment.SetEnvironmentVariable(ConnectionResolver.TenantIdEnvVar, null);
         }
     }
 
     [Fact]
-    public void Resolve_WithEmptyArgument_ReadsEnvironmentVariable()
+    public void Resolve_WithoutTenantId_ReturnsConfigWithNullTenant()
     {
         try
         {
-            Environment.SetEnvironmentVariable(TestEnvVar, "env-value");
+            Environment.SetEnvironmentVariable(ConnectionResolver.UrlEnvVar, "https://test.crm.dynamics.com");
+            Environment.SetEnvironmentVariable(ConnectionResolver.ClientIdEnvVar, "test-client-id");
+            Environment.SetEnvironmentVariable(ConnectionResolver.ClientSecretEnvVar, "test-secret");
 
-            var result = ConnectionResolver.Resolve("", TestEnvVar);
+            var result = ConnectionResolver.Resolve();
 
-            Assert.Equal("env-value", result);
+            Assert.Equal("https://test.crm.dynamics.com", result.Url);
+            Assert.Equal("test-client-id", result.ClientId);
+            Assert.Equal("test-secret", result.ClientSecret);
+            Assert.Null(result.TenantId);
         }
         finally
         {
-            Environment.SetEnvironmentVariable(TestEnvVar, null);
+            Environment.SetEnvironmentVariable(ConnectionResolver.UrlEnvVar, null);
+            Environment.SetEnvironmentVariable(ConnectionResolver.ClientIdEnvVar, null);
+            Environment.SetEnvironmentVariable(ConnectionResolver.ClientSecretEnvVar, null);
         }
     }
 
     [Fact]
-    public void Resolve_WithWhitespaceArgument_ReadsEnvironmentVariable()
+    public void Resolve_WithMissingUrl_ThrowsInvalidOperationException()
     {
         try
         {
-            Environment.SetEnvironmentVariable(TestEnvVar, "env-value");
+            Environment.SetEnvironmentVariable(ConnectionResolver.UrlEnvVar, null);
+            Environment.SetEnvironmentVariable(ConnectionResolver.ClientIdEnvVar, "test-client-id");
+            Environment.SetEnvironmentVariable(ConnectionResolver.ClientSecretEnvVar, "test-secret");
 
-            var result = ConnectionResolver.Resolve("   ", TestEnvVar);
+            var exception = Assert.Throws<InvalidOperationException>(() => ConnectionResolver.Resolve());
 
-            Assert.Equal("env-value", result);
+            Assert.Contains("URL", exception.Message);
+            Assert.Contains(ConnectionResolver.UrlEnvVar, exception.Message);
         }
         finally
         {
-            Environment.SetEnvironmentVariable(TestEnvVar, null);
+            Environment.SetEnvironmentVariable(ConnectionResolver.ClientIdEnvVar, null);
+            Environment.SetEnvironmentVariable(ConnectionResolver.ClientSecretEnvVar, null);
         }
     }
 
     [Fact]
-    public void Resolve_ArgumentTakesPrecedenceOverEnvVar()
+    public void Resolve_WithMissingClientId_ThrowsInvalidOperationException()
     {
         try
         {
-            Environment.SetEnvironmentVariable(TestEnvVar, "env-value");
+            Environment.SetEnvironmentVariable(ConnectionResolver.UrlEnvVar, "https://test.crm.dynamics.com");
+            Environment.SetEnvironmentVariable(ConnectionResolver.ClientIdEnvVar, null);
+            Environment.SetEnvironmentVariable(ConnectionResolver.ClientSecretEnvVar, "test-secret");
 
-            var result = ConnectionResolver.Resolve("arg-value", TestEnvVar);
+            var exception = Assert.Throws<InvalidOperationException>(() => ConnectionResolver.Resolve());
 
-            Assert.Equal("arg-value", result);
+            Assert.Contains("client ID", exception.Message);
+            Assert.Contains(ConnectionResolver.ClientIdEnvVar, exception.Message);
         }
         finally
         {
-            Environment.SetEnvironmentVariable(TestEnvVar, null);
+            Environment.SetEnvironmentVariable(ConnectionResolver.UrlEnvVar, null);
+            Environment.SetEnvironmentVariable(ConnectionResolver.ClientSecretEnvVar, null);
         }
     }
 
     [Fact]
-    public void Resolve_WithNoValueAvailable_ThrowsInvalidOperationException()
-    {
-        Environment.SetEnvironmentVariable(TestEnvVar, null);
-
-        var exception = Assert.Throws<InvalidOperationException>(() =>
-            ConnectionResolver.Resolve(null, TestEnvVar, "test-connection"));
-
-        Assert.Contains("test-connection", exception.Message);
-        Assert.Contains(TestEnvVar, exception.Message);
-    }
-
-    [Fact]
-    public void TryResolve_WithArgumentValue_ReturnsArgument()
-    {
-        var result = ConnectionResolver.TryResolve("arg-value", TestEnvVar);
-
-        Assert.Equal("arg-value", result);
-    }
-
-    [Fact]
-    public void TryResolve_WithEnvVar_ReturnsEnvVar()
+    public void Resolve_WithMissingClientSecret_ThrowsInvalidOperationException()
     {
         try
         {
-            Environment.SetEnvironmentVariable(TestEnvVar, "env-value");
+            Environment.SetEnvironmentVariable(ConnectionResolver.UrlEnvVar, "https://test.crm.dynamics.com");
+            Environment.SetEnvironmentVariable(ConnectionResolver.ClientIdEnvVar, "test-client-id");
+            Environment.SetEnvironmentVariable(ConnectionResolver.ClientSecretEnvVar, null);
 
-            var result = ConnectionResolver.TryResolve(null, TestEnvVar);
+            var exception = Assert.Throws<InvalidOperationException>(() => ConnectionResolver.Resolve());
 
-            Assert.Equal("env-value", result);
+            Assert.Contains("client secret", exception.Message);
+            Assert.Contains(ConnectionResolver.ClientSecretEnvVar, exception.Message);
         }
         finally
         {
-            Environment.SetEnvironmentVariable(TestEnvVar, null);
+            Environment.SetEnvironmentVariable(ConnectionResolver.UrlEnvVar, null);
+            Environment.SetEnvironmentVariable(ConnectionResolver.ClientIdEnvVar, null);
         }
     }
 
     [Fact]
-    public void TryResolve_WithNoValue_ReturnsNull()
+    public void Resolve_WithPrefix_UsesCorrectEnvVars()
     {
-        Environment.SetEnvironmentVariable(TestEnvVar, null);
+        try
+        {
+            Environment.SetEnvironmentVariable($"{ConnectionResolver.SourcePrefix}URL", "https://source.crm.dynamics.com");
+            Environment.SetEnvironmentVariable($"{ConnectionResolver.SourcePrefix}CLIENT_ID", "source-client-id");
+            Environment.SetEnvironmentVariable($"{ConnectionResolver.SourcePrefix}CLIENT_SECRET", "source-secret");
+            Environment.SetEnvironmentVariable($"{ConnectionResolver.SourcePrefix}TENANT_ID", "source-tenant");
 
-        var result = ConnectionResolver.TryResolve(null, TestEnvVar);
+            var result = ConnectionResolver.Resolve(ConnectionResolver.SourcePrefix, "source");
 
-        Assert.Null(result);
+            Assert.Equal("https://source.crm.dynamics.com", result.Url);
+            Assert.Equal("source-client-id", result.ClientId);
+            Assert.Equal("source-secret", result.ClientSecret);
+            Assert.Equal("source-tenant", result.TenantId);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable($"{ConnectionResolver.SourcePrefix}URL", null);
+            Environment.SetEnvironmentVariable($"{ConnectionResolver.SourcePrefix}CLIENT_ID", null);
+            Environment.SetEnvironmentVariable($"{ConnectionResolver.SourcePrefix}CLIENT_SECRET", null);
+            Environment.SetEnvironmentVariable($"{ConnectionResolver.SourcePrefix}TENANT_ID", null);
+        }
     }
 
     [Fact]
-    public void GetHelpDescription_IncludesEnvVarName()
+    public void GetHelpDescription_IncludesEnvVarNames()
     {
-        var result = ConnectionResolver.GetHelpDescription(TestEnvVar);
+        var result = ConnectionResolver.GetHelpDescription();
 
-        Assert.Contains(TestEnvVar, result);
-        Assert.Contains("environment variable", result.ToLower());
+        Assert.Contains(ConnectionResolver.UrlEnvVar, result);
+        Assert.Contains(ConnectionResolver.ClientIdEnvVar, result);
+        Assert.Contains(ConnectionResolver.ClientSecretEnvVar, result);
+        Assert.Contains(ConnectionResolver.TenantIdEnvVar, result);
+    }
+
+    [Fact]
+    public void GetSourceHelpDescription_IncludesSourcePrefix()
+    {
+        var result = ConnectionResolver.GetSourceHelpDescription();
+
+        Assert.Contains(ConnectionResolver.SourcePrefix, result);
+        Assert.Contains("URL", result);
+        Assert.Contains("CLIENT_ID", result);
+        Assert.Contains("CLIENT_SECRET", result);
+    }
+
+    [Fact]
+    public void GetTargetHelpDescription_IncludesTargetPrefix()
+    {
+        var result = ConnectionResolver.GetTargetHelpDescription();
+
+        Assert.Contains(ConnectionResolver.TargetPrefix, result);
+        Assert.Contains("URL", result);
+        Assert.Contains("CLIENT_ID", result);
+        Assert.Contains("CLIENT_SECRET", result);
     }
 
     [Fact]
     public void EnvironmentVariableNames_AreCorrect()
     {
-        Assert.Equal("PPDS_CONNECTION", ConnectionResolver.ConnectionEnvVar);
-        Assert.Equal("PPDS_SOURCE_CONNECTION", ConnectionResolver.SourceConnectionEnvVar);
-        Assert.Equal("PPDS_TARGET_CONNECTION", ConnectionResolver.TargetConnectionEnvVar);
+        Assert.Equal("PPDS_URL", ConnectionResolver.UrlEnvVar);
+        Assert.Equal("PPDS_CLIENT_ID", ConnectionResolver.ClientIdEnvVar);
+        Assert.Equal("PPDS_CLIENT_SECRET", ConnectionResolver.ClientSecretEnvVar);
+        Assert.Equal("PPDS_TENANT_ID", ConnectionResolver.TenantIdEnvVar);
+        Assert.Equal("PPDS_SOURCE_", ConnectionResolver.SourcePrefix);
+        Assert.Equal("PPDS_TARGET_", ConnectionResolver.TargetPrefix);
+    }
+
+    [Fact]
+    public void ConnectionConfig_IsRecord()
+    {
+        var config1 = new ConnectionResolver.ConnectionConfig("url", "clientId", "secret", "tenant");
+        var config2 = new ConnectionResolver.ConnectionConfig("url", "clientId", "secret", "tenant");
+
+        Assert.Equal(config1, config2);
     }
 }

@@ -25,29 +25,7 @@ public class MigrateCommandTests
     [Fact]
     public void Create_ReturnsCommandWithDescription()
     {
-        Assert.Equal("Migrate data from source to target Dataverse environment", _command.Description);
-    }
-
-    [Fact]
-    public void Create_HasSourceConnectionOption()
-    {
-        var option = _command.Options.FirstOrDefault(o => o.Name == "source-connection");
-        Assert.NotNull(option);
-        // Not required at parse time - can come from environment variable
-        Assert.False(option.IsRequired);
-        Assert.Contains("--source", option.Aliases);
-        Assert.Contains("--source-connection", option.Aliases);
-    }
-
-    [Fact]
-    public void Create_HasTargetConnectionOption()
-    {
-        var option = _command.Options.FirstOrDefault(o => o.Name == "target-connection");
-        Assert.NotNull(option);
-        // Not required at parse time - can come from environment variable
-        Assert.False(option.IsRequired);
-        Assert.Contains("--target", option.Aliases);
-        Assert.Contains("--target-connection", option.Aliases);
+        Assert.StartsWith("Migrate data from source to target Dataverse environment", _command.Description);
     }
 
     [Fact]
@@ -117,86 +95,70 @@ public class MigrateCommandTests
     [Fact]
     public void Parse_WithAllRequiredOptions_Succeeds()
     {
-        var result = _command.Parse("--source-connection source --target-connection target --schema schema.xml");
+        var result = _command.Parse("--schema schema.xml");
         Assert.Empty(result.Errors);
     }
 
     [Fact]
     public void Parse_WithShortAliases_Succeeds()
     {
-        var result = _command.Parse("--source source --target target -s schema.xml");
-        Assert.Empty(result.Errors);
-    }
-
-    [Fact]
-    public void Parse_MissingSourceConnection_NoParseError()
-    {
-        // Connection can come from environment variable, so no parse error
-        var result = _command.Parse("--target-connection target --schema schema.xml");
-        Assert.Empty(result.Errors);
-    }
-
-    [Fact]
-    public void Parse_MissingTargetConnection_NoParseError()
-    {
-        // Connection can come from environment variable, so no parse error
-        var result = _command.Parse("--source-connection source --schema schema.xml");
+        var result = _command.Parse("-s schema.xml");
         Assert.Empty(result.Errors);
     }
 
     [Fact]
     public void Parse_MissingSchema_HasError()
     {
-        var result = _command.Parse("--source-connection source --target-connection target");
+        var result = _command.Parse("");
         Assert.NotEmpty(result.Errors);
     }
 
     [Fact]
     public void Parse_WithOptionalTempDir_Succeeds()
     {
-        var result = _command.Parse("--source source --target target -s schema.xml --temp-dir /tmp");
+        var result = _command.Parse("-s schema.xml --temp-dir /tmp");
         Assert.Empty(result.Errors);
     }
 
     [Fact]
     public void Parse_WithOptionalBatchSize_Succeeds()
     {
-        var result = _command.Parse("--source source --target target -s schema.xml --batch-size 500");
+        var result = _command.Parse("-s schema.xml --batch-size 500");
         Assert.Empty(result.Errors);
     }
 
     [Fact]
     public void Parse_WithOptionalBypassPlugins_Succeeds()
     {
-        var result = _command.Parse("--source source --target target -s schema.xml --bypass-plugins");
+        var result = _command.Parse("-s schema.xml --bypass-plugins");
         Assert.Empty(result.Errors);
     }
 
     [Fact]
     public void Parse_WithOptionalBypassFlows_Succeeds()
     {
-        var result = _command.Parse("--source source --target target -s schema.xml --bypass-flows");
+        var result = _command.Parse("-s schema.xml --bypass-flows");
         Assert.Empty(result.Errors);
     }
 
     [Fact]
     public void Parse_WithAllBypassOptions_Succeeds()
     {
-        var result = _command.Parse("--source source --target target -s schema.xml --bypass-plugins --bypass-flows");
+        var result = _command.Parse("-s schema.xml --bypass-plugins --bypass-flows");
         Assert.Empty(result.Errors);
     }
 
     [Fact]
     public void Parse_WithOptionalJson_Succeeds()
     {
-        var result = _command.Parse("--source source --target target -s schema.xml --json");
+        var result = _command.Parse("-s schema.xml --json");
         Assert.Empty(result.Errors);
     }
 
     [Fact]
     public void Parse_WithOptionalVerbose_Succeeds()
     {
-        var result = _command.Parse("--source source --target target -s schema.xml --verbose");
+        var result = _command.Parse("-s schema.xml --verbose");
         Assert.Empty(result.Errors);
     }
 

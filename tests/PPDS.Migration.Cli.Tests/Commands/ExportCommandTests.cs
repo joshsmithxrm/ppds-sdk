@@ -25,18 +25,7 @@ public class ExportCommandTests
     [Fact]
     public void Create_ReturnsCommandWithDescription()
     {
-        Assert.Equal("Export data from Dataverse to a ZIP file", _command.Description);
-    }
-
-    [Fact]
-    public void Create_HasConnectionOption()
-    {
-        var option = _command.Options.FirstOrDefault(o => o.Name == "connection");
-        Assert.NotNull(option);
-        // Not required at parse time - can come from environment variable
-        Assert.False(option.IsRequired);
-        Assert.Contains("-c", option.Aliases);
-        Assert.Contains("--connection", option.Aliases);
+        Assert.StartsWith("Export data from Dataverse to a ZIP file", _command.Description);
     }
 
     [Fact]
@@ -108,78 +97,70 @@ public class ExportCommandTests
     [Fact]
     public void Parse_WithAllRequiredOptions_Succeeds()
     {
-        var result = _command.Parse("--connection conn --schema schema.xml --output data.zip");
+        var result = _command.Parse("--schema schema.xml --output data.zip");
         Assert.Empty(result.Errors);
     }
 
     [Fact]
     public void Parse_WithShortAliases_Succeeds()
     {
-        var result = _command.Parse("-c conn -s schema.xml -o data.zip");
-        Assert.Empty(result.Errors);
-    }
-
-    [Fact]
-    public void Parse_MissingConnection_NoParseError()
-    {
-        // Connection can come from environment variable, so no parse error
-        var result = _command.Parse("--schema schema.xml --output data.zip");
+        var result = _command.Parse("-s schema.xml -o data.zip");
         Assert.Empty(result.Errors);
     }
 
     [Fact]
     public void Parse_MissingSchema_HasError()
     {
-        var result = _command.Parse("--connection conn --output data.zip");
+        var result = _command.Parse("--output data.zip");
         Assert.NotEmpty(result.Errors);
     }
 
     [Fact]
     public void Parse_MissingOutput_HasError()
     {
-        var result = _command.Parse("--connection conn --schema schema.xml");
+        var result = _command.Parse("--schema schema.xml");
         Assert.NotEmpty(result.Errors);
     }
 
     [Fact]
     public void Parse_WithOptionalParallel_Succeeds()
     {
-        var result = _command.Parse("-c conn -s schema.xml -o data.zip --parallel 4");
+        var result = _command.Parse("-s schema.xml -o data.zip --parallel 4");
         Assert.Empty(result.Errors);
     }
 
     [Fact]
     public void Parse_WithOptionalPageSize_Succeeds()
     {
-        var result = _command.Parse("-c conn -s schema.xml -o data.zip --page-size 1000");
+        var result = _command.Parse("-s schema.xml -o data.zip --page-size 1000");
         Assert.Empty(result.Errors);
     }
 
     [Fact]
     public void Parse_WithOptionalIncludeFiles_Succeeds()
     {
-        var result = _command.Parse("-c conn -s schema.xml -o data.zip --include-files");
+        var result = _command.Parse("-s schema.xml -o data.zip --include-files");
         Assert.Empty(result.Errors);
     }
 
     [Fact]
     public void Parse_WithOptionalJson_Succeeds()
     {
-        var result = _command.Parse("-c conn -s schema.xml -o data.zip --json");
+        var result = _command.Parse("-s schema.xml -o data.zip --json");
         Assert.Empty(result.Errors);
     }
 
     [Fact]
     public void Parse_WithOptionalVerbose_Succeeds()
     {
-        var result = _command.Parse("-c conn -s schema.xml -o data.zip --verbose");
+        var result = _command.Parse("-s schema.xml -o data.zip --verbose");
         Assert.Empty(result.Errors);
     }
 
     [Fact]
     public void Parse_WithShortVerbose_Succeeds()
     {
-        var result = _command.Parse("-c conn -s schema.xml -o data.zip -v");
+        var result = _command.Parse("-s schema.xml -o data.zip -v");
         Assert.Empty(result.Errors);
     }
 

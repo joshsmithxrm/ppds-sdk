@@ -14,10 +14,6 @@ public static class ImportCommand
 {
     public static Command Create()
     {
-        var connectionOption = new Option<string?>(
-            aliases: ["--connection", "-c"],
-            description: ConnectionResolver.GetHelpDescription(ConnectionResolver.ConnectionEnvVar));
-
         var dataOption = new Option<FileInfo>(
             aliases: ["--data", "-d"],
             description: "Path to data.zip file")
@@ -64,9 +60,8 @@ public static class ImportCommand
             getDefaultValue: () => false,
             description: "Verbose output");
 
-        var command = new Command("import", "Import data from a ZIP file into Dataverse")
+        var command = new Command("import", "Import data from a ZIP file into Dataverse. " + ConnectionResolver.GetHelpDescription())
         {
-            connectionOption,
             dataOption,
             batchSizeOption,
             bypassPluginsOption,
@@ -80,7 +75,6 @@ public static class ImportCommand
 
         command.SetHandler(async (context) =>
         {
-            var connectionArg = context.ParseResult.GetValueForOption(connectionOption);
             var data = context.ParseResult.GetValueForOption(dataOption)!;
             var batchSize = context.ParseResult.GetValueForOption(batchSizeOption);
             var bypassPlugins = context.ParseResult.GetValueForOption(bypassPluginsOption);
@@ -107,14 +101,11 @@ public static class ImportCommand
                 return;
             }
 
-            // Resolve connection string from argument or environment variable
-            string connection;
+            // Resolve connection from environment variables
+            ConnectionResolver.ConnectionConfig connection;
             try
             {
-                connection = ConnectionResolver.Resolve(
-                    connectionArg,
-                    ConnectionResolver.ConnectionEnvVar,
-                    "connection");
+                connection = ConnectionResolver.Resolve();
             }
             catch (InvalidOperationException ex)
             {
@@ -132,7 +123,7 @@ public static class ImportCommand
     }
 
     private static async Task<int> ExecuteAsync(
-        string connection,
+        ConnectionResolver.ConnectionConfig connection,
         FileInfo data,
         int batchSize,
         bool bypassPlugins,
