@@ -1428,7 +1428,7 @@ namespace PPDS.Dataverse.BulkOperations
             var connectionCount = _options.Connections.Count;
             var pending = new Queue<(int Index, List<T> Batch)>(
                 batches.Select((b, i) => (i, b)));
-            var inFlight = new Dictionary<Task<(int Index, BulkOperationResult Result)>, int>();
+            var inFlight = new Dictionary<Task<(int Index, BulkOperationResult Result, TimeSpan Duration)>, int>();
             var results = new BulkOperationResult?[batches.Count];
             var completedCount = 0;
             var lastLoggedParallelism = 0;
@@ -1471,9 +1471,12 @@ namespace PPDS.Dataverse.BulkOperations
                 inFlight.Remove(completedTask);
 
                 // Get result (propagates exceptions if the task faulted)
-                var (completedIndex, result) = await completedTask.ConfigureAwait(false);
+                var (completedIndex, result, duration) = await completedTask.ConfigureAwait(false);
                 results[completedIndex] = result;
                 completedCount++;
+
+                // Record batch duration for execution time ceiling calculation
+                _adaptiveRateController.RecordBatchDuration(connectionName, duration);
 
                 // Report progress
                 tracker.RecordProgress(result.SuccessCount, result.FailureCount);
@@ -1496,16 +1499,18 @@ namespace PPDS.Dataverse.BulkOperations
         }
 
         /// <summary>
-        /// Executes a single batch and returns the result with its index for tracking.
+        /// Executes a single batch and returns the result with its index and duration for tracking.
         /// </summary>
-        private static async Task<(int Index, BulkOperationResult Result)> ExecuteSingleBatchWithIndexAsync<T>(
+        private static async Task<(int Index, BulkOperationResult Result, TimeSpan Duration)> ExecuteSingleBatchWithIndexAsync<T>(
             int index,
             List<T> batch,
             Func<List<T>, CancellationToken, Task<BulkOperationResult>> executeBatch,
             CancellationToken cancellationToken)
         {
+            var stopwatch = Stopwatch.StartNew();
             var result = await executeBatch(batch, cancellationToken).ConfigureAwait(false);
-            return (index, result);
+            stopwatch.Stop();
+            return (index, result, stopwatch.Elapsed);
         }
 
         /// <summary>

@@ -28,6 +28,13 @@ namespace PPDS.Dataverse.Resilience
         void RecordSuccess(string connectionName);
 
         /// <summary>
+        /// Records batch execution duration for execution time ceiling calculation.
+        /// </summary>
+        /// <param name="connectionName">The connection that executed the batch.</param>
+        /// <param name="duration">The wall-clock duration of the batch execution.</param>
+        void RecordBatchDuration(string connectionName, TimeSpan duration);
+
+        /// <summary>
         /// Records throttle event.
         /// </summary>
         /// <param name="connectionName">The connection that was throttled.</param>

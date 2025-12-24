@@ -40,11 +40,44 @@ namespace PPDS.Dataverse.Resilience
         public DateTime? ThrottleCeilingExpiry { get; init; }
 
         /// <summary>
-        /// Gets the effective ceiling (minimum of hard ceiling and throttle ceiling if active).
+        /// Gets the execution time-based ceiling (calculated from batch durations).
+        /// Null if not enough samples have been collected yet.
         /// </summary>
-        public int EffectiveCeiling => ThrottleCeilingExpiry.HasValue && ThrottleCeilingExpiry > DateTime.UtcNow && ThrottleCeiling.HasValue
-            ? Math.Min(CeilingParallelism, ThrottleCeiling.Value)
-            : CeilingParallelism;
+        public int? ExecutionTimeCeiling { get; init; }
+
+        /// <summary>
+        /// Gets the average batch duration used to calculate execution time ceiling.
+        /// Null if not enough samples have been collected yet.
+        /// </summary>
+        public TimeSpan? AverageBatchDuration { get; init; }
+
+        /// <summary>
+        /// Gets the number of batch duration samples collected.
+        /// </summary>
+        public int BatchDurationSampleCount { get; init; }
+
+        /// <summary>
+        /// Gets the effective ceiling (minimum of hard ceiling, throttle ceiling, and execution time ceiling).
+        /// </summary>
+        public int EffectiveCeiling
+        {
+            get
+            {
+                var ceiling = CeilingParallelism;
+
+                if (ThrottleCeilingExpiry.HasValue && ThrottleCeilingExpiry > DateTime.UtcNow && ThrottleCeiling.HasValue)
+                {
+                    ceiling = Math.Min(ceiling, ThrottleCeiling.Value);
+                }
+
+                if (ExecutionTimeCeiling.HasValue)
+                {
+                    ceiling = Math.Min(ceiling, ExecutionTimeCeiling.Value);
+                }
+
+                return ceiling;
+            }
+        }
 
         /// <summary>
         /// Gets the last known good parallelism level.

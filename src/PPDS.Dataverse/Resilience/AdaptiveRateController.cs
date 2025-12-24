@@ -101,13 +101,25 @@ namespace PPDS.Dataverse.Resilience
                     state.LastKnownGoodTimestamp = DateTime.UtcNow;
                 }
 
-                // Calculate effective ceiling (respect throttle ceiling if not expired)
+                // Calculate effective ceiling (minimum of hard ceiling, throttle ceiling, and execution time ceiling)
                 var effectiveCeiling = state.CeilingParallelism;
                 var throttleCeilingActive = false;
+                var execTimeCeilingActive = false;
+
                 if (state.ThrottleCeilingExpiry.HasValue && state.ThrottleCeilingExpiry > DateTime.UtcNow && state.ThrottleCeiling.HasValue)
                 {
                     effectiveCeiling = Math.Min(effectiveCeiling, state.ThrottleCeiling.Value);
                     throttleCeilingActive = true;
+                }
+
+                // Only apply execution time ceiling for slow batches (protects updates/deletes,
+                // allows fast creates to run at full parallelism)
+                if (state.ExecutionTimeCeiling.HasValue &&
+                    state.BatchDurationEmaMs.HasValue &&
+                    state.BatchDurationEmaMs.Value >= _options.SlowBatchThresholdMs)
+                {
+                    effectiveCeiling = Math.Min(effectiveCeiling, state.ExecutionTimeCeiling.Value);
+                    execTimeCeilingActive = state.ExecutionTimeCeiling.Value < state.CeilingParallelism;
                 }
 
                 var canIncrease = state.SuccessesSinceThrottle >= _options.StabilizationBatches
@@ -128,11 +140,18 @@ namespace PPDS.Dataverse.Resilience
                         state.CurrentParallelism + increase,
                         effectiveCeiling);
 
+                    // Build ceiling note for logging
+                    var ceilingNotes = new System.Collections.Generic.List<string>();
+                    if (throttleCeilingActive)
+                        ceilingNotes.Add($"throttle ceiling until {state.ThrottleCeilingExpiry:HH:mm:ss}");
+                    if (execTimeCeilingActive)
+                        ceilingNotes.Add($"exec time ceiling {state.ExecutionTimeCeiling}");
+
                     _logger.LogDebug(
-                        "Connection {Connection}: {Old} -> {New} (floor: {Floor}, ceiling: {Ceiling}{ThrottleCeilingNote})",
+                        "Connection {Connection}: {Old} -> {New} (floor: {Floor}, ceiling: {Ceiling}{CeilingNote})",
                         connectionName, oldParallelism, state.CurrentParallelism,
                         state.FloorParallelism, effectiveCeiling,
-                        throttleCeilingActive ? $", throttle ceiling active until {state.ThrottleCeilingExpiry:HH:mm:ss}" : "");
+                        ceilingNotes.Count > 0 ? $", {string.Join(", ", ceilingNotes)}" : "");
 
                     state.SuccessesSinceThrottle = 0;
                     state.LastIncreaseTime = DateTime.UtcNow;
@@ -192,6 +211,60 @@ namespace PPDS.Dataverse.Resilience
         }
 
         /// <inheritdoc />
+        public void RecordBatchDuration(string connectionName, TimeSpan duration)
+        {
+            if (!IsEnabled || !_options.ExecutionTimeCeilingEnabled)
+            {
+                return;
+            }
+
+            if (!_states.TryGetValue(connectionName, out var state))
+            {
+                return;
+            }
+
+            lock (state.SyncRoot)
+            {
+                var durationMs = duration.TotalMilliseconds;
+
+                // Update EMA of batch duration
+                if (state.BatchDurationEmaMs.HasValue)
+                {
+                    // EMA: new = alpha * current + (1 - alpha) * previous
+                    var alpha = _options.BatchDurationSmoothingFactor;
+                    state.BatchDurationEmaMs = alpha * durationMs + (1 - alpha) * state.BatchDurationEmaMs.Value;
+                }
+                else
+                {
+                    // First sample - use it directly
+                    state.BatchDurationEmaMs = durationMs;
+                }
+
+                state.BatchDurationSampleCount++;
+
+                // Calculate execution time ceiling once we have enough samples
+                if (state.BatchDurationSampleCount >= _options.MinBatchSamplesForCeiling)
+                {
+                    var avgBatchSeconds = state.BatchDurationEmaMs.Value / 1000.0;
+                    var calculatedCeiling = (int)(_options.ExecutionTimeCeilingFactor / avgBatchSeconds);
+
+                    // Clamp to [floor, hard ceiling]
+                    var newCeiling = Math.Max(state.FloorParallelism, Math.Min(calculatedCeiling, state.CeilingParallelism));
+
+                    // Only log when ceiling changes significantly
+                    if (!state.ExecutionTimeCeiling.HasValue || Math.Abs(newCeiling - state.ExecutionTimeCeiling.Value) >= 2)
+                    {
+                        _logger.LogDebug(
+                            "Connection {Connection}: Execution time ceiling updated to {Ceiling} (avg batch: {AvgBatch:F1}s, samples: {Samples})",
+                            connectionName, newCeiling, avgBatchSeconds, state.BatchDurationSampleCount);
+                    }
+
+                    state.ExecutionTimeCeiling = newCeiling;
+                }
+            }
+        }
+
+        /// <inheritdoc />
         public void Reset(string connectionName)
         {
             if (_states.TryGetValue(connectionName, out var state))
@@ -199,6 +272,10 @@ namespace PPDS.Dataverse.Resilience
                 lock (state.SyncRoot)
                 {
                     ResetStateInternal(state, state.FloorParallelism, state.CeilingParallelism);
+                    // Full reset also clears execution time tracking
+                    state.BatchDurationEmaMs = null;
+                    state.BatchDurationSampleCount = 0;
+                    state.ExecutionTimeCeiling = null;
                 }
             }
         }
@@ -228,6 +305,11 @@ namespace PPDS.Dataverse.Resilience
                     CeilingParallelism = state.CeilingParallelism,
                     ThrottleCeiling = throttleCeilingActive ? state.ThrottleCeiling : null,
                     ThrottleCeilingExpiry = throttleCeilingActive ? state.ThrottleCeilingExpiry : null,
+                    ExecutionTimeCeiling = state.ExecutionTimeCeiling,
+                    AverageBatchDuration = state.BatchDurationEmaMs.HasValue
+                        ? TimeSpan.FromMilliseconds(state.BatchDurationEmaMs.Value)
+                        : null,
+                    BatchDurationSampleCount = state.BatchDurationSampleCount,
                     LastKnownGoodParallelism = state.LastKnownGoodParallelism,
                     IsLastKnownGoodStale = isStale,
                     SuccessesSinceThrottle = state.SuccessesSinceThrottle,
@@ -275,6 +357,10 @@ namespace PPDS.Dataverse.Resilience
             state.LastActivityTime = DateTime.UtcNow;
             state.ThrottleCeiling = null;
             state.ThrottleCeilingExpiry = null;
+            // Note: We intentionally do NOT reset batch duration tracking on idle reset.
+            // The execution time ceiling should persist across idle periods as it reflects
+            // the operation's inherent characteristics, not transient throttle state.
+            // Only a full Reset() call should clear these.
         }
 
         private sealed class ConnectionState
@@ -302,6 +388,22 @@ namespace PPDS.Dataverse.Resilience
             /// After expiry, probing can resume up to the hard ceiling.
             /// </summary>
             public DateTime? ThrottleCeilingExpiry { get; set; }
+
+            /// <summary>
+            /// Exponential moving average of batch durations in milliseconds.
+            /// Used to calculate execution time ceiling.
+            /// </summary>
+            public double? BatchDurationEmaMs { get; set; }
+
+            /// <summary>
+            /// Number of batch duration samples collected.
+            /// </summary>
+            public int BatchDurationSampleCount { get; set; }
+
+            /// <summary>
+            /// Execution time-based ceiling calculated from batch durations.
+            /// </summary>
+            public int? ExecutionTimeCeiling { get; set; }
         }
     }
 }
