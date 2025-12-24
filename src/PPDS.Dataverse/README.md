@@ -100,6 +100,49 @@ var result = await executor.UpsertMultipleAsync("account", entities,
 Console.WriteLine($"Success: {result.SuccessCount}, Failed: {result.FailureCount}");
 ```
 
+### Adaptive Rate Control
+
+Automatically adjusts parallelism to maximize throughput while avoiding service protection throttles. Enabled by default with sensible settings.
+
+| Preset | Best For | Behavior |
+|--------|----------|----------|
+| **Conservative** | Production bulk jobs, overnight migrations | Lower parallelism, avoids throttles |
+| **Balanced** | General purpose (default) | Balanced throughput vs safety |
+| **Aggressive** | Dev/test, time-critical with monitoring | Higher parallelism, accepts some throttles |
+
+**Simple configuration:**
+
+```json
+{
+  "Dataverse": {
+    "AdaptiveRate": {
+      "Preset": "Conservative"
+    }
+  }
+}
+```
+
+**Fine-tuning** - override individual settings while using a preset base:
+
+```json
+{
+  "Dataverse": {
+    "AdaptiveRate": {
+      "Preset": "Balanced",
+      "ExecutionTimeCeilingFactor": 180
+    }
+  }
+}
+```
+
+**Fail-fast** - for time-sensitive operations that shouldn't wait on throttles:
+
+```csharp
+options.AdaptiveRate.MaxRetryAfterTolerance = TimeSpan.FromSeconds(30);
+```
+
+See [ADR-0006](docs/adr/0006_EXECUTION_TIME_CEILING.md) for algorithm details.
+
 ### Affinity Cookie Disabled by Default
 
 The SDK's affinity cookie routes all requests to a single backend node. Disabling it provides 10x+ throughput improvement:

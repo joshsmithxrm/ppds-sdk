@@ -1,0 +1,138 @@
+# ADR-0006: Execution Time Ceiling for Adaptive Rate Control
+
+**Status:** Accepted
+**Applies to:** PPDS.Dataverse
+
+## Context
+
+Dataverse service protection limits include three dimensions:
+1. **Request count**: 6,000 requests per 5-minute window per user
+2. **Execution time**: 1,200 seconds (20 minutes) per 5-minute window per user
+3. **Concurrent requests**: 52 simultaneous requests per user
+
+The original AIMD adaptive rate controller (ADR-0004) focused on request count, adjusting parallelism based on throttle responses. However, **execution time exhaustion** was causing severe throttle cascades:
+
+- Update/delete operations take 10-15 seconds per batch (server-side)
+- At 25 parallelism with 12s batches: 25 × 12s = 300s execution time consumed per batch cycle
+- The 1,200s budget (4s/second average) is quickly exhausted
+- Result: 80-100 concurrent throttle responses, 1-8 minute Retry-After cascades
+
+### The Problem: Fast vs Slow Operations
+
+| Operation | Batch Time | At 30 Parallelism | Result |
+|-----------|------------|-------------------|--------|
+| Create | 7-8s | Well under budget | No throttle |
+| Update | 10-15s | Exceeds budget | Throttle cascade |
+| Delete | 8-12s | Borderline/exceeds | Throttle cascade |
+
+A single parallelism ceiling doesn't work for all operation types.
+
+## Decision
+
+Implement an **execution time-aware ceiling** that dynamically adjusts based on observed batch durations.
+
+### Algorithm
+
+```
+1. Track batch durations via exponential moving average (EMA)
+   ema = α × newDuration + (1-α) × ema  // α = 0.3
+
+2. Calculate ceiling based on batch time:
+   ceiling = ExecutionTimeCeilingFactor / avgBatchSeconds
+
+   Example: Factor=200, avgBatch=10s → ceiling = 20
+
+3. Only apply ceiling for "slow" operations:
+   if (avgBatchMs >= SlowBatchThresholdMs) {
+     effectiveCeiling = min(hardCeiling, throttleCeiling, executionTimeCeiling)
+   }
+
+4. Fast operations (creates) run uncapped at full parallelism
+```
+
+### Configurable Presets
+
+To simplify configuration, three presets provide sensible defaults:
+
+| Preset | Factor | Threshold | Use Case |
+|--------|--------|-----------|----------|
+| **Conservative** | 180 | 7000ms | Production bulk jobs |
+| **Balanced** | 200 | 8000ms | General purpose (default) |
+| **Aggressive** | 320 | 11000ms | Dev/test with monitoring |
+
+### Configuration
+
+**Simple (preset only):**
+```json
+{"Dataverse": {"AdaptiveRate": {"Preset": "Conservative"}}}
+```
+
+**Fine-tuned (preset + overrides):**
+```json
+{
+  "Dataverse": {
+    "AdaptiveRate": {
+      "Preset": "Balanced",
+      "ExecutionTimeCeilingFactor": 180,
+      "SlowBatchThresholdMs": 7000
+    }
+  }
+}
+```
+
+### Implementation Details
+
+**Nullable backing fields** enable preset defaults with explicit overrides:
+
+```csharp
+private int? _executionTimeCeilingFactor;
+
+public int ExecutionTimeCeilingFactor
+{
+    get => _executionTimeCeilingFactor ?? GetPresetDefaults(Preset).Factor;
+    set => _executionTimeCeilingFactor = value;
+}
+```
+
+This allows:
+- `{"Preset": "Conservative"}` → Uses all Conservative values
+- `{"Preset": "Conservative", "Factor": 200}` → Conservative base with Factor override
+
+### Tuning History
+
+| Round | Factor | Threshold | Create | Update | Delete | Issue |
+|-------|--------|-----------|--------|--------|--------|-------|
+| 1 | 250 | 10000 | 542/s ✅ | 118/s ❌ | 78/s ❌ | Threshold too high |
+| 2 | 250 | 9000 | 545/s ✅ | 100/s ❌ | 67/s ❌ | Factor too high |
+| 3 | 200 | 8000 | TBD | TBD | TBD | Current settings |
+
+## Consequences
+
+### Positive
+
+- **Prevents throttle cascades**: Slow operations get lower ceilings automatically
+- **Preserves fast operation throughput**: Creates run at full speed (under threshold)
+- **Easy configuration**: Presets cover common scenarios
+- **Fine-grained control**: Individual options for advanced tuning
+- **appsettings.json support**: Full configuration binding compatibility
+
+### Negative
+
+- **EMA lag**: The moving average can lag behind sudden batch time changes
+- **Per-connection tracking**: Each connection maintains separate state
+- **No operation type awareness**: Relies on batch timing, not explicit operation type
+
+### Trade-offs
+
+| Approach | Pros | Cons |
+|----------|------|------|
+| Per-operation ceilings | Precise control | Requires API changes, complex config |
+| Dynamic EMA (chosen) | Adapts automatically | Slight lag, simpler API |
+| Fixed ceilings | Simple | One size doesn't fit all |
+
+## References
+
+- [Service protection API limits](https://learn.microsoft.com/en-us/power-apps/developer/data-platform/api-limits) - Execution time budget details
+- [Optimize performance for bulk operations](https://learn.microsoft.com/en-us/power-apps/developer/data-platform/optimize-performance-create-update) - Microsoft's throughput guidance
+- ADR-0004: Throttle Recovery Strategy - Base AIMD implementation
+- [ADAPTIVE_RATE_TUNING_STATUS.md](../ADAPTIVE_RATE_TUNING_STATUS.md) - Detailed tuning history

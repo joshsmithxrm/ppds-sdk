@@ -14,6 +14,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Connection selection strategies: RoundRobin, LeastConnections, ThrottleAware
 - Throttle tracking with automatic routing away from throttled connections
 - AIMD-based adaptive rate control for throttle recovery
+- Rate control presets: Conservative, Balanced, Aggressive for easy tuning
+- Execution time-aware ceiling to prevent throttle cascades on slow operations
+- `MaxRetryAfterTolerance` option for fail-fast in time-sensitive scenarios
+- Full `appsettings.json` configuration support for all options
 - Bulk operation wrappers: CreateMultiple, UpdateMultiple, UpsertMultiple, DeleteMultiple
 - `IProgress<ProgressSnapshot>` support for real-time progress reporting
 - Structured configuration with typed auth properties

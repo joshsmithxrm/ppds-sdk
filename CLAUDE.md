@@ -36,6 +36,7 @@
 | Dispose pooled clients with `await using` | Returns connections to pool; prevents leaks |
 | Use bulk APIs (`CreateMultiple`, `UpdateMultiple`, `UpsertMultiple`) | 5x faster than `ExecuteMultiple` (~10M vs ~2M records/hour) |
 | Reference Microsoft Learn docs in ADRs | Authoritative source for Dataverse best practices |
+| Use `Conservative` preset for production bulk operations | Prevents throttle cascades; slightly lower throughput but zero throttles |
 
 ---
 
@@ -263,18 +264,30 @@ ServicePointManager.UseNagleAlgorithm = false;
 - [Service protection API limits](https://learn.microsoft.com/en-us/power-apps/developer/data-platform/api-limits)
 - [Use bulk operation messages](https://learn.microsoft.com/en-us/power-apps/developer/data-platform/bulk-operations)
 
-### Throttle Recovery (Known Limitation)
+### Adaptive Rate Control
 
-The pool handles service protection errors transparently (waits and retries). However, it currently resumes at **full parallelism** after recovery, which can cause re-throttling with extended `Retry-After` durations.
+The pool implements AIMD-based (Additive Increase, Multiplicative Decrease) rate control that:
+- Starts at server-recommended parallelism
+- Increases gradually after sustained success
+- Backs off aggressively on throttle (50% reduction)
+- Applies execution time-aware ceiling for slow operations
 
-**Microsoft recommends** gradual ramp-up after throttle recovery. This is planned for a future enhancement (see ADR-0004).
+### Rate Control Presets
 
-**Workaround**: Use lower `MaxParallelBatches` to reduce throttle frequency:
+| Preset | Use Case | Behavior |
+|--------|----------|----------|
+| `Conservative` | Production bulk jobs, migrations | Lower ceiling, avoids all throttles |
+| `Balanced` | General purpose (default) | Balanced throughput vs safety |
+| `Aggressive` | Dev/test with monitoring | Higher ceiling, accepts some throttles |
 
-```csharp
-var options = new BulkOperationOptions { MaxParallelBatches = 10 };
-await executor.UpsertMultipleAsync(entities, options);
+**Configuration:**
+```json
+{"Dataverse": {"AdaptiveRate": {"Preset": "Conservative"}}}
 ```
+
+**For production bulk operations, always use `Conservative`** to prevent throttle cascades.
+
+See ADR-0006 for execution time ceiling details.
 
 ---
 
