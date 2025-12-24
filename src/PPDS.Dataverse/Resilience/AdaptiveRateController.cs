@@ -25,6 +25,29 @@ namespace PPDS.Dataverse.Resilience
             _options = options?.Value?.AdaptiveRate ?? new AdaptiveRateOptions();
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _states = new ConcurrentDictionary<string, ConnectionState>(StringComparer.OrdinalIgnoreCase);
+
+            LogEffectiveConfiguration();
+        }
+
+        private void LogEffectiveConfiguration()
+        {
+            if (!_options.Enabled)
+            {
+                _logger.LogInformation("Adaptive rate control: Disabled");
+                return;
+            }
+
+            // Log effective configuration with override indicators
+            // This helps operators verify their config is applied correctly
+            _logger.LogInformation(
+                "Adaptive rate control: Preset={Preset}, Factor={Factor}, Threshold={Threshold}ms, " +
+                "DecreaseFactor={DecreaseFactor}, Stabilization={Stabilization}, Interval={Interval}s",
+                _options.Preset,
+                AdaptiveRateOptions.FormatValue(_options.ExecutionTimeCeilingFactor, _options.IsExecutionTimeCeilingFactorOverridden),
+                AdaptiveRateOptions.FormatValue(_options.SlowBatchThresholdMs, _options.IsSlowBatchThresholdMsOverridden),
+                AdaptiveRateOptions.FormatValue(_options.DecreaseFactor, _options.IsDecreaseFactorOverridden),
+                AdaptiveRateOptions.FormatValue(_options.StabilizationBatches, _options.IsStabilizationBatchesOverridden),
+                AdaptiveRateOptions.FormatValue(_options.MinIncreaseInterval.TotalSeconds, _options.IsMinIncreaseIntervalOverridden));
         }
 
         /// <inheritdoc />

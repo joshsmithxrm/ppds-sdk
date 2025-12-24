@@ -175,6 +175,41 @@ namespace PPDS.Dataverse.Resilience
 
         #endregion
 
+        #region Override Detection (for logging)
+
+        /// <summary>
+        /// Returns true if ExecutionTimeCeilingFactor was explicitly set (not from preset).
+        /// </summary>
+        internal bool IsExecutionTimeCeilingFactorOverridden => _executionTimeCeilingFactor.HasValue;
+
+        /// <summary>
+        /// Returns true if SlowBatchThresholdMs was explicitly set (not from preset).
+        /// </summary>
+        internal bool IsSlowBatchThresholdMsOverridden => _slowBatchThresholdMs.HasValue;
+
+        /// <summary>
+        /// Returns true if DecreaseFactor was explicitly set (not from preset).
+        /// </summary>
+        internal bool IsDecreaseFactorOverridden => _decreaseFactor.HasValue;
+
+        /// <summary>
+        /// Returns true if StabilizationBatches was explicitly set (not from preset).
+        /// </summary>
+        internal bool IsStabilizationBatchesOverridden => _stabilizationBatches.HasValue;
+
+        /// <summary>
+        /// Returns true if MinIncreaseInterval was explicitly set (not from preset).
+        /// </summary>
+        internal bool IsMinIncreaseIntervalOverridden => _minIncreaseInterval.HasValue;
+
+        /// <summary>
+        /// Formats a value with an indicator of whether it's from preset or explicitly overridden.
+        /// </summary>
+        internal static string FormatValue<T>(T value, bool isOverridden) =>
+            isOverridden ? $"{value} (override)" : $"{value}";
+
+        #endregion
+
         #region Internal Options (implementation details)
 
         /// <summary>
