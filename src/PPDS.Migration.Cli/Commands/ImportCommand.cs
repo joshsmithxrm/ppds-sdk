@@ -154,7 +154,11 @@ public static class ImportCommand
         try
         {
             // Create service provider and get importer
-            await using var serviceProvider = ServiceFactory.CreateProvider(connection);
+            if (!json)
+            {
+                Console.WriteLine($"Connecting to Dataverse ({connection.Url})...");
+            }
+            await using var serviceProvider = ServiceFactory.CreateProvider(connection, verbose: verbose);
             var importer = serviceProvider.GetRequiredService<IImporter>();
             var progressReporter = ServiceFactory.CreateProgressReporter(json);
 

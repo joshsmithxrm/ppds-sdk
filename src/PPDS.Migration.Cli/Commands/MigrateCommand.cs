@@ -162,6 +162,7 @@ public static class MigrateCommand
             if (!json)
             {
                 Console.WriteLine("Phase 1: Exporting from source environment...");
+                Console.WriteLine($"Connecting to Dataverse ({sourceConnection.Url})...");
             }
             progressReporter.Report(new ProgressEventArgs
             {
@@ -169,7 +170,7 @@ public static class MigrateCommand
                 Message = "Connecting to source environment..."
             });
 
-            await using var sourceProvider = ServiceFactory.CreateProvider(sourceConnection, "Source");
+            await using var sourceProvider = ServiceFactory.CreateProvider(sourceConnection, "Source", verbose);
             var exporter = sourceProvider.GetRequiredService<IExporter>();
 
             var exportResult = await exporter.ExportAsync(
@@ -190,6 +191,7 @@ public static class MigrateCommand
             {
                 Console.WriteLine();
                 Console.WriteLine("Phase 2: Importing to target environment...");
+                Console.WriteLine($"Connecting to Dataverse ({targetConnection.Url})...");
             }
             progressReporter.Report(new ProgressEventArgs
             {
@@ -197,7 +199,7 @@ public static class MigrateCommand
                 Message = "Connecting to target environment..."
             });
 
-            await using var targetProvider = ServiceFactory.CreateProvider(targetConnection, "Target");
+            await using var targetProvider = ServiceFactory.CreateProvider(targetConnection, "Target", verbose);
             var importer = targetProvider.GetRequiredService<IImporter>();
 
             var importOptions = new ImportOptions

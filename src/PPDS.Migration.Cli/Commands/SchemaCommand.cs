@@ -279,9 +279,10 @@ public static class SchemaCommand
                 {
                     Console.WriteLine($"  Excluding patterns: {string.Join(", ", excludePatterns)}");
                 }
+                Console.WriteLine($"Connecting to Dataverse ({connection.Url})...");
             }
 
-            await using var serviceProvider = ServiceFactory.CreateProvider(connection);
+            await using var serviceProvider = ServiceFactory.CreateProvider(connection, verbose: verbose);
             var generator = serviceProvider.GetRequiredService<ISchemaGenerator>();
             var schemaWriter = serviceProvider.GetRequiredService<ICmtSchemaWriter>();
             var progressReporter = ServiceFactory.CreateProgressReporter(json);
@@ -342,6 +343,7 @@ public static class SchemaCommand
         {
             if (!json)
             {
+                Console.WriteLine($"Connecting to Dataverse ({connection.Url})...");
                 Console.WriteLine("Retrieving available entities...");
             }
 

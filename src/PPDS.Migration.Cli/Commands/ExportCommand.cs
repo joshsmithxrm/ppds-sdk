@@ -138,7 +138,11 @@ public static class ExportCommand
             }
 
             // Create service provider and get exporter
-            await using var serviceProvider = ServiceFactory.CreateProvider(connection);
+            if (!json)
+            {
+                Console.WriteLine($"Connecting to Dataverse ({connection.Url})...");
+            }
+            await using var serviceProvider = ServiceFactory.CreateProvider(connection, verbose: verbose);
             var exporter = serviceProvider.GetRequiredService<IExporter>();
             var progressReporter = ServiceFactory.CreateProgressReporter(json);
 
