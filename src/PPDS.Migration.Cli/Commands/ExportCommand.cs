@@ -47,6 +47,11 @@ public static class ExportCommand
             getDefaultValue: () => false,
             description: "Output progress as JSON (for tool integration)");
 
+        var verboseOption = new Option<bool>(
+            aliases: ["--verbose", "-v"],
+            getDefaultValue: () => false,
+            description: "Enable verbose logging output");
+
         var debugOption = new Option<bool>(
             name: "--debug",
             getDefaultValue: () => false,
@@ -73,6 +78,7 @@ public static class ExportCommand
             pageSizeOption,
             includeFilesOption,
             jsonOption,
+            verboseOption,
             debugOption
         };
 
@@ -87,6 +93,7 @@ public static class ExportCommand
             var pageSize = context.ParseResult.GetValueForOption(pageSizeOption);
             var includeFiles = context.ParseResult.GetValueForOption(includeFilesOption);
             var json = context.ParseResult.GetValueForOption(jsonOption);
+            var verbose = context.ParseResult.GetValueForOption(verboseOption);
             var debug = context.ParseResult.GetValueForOption(debugOption);
 
             // Resolve connection from configuration
@@ -104,7 +111,7 @@ public static class ExportCommand
 
             context.ExitCode = await ExecuteAsync(
                 resolved.Config, schema, output, parallel, pageSize,
-                includeFiles, json, debug, context.GetCancellationToken());
+                includeFiles, json, verbose, debug, context.GetCancellationToken());
         });
 
         return command;
@@ -118,6 +125,7 @@ public static class ExportCommand
         int pageSize,
         bool includeFiles,
         bool json,
+        bool verbose,
         bool debug,
         CancellationToken cancellationToken)
     {
@@ -148,7 +156,7 @@ public static class ExportCommand
                 Message = $"Connecting to Dataverse ({connection.Url})..."
             });
 
-            await using var serviceProvider = ServiceFactory.CreateProvider(connection, debug: debug);
+            await using var serviceProvider = ServiceFactory.CreateProvider(connection, verbose: verbose, debug: debug);
             var exporter = serviceProvider.GetRequiredService<IExporter>();
 
             // Configure export options

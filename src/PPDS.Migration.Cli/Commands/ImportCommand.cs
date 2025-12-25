@@ -22,11 +22,6 @@ public static class ImportCommand
             IsRequired = true
         };
 
-        var batchSizeOption = new Option<int>(
-            name: "--batch-size",
-            getDefaultValue: () => 1000,
-            description: "Records per batch for ExecuteMultiple requests");
-
         var bypassPluginsOption = new Option<bool>(
             name: "--bypass-plugins",
             getDefaultValue: () => false,
@@ -61,6 +56,11 @@ public static class ImportCommand
             getDefaultValue: () => false,
             description: "Output progress as JSON (for tool integration)");
 
+        var verboseOption = new Option<bool>(
+            aliases: ["--verbose", "-v"],
+            getDefaultValue: () => false,
+            description: "Enable verbose logging output");
+
         var debugOption = new Option<bool>(
             name: "--debug",
             getDefaultValue: () => false,
@@ -82,7 +82,6 @@ public static class ImportCommand
             dataOption,
             envOption,
             configOption,
-            batchSizeOption,
             bypassPluginsOption,
             bypassFlowsOption,
             continueOnErrorOption,
@@ -90,6 +89,7 @@ public static class ImportCommand
             userMappingOption,
             stripOwnerFieldsOption,
             jsonOption,
+            verboseOption,
             debugOption
         };
 
@@ -99,7 +99,6 @@ public static class ImportCommand
             var env = context.ParseResult.GetValueForOption(envOption)!;
             var config = context.ParseResult.GetValueForOption(configOption);
             var secretsId = context.ParseResult.GetValueForOption(Program.SecretsIdOption);
-            var batchSize = context.ParseResult.GetValueForOption(batchSizeOption);
             var bypassPlugins = context.ParseResult.GetValueForOption(bypassPluginsOption);
             var bypassFlows = context.ParseResult.GetValueForOption(bypassFlowsOption);
             var continueOnError = context.ParseResult.GetValueForOption(continueOnErrorOption);
@@ -107,6 +106,7 @@ public static class ImportCommand
             var userMappingFile = context.ParseResult.GetValueForOption(userMappingOption);
             var stripOwnerFields = context.ParseResult.GetValueForOption(stripOwnerFieldsOption);
             var json = context.ParseResult.GetValueForOption(jsonOption);
+            var verbose = context.ParseResult.GetValueForOption(verboseOption);
             var debug = context.ParseResult.GetValueForOption(debugOption);
 
             // Validate data file exists first (explicit argument)
@@ -139,8 +139,8 @@ public static class ImportCommand
             }
 
             context.ExitCode = await ExecuteAsync(
-                resolved.Config, data, batchSize, bypassPlugins, bypassFlows,
-                continueOnError, mode, userMappingFile, stripOwnerFields, json, debug, context.GetCancellationToken());
+                resolved.Config, data, bypassPlugins, bypassFlows,
+                continueOnError, mode, userMappingFile, stripOwnerFields, json, verbose, debug, context.GetCancellationToken());
         });
 
         return command;
@@ -149,7 +149,6 @@ public static class ImportCommand
     private static async Task<int> ExecuteAsync(
         ConnectionResolver.ConnectionConfig connection,
         FileInfo data,
-        int batchSize,
         bool bypassPlugins,
         bool bypassFlows,
         bool continueOnError,
@@ -157,6 +156,7 @@ public static class ImportCommand
         FileInfo? userMappingFile,
         bool stripOwnerFields,
         bool json,
+        bool verbose,
         bool debug,
         CancellationToken cancellationToken)
     {
@@ -172,7 +172,7 @@ public static class ImportCommand
                 Message = $"Connecting to Dataverse ({connection.Url})..."
             });
 
-            await using var serviceProvider = ServiceFactory.CreateProvider(connection, debug: debug);
+            await using var serviceProvider = ServiceFactory.CreateProvider(connection, verbose: verbose, debug: debug);
             var importer = serviceProvider.GetRequiredService<IImporter>();
 
             // Load user mappings if provided
@@ -208,7 +208,6 @@ public static class ImportCommand
             // Configure import options
             var importOptions = new ImportOptions
             {
-                BatchSize = batchSize,
                 BypassCustomPluginExecution = bypassPlugins,
                 BypassPowerAutomateFlows = bypassFlows,
                 ContinueOnError = continueOnError,

@@ -24,14 +24,16 @@ public static class ServiceFactory
     /// </summary>
     /// <param name="config">The connection configuration resolved from environment variables.</param>
     /// <param name="connectionName">Optional name for the connection. Default: "Primary"</param>
-    /// <param name="debug">Enable debug logging output to console.</param>
+    /// <param name="verbose">Enable verbose logging output (LogLevel.Information).</param>
+    /// <param name="debug">Enable debug logging output (LogLevel.Debug).</param>
     /// <returns>A configured service provider.</returns>
     public static ServiceProvider CreateProvider(
         ConnectionResolver.ConnectionConfig config,
         string connectionName = "Primary",
+        bool verbose = false,
         bool debug = false)
     {
-        return CreateProvider(config.Url, config.ClientId, config.ClientSecret, config.TenantId, connectionName, debug);
+        return CreateProvider(config.Url, config.ClientId, config.ClientSecret, config.TenantId, connectionName, verbose, debug);
     }
 
     /// <summary>
@@ -42,7 +44,8 @@ public static class ServiceFactory
     /// <param name="clientSecret">The client secret value.</param>
     /// <param name="tenantId">Optional Azure AD tenant ID.</param>
     /// <param name="connectionName">Optional name for the connection. Default: "Primary"</param>
-    /// <param name="debug">Enable debug logging output to console.</param>
+    /// <param name="verbose">Enable verbose logging output (LogLevel.Information).</param>
+    /// <param name="debug">Enable debug logging output (LogLevel.Debug).</param>
     /// <returns>A configured service provider.</returns>
     public static ServiceProvider CreateProvider(
         string url,
@@ -50,28 +53,35 @@ public static class ServiceFactory
         string clientSecret,
         string? tenantId = null,
         string connectionName = "Primary",
+        bool verbose = false,
         bool debug = false)
     {
         var services = new ServiceCollection();
 
-        // Add logging - console output only when debug mode is enabled
-        // This keeps CLI output clean; progress reporter handles user-facing output
+        // Add logging with console output
+        // --debug: LogLevel.Debug (diagnostic detail)
+        // --verbose: LogLevel.Information (operational info)
+        // Default: LogLevel.Warning (errors and warnings only)
         services.AddLogging(builder =>
         {
             if (debug)
             {
                 builder.SetMinimumLevel(LogLevel.Debug);
-                builder.AddSimpleConsole(options =>
-                {
-                    options.SingleLine = true;
-                    options.TimestampFormat = "[HH:mm:ss] ";
-                });
+            }
+            else if (verbose)
+            {
+                builder.SetMinimumLevel(LogLevel.Information);
             }
             else
             {
-                // Suppress all console output - progress reporter handles user output
-                builder.SetMinimumLevel(LogLevel.None);
+                builder.SetMinimumLevel(LogLevel.Warning);
             }
+
+            builder.AddSimpleConsole(options =>
+            {
+                options.SingleLine = true;
+                options.TimestampFormat = "[HH:mm:ss] ";
+            });
         });
 
         // Add Dataverse connection pool
@@ -103,33 +113,41 @@ public static class ServiceFactory
     /// </summary>
     /// <param name="configuration">The configuration root.</param>
     /// <param name="environmentName">The environment name to use.</param>
-    /// <param name="debug">Enable debug logging output to console.</param>
+    /// <param name="verbose">Enable verbose logging output (LogLevel.Information).</param>
+    /// <param name="debug">Enable debug logging output (LogLevel.Debug).</param>
     /// <returns>A configured service provider.</returns>
     public static ServiceProvider CreateProviderFromConfig(
         IConfiguration configuration,
         string environmentName,
+        bool verbose = false,
         bool debug = false)
     {
         var services = new ServiceCollection();
 
-        // Add logging - console output only when debug mode is enabled
-        // This keeps CLI output clean; progress reporter handles user-facing output
+        // Add logging with console output
+        // --debug: LogLevel.Debug (diagnostic detail)
+        // --verbose: LogLevel.Information (operational info)
+        // Default: LogLevel.Warning (errors and warnings only)
         services.AddLogging(builder =>
         {
             if (debug)
             {
                 builder.SetMinimumLevel(LogLevel.Debug);
-                builder.AddSimpleConsole(options =>
-                {
-                    options.SingleLine = true;
-                    options.TimestampFormat = "[HH:mm:ss] ";
-                });
+            }
+            else if (verbose)
+            {
+                builder.SetMinimumLevel(LogLevel.Information);
             }
             else
             {
-                // Suppress all console output - progress reporter handles user output
-                builder.SetMinimumLevel(LogLevel.None);
+                builder.SetMinimumLevel(LogLevel.Warning);
             }
+
+            builder.AddSimpleConsole(options =>
+            {
+                options.SingleLine = true;
+                options.TimestampFormat = "[HH:mm:ss] ";
+            });
         });
 
         // Use SDK's config-based overload with environment selection

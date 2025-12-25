@@ -80,6 +80,11 @@ public static class SchemaCommand
             getDefaultValue: () => false,
             description: "Output progress as JSON");
 
+        var verboseOption = new Option<bool>(
+            aliases: ["--verbose", "-v"],
+            getDefaultValue: () => false,
+            description: "Enable verbose logging output");
+
         var debugOption = new Option<bool>(
             name: "--debug",
             getDefaultValue: () => false,
@@ -109,6 +114,7 @@ public static class SchemaCommand
             excludeAttributesOption,
             excludePatternsOption,
             jsonOption,
+            verboseOption,
             debugOption
         };
 
@@ -126,6 +132,7 @@ public static class SchemaCommand
             var excludeAttributes = context.ParseResult.GetValueForOption(excludeAttributesOption);
             var excludePatterns = context.ParseResult.GetValueForOption(excludePatternsOption);
             var json = context.ParseResult.GetValueForOption(jsonOption);
+            var verbose = context.ParseResult.GetValueForOption(verboseOption);
             var debug = context.ParseResult.GetValueForOption(debugOption);
 
             // Resolve connection from configuration
@@ -164,7 +171,7 @@ public static class SchemaCommand
                 resolved.Config, entityList, output,
                 includeSystemFields, includeRelationships, disablePlugins,
                 includeAttrList, excludeAttrList, excludePatternList,
-                json, debug, context.GetCancellationToken());
+                json, verbose, debug, context.GetCancellationToken());
         });
 
         return command;
@@ -260,6 +267,7 @@ public static class SchemaCommand
         List<string>? excludeAttributes,
         List<string>? excludePatterns,
         bool json,
+        bool verbose,
         bool debug,
         CancellationToken cancellationToken)
     {
@@ -287,7 +295,7 @@ public static class SchemaCommand
                 Message = $"Connecting to Dataverse ({connection.Url})..."
             });
 
-            await using var serviceProvider = ServiceFactory.CreateProvider(connection, debug: debug);
+            await using var serviceProvider = ServiceFactory.CreateProvider(connection, verbose: verbose, debug: debug);
             var generator = serviceProvider.GetRequiredService<ISchemaGenerator>();
             var schemaWriter = serviceProvider.GetRequiredService<ICmtSchemaWriter>();
 

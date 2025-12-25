@@ -25,11 +25,6 @@ public static class MigrateCommand
             name: "--temp-dir",
             description: "Temporary directory for intermediate data file (default: system temp)");
 
-        var batchSizeOption = new Option<int>(
-            name: "--batch-size",
-            getDefaultValue: () => 1000,
-            description: "Records per batch for import");
-
         var bypassPluginsOption = new Option<bool>(
             name: "--bypass-plugins",
             getDefaultValue: () => false,
@@ -44,6 +39,11 @@ public static class MigrateCommand
             name: "--json",
             getDefaultValue: () => false,
             description: "Output progress as JSON (for tool integration)");
+
+        var verboseOption = new Option<bool>(
+            aliases: ["--verbose", "-v"],
+            getDefaultValue: () => false,
+            description: "Enable verbose logging output");
 
         var debugOption = new Option<bool>(
             name: "--debug",
@@ -77,10 +77,10 @@ public static class MigrateCommand
             targetEnvOption,
             configOption,
             tempDirOption,
-            batchSizeOption,
             bypassPluginsOption,
             bypassFlowsOption,
             jsonOption,
+            verboseOption,
             debugOption
         };
 
@@ -92,10 +92,10 @@ public static class MigrateCommand
             var config = context.ParseResult.GetValueForOption(configOption);
             var secretsId = context.ParseResult.GetValueForOption(Program.SecretsIdOption);
             var tempDir = context.ParseResult.GetValueForOption(tempDirOption);
-            var batchSize = context.ParseResult.GetValueForOption(batchSizeOption);
             var bypassPlugins = context.ParseResult.GetValueForOption(bypassPluginsOption);
             var bypassFlows = context.ParseResult.GetValueForOption(bypassFlowsOption);
             var json = context.ParseResult.GetValueForOption(jsonOption);
+            var verbose = context.ParseResult.GetValueForOption(verboseOption);
             var debug = context.ParseResult.GetValueForOption(debugOption);
 
             // Resolve source and target connections from configuration
@@ -115,7 +115,7 @@ public static class MigrateCommand
 
             context.ExitCode = await ExecuteAsync(
                 sourceResolved.Config, targetResolved.Config, schema, tempDir,
-                batchSize, bypassPlugins, bypassFlows, json, debug, context.GetCancellationToken());
+                bypassPlugins, bypassFlows, json, verbose, debug, context.GetCancellationToken());
         });
 
         return command;
@@ -126,10 +126,10 @@ public static class MigrateCommand
         ConnectionResolver.ConnectionConfig targetConnection,
         FileInfo schema,
         DirectoryInfo? tempDir,
-        int batchSize,
         bool bypassPlugins,
         bool bypassFlows,
         bool json,
+        bool verbose,
         bool debug,
         CancellationToken cancellationToken)
     {
@@ -165,7 +165,7 @@ public static class MigrateCommand
                 Message = $"Phase 1: Connecting to source ({sourceConnection.Url})..."
             });
 
-            await using var sourceProvider = ServiceFactory.CreateProvider(sourceConnection, "Source", debug);
+            await using var sourceProvider = ServiceFactory.CreateProvider(sourceConnection, "Source", verbose, debug);
             var exporter = sourceProvider.GetRequiredService<IExporter>();
 
             var exportResult = await exporter.ExportAsync(
@@ -187,12 +187,11 @@ public static class MigrateCommand
                 Message = $"Phase 2: Connecting to target ({targetConnection.Url})..."
             });
 
-            await using var targetProvider = ServiceFactory.CreateProvider(targetConnection, "Target", debug);
+            await using var targetProvider = ServiceFactory.CreateProvider(targetConnection, "Target", verbose, debug);
             var importer = targetProvider.GetRequiredService<IImporter>();
 
             var importOptions = new ImportOptions
             {
-                BatchSize = batchSize,
                 BypassCustomPluginExecution = bypassPlugins,
                 BypassPowerAutomateFlows = bypassFlows
             };

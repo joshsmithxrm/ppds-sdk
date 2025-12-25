@@ -39,11 +39,13 @@ public class ImportCommandTests
     }
 
     [Fact]
-    public void Create_HasOptionalBatchSizeOption()
+    public void Create_HasOptionalVerboseOption()
     {
-        var option = _command.Options.FirstOrDefault(o => o.Name == "batch-size");
+        var option = _command.Options.FirstOrDefault(o => o.Name == "verbose");
         Assert.NotNull(option);
         Assert.False(option.IsRequired);
+        Assert.Contains("-v", option.Aliases);
+        Assert.Contains("--verbose", option.Aliases);
     }
 
     [Fact]
@@ -135,9 +137,16 @@ public class ImportCommandTests
     }
 
     [Fact]
-    public void Parse_WithOptionalBatchSize_Succeeds()
+    public void Parse_WithOptionalVerbose_Succeeds()
     {
-        var result = _command.Parse("-d data.zip --env Dev --batch-size 500");
+        var result = _command.Parse("-d data.zip --env Dev --verbose");
+        Assert.Empty(result.Errors);
+    }
+
+    [Fact]
+    public void Parse_WithOptionalVerboseShortAlias_Succeeds()
+    {
+        var result = _command.Parse("-d data.zip --env Dev -v");
         Assert.Empty(result.Errors);
     }
 

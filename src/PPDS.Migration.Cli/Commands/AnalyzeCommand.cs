@@ -27,6 +27,11 @@ public static class AnalyzeCommand
             getDefaultValue: () => OutputFormat.Text,
             description: "Output format: text or json");
 
+        var verboseOption = new Option<bool>(
+            aliases: ["--verbose", "-v"],
+            getDefaultValue: () => false,
+            description: "Enable verbose logging output");
+
         var debugOption = new Option<bool>(
             name: "--debug",
             getDefaultValue: () => false,
@@ -36,6 +41,7 @@ public static class AnalyzeCommand
         {
             schemaOption,
             outputFormatOption,
+            verboseOption,
             debugOption
         };
 

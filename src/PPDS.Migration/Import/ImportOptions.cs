@@ -8,12 +8,6 @@ namespace PPDS.Migration.Import
     public class ImportOptions
     {
         /// <summary>
-        /// Gets or sets the batch size for bulk operations.
-        /// Default: 1000
-        /// </summary>
-        public int BatchSize { get; set; } = 1000;
-
-        /// <summary>
         /// Gets or sets whether to use modern bulk APIs (CreateMultiple, etc.).
         /// Default: true
         /// </summary>
@@ -54,12 +48,6 @@ namespace PPDS.Migration.Import
         /// Default: false
         /// </summary>
         public bool SuppressDuplicateDetection { get; set; } = false;
-
-        /// <summary>
-        /// Gets or sets the progress reporting interval in records.
-        /// Default: 100
-        /// </summary>
-        public int ProgressInterval { get; set; } = 100;
 
         /// <summary>
         /// Gets or sets the user mappings for remapping user references.

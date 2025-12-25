@@ -306,9 +306,6 @@ namespace PPDS.Migration.Import
             CancellationToken cancellationToken)
         {
             var entityStopwatch = Stopwatch.StartNew();
-            var successCount = 0;
-            var failureCount = 0;
-            var allErrors = new List<MigrationError>();
             var deferredSet = deferredFields != null
                 ? new HashSet<string>(deferredFields, StringComparer.OrdinalIgnoreCase)
                 : new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -323,43 +320,64 @@ namespace PPDS.Migration.Import
                 preparedRecords.Add(prepared);
             }
 
-            // Batch import
-            for (var i = 0; i < preparedRecords.Count; i += options.BatchSize)
+            // Create progress adapter that bridges BulkOperationExecutor progress to IProgressReporter
+            var progressAdapter = progress != null
+                ? new Progress<Dataverse.Progress.ProgressSnapshot>(snapshot =>
+                {
+                    progress.Report(new ProgressEventArgs
+                    {
+                        Phase = MigrationPhase.Importing,
+                        Entity = entityName,
+                        TierNumber = tierNumber,
+                        Current = (int)snapshot.Processed,
+                        Total = (int)snapshot.Total,
+                        SuccessCount = (int)snapshot.Succeeded,
+                        FailureCount = (int)snapshot.Failed,
+                        RecordsPerSecond = snapshot.RatePerSecond
+                    });
+                })
+                : null;
+
+            // Pass ALL records to BulkOperationExecutor - it handles batching dynamically
+            var bulkOptions = new BulkOperationOptions
             {
-                cancellationToken.ThrowIfCancellationRequested();
+                ContinueOnError = options.ContinueOnError,
+                BypassCustomLogic = options.BypassCustomPluginExecution ? CustomLogicBypass.All : CustomLogicBypass.None,
+                BypassPowerAutomateFlows = options.BypassPowerAutomateFlows
+            };
 
-                var batch = preparedRecords.Skip(i).Take(options.BatchSize).ToList();
-                var batchResult = await ImportBatchAsync(entityName, batch, options, cancellationToken).ConfigureAwait(false);
-
-                // Track ID mappings
-                for (var j = 0; j < batch.Count && j < batchResult.CreatedIds.Count; j++)
+            BulkOperationResult bulkResult;
+            if (options.UseBulkApis)
+            {
+                bulkResult = options.Mode switch
                 {
-                    var oldId = records[i + j].Id;
-                    var newId = batchResult.CreatedIds[j];
-                    idMappings.AddMapping(entityName, oldId, newId);
-                }
-
-                successCount += batchResult.SuccessCount;
-                failureCount += batchResult.FailureCount;
-                allErrors.AddRange(batchResult.Errors);
-
-                // Report progress
-                var rps = entityStopwatch.Elapsed.TotalSeconds > 0
-                    ? (successCount + failureCount) / entityStopwatch.Elapsed.TotalSeconds
-                    : 0;
-
-                progress?.Report(new ProgressEventArgs
-                {
-                    Phase = MigrationPhase.Importing,
-                    Entity = entityName,
-                    TierNumber = tierNumber,
-                    Current = successCount + failureCount,
-                    Total = records.Count,
-                    SuccessCount = successCount,
-                    FailureCount = failureCount,
-                    RecordsPerSecond = rps
-                });
+                    ImportMode.Create => await _bulkExecutor.CreateMultipleAsync(entityName, preparedRecords, bulkOptions, progressAdapter, cancellationToken).ConfigureAwait(false),
+                    ImportMode.Update => await _bulkExecutor.UpdateMultipleAsync(entityName, preparedRecords, bulkOptions, progressAdapter, cancellationToken).ConfigureAwait(false),
+                    _ => await _bulkExecutor.UpsertMultipleAsync(entityName, preparedRecords, bulkOptions, progressAdapter, cancellationToken).ConfigureAwait(false)
+                };
             }
+            else
+            {
+                // Fallback to individual operations
+                bulkResult = await ExecuteIndividualOperationsAsync(entityName, preparedRecords, options, cancellationToken).ConfigureAwait(false);
+            }
+
+            // Track ID mappings - for bulk operations, IDs are preserved from Entity.Id
+            for (var i = 0; i < records.Count; i++)
+            {
+                var oldId = records[i].Id;
+                idMappings.AddMapping(entityName, oldId, oldId);
+            }
+
+            // Convert BulkOperationErrors to MigrationErrors
+            var allErrors = bulkResult.Errors.Select(e => new MigrationError
+            {
+                Phase = MigrationPhase.Importing,
+                EntityLogicalName = entityName,
+                RecordIndex = e.Index,
+                ErrorCode = e.ErrorCode,
+                Message = e.Message
+            }).ToList();
 
             entityStopwatch.Stop();
 
@@ -368,11 +386,76 @@ namespace PPDS.Migration.Import
                 EntityLogicalName = entityName,
                 TierNumber = tierNumber,
                 RecordCount = records.Count,
+                SuccessCount = bulkResult.SuccessCount,
+                FailureCount = bulkResult.FailureCount,
+                Duration = entityStopwatch.Elapsed,
+                Success = bulkResult.FailureCount == 0,
+                Errors = allErrors
+            };
+        }
+
+        private async Task<BulkOperationResult> ExecuteIndividualOperationsAsync(
+            string entityName,
+            List<Entity> records,
+            ImportOptions options,
+            CancellationToken cancellationToken)
+        {
+            var createdIds = new List<Guid>();
+            var errors = new List<BulkOperationError>();
+            var successCount = 0;
+            var failureCount = 0;
+
+            await using var client = await _connectionPool.GetClientAsync(null, cancellationToken: cancellationToken).ConfigureAwait(false);
+
+            for (var i = 0; i < records.Count; i++)
+            {
+                var record = records[i];
+                try
+                {
+                    Guid newId;
+                    switch (options.Mode)
+                    {
+                        case ImportMode.Create:
+                            newId = await client.CreateAsync(record).ConfigureAwait(false);
+                            break;
+                        case ImportMode.Update:
+                            await client.UpdateAsync(record).ConfigureAwait(false);
+                            newId = record.Id;
+                            break;
+                        default:
+                            var response = (UpsertResponse)await client.ExecuteAsync(new UpsertRequest { Target = record }).ConfigureAwait(false);
+                            newId = response.Target?.Id ?? record.Id;
+                            break;
+                    }
+
+                    createdIds.Add(newId);
+                    successCount++;
+                }
+                catch (Exception ex)
+                {
+                    failureCount++;
+                    errors.Add(new BulkOperationError
+                    {
+                        Index = i,
+                        RecordId = record.Id != Guid.Empty ? record.Id : null,
+                        ErrorCode = -1,
+                        Message = ex.Message
+                    });
+
+                    if (!options.ContinueOnError)
+                    {
+                        throw;
+                    }
+                }
+            }
+
+            return new BulkOperationResult
+            {
                 SuccessCount = successCount,
                 FailureCount = failureCount,
-                Duration = entityStopwatch.Elapsed,
-                Success = failureCount == 0,
-                Errors = allErrors
+                CreatedIds = createdIds,
+                Errors = errors,
+                Duration = TimeSpan.Zero
             };
         }
 
@@ -473,109 +556,6 @@ namespace PPDS.Migration.Import
         {
             return entityLogicalName.Equals("systemuser", StringComparison.OrdinalIgnoreCase) ||
                    entityLogicalName.Equals("team", StringComparison.OrdinalIgnoreCase);
-        }
-
-        private async Task<BatchImportResult> ImportBatchAsync(
-            string entityName,
-            List<Entity> batch,
-            ImportOptions options,
-            CancellationToken cancellationToken)
-        {
-            var bulkOptions = new BulkOperationOptions
-            {
-                BatchSize = options.BatchSize,
-                ContinueOnError = options.ContinueOnError,
-                BypassCustomLogic = options.BypassCustomPluginExecution ? CustomLogicBypass.All : CustomLogicBypass.None,
-                BypassPowerAutomateFlows = options.BypassPowerAutomateFlows
-            };
-
-            if (options.UseBulkApis)
-            {
-                var result = options.Mode switch
-                {
-                    ImportMode.Create => await _bulkExecutor.CreateMultipleAsync(entityName, batch, bulkOptions, progress: null, cancellationToken).ConfigureAwait(false),
-                    ImportMode.Update => await _bulkExecutor.UpdateMultipleAsync(entityName, batch, bulkOptions, progress: null, cancellationToken).ConfigureAwait(false),
-                    _ => await _bulkExecutor.UpsertMultipleAsync(entityName, batch, bulkOptions, progress: null, cancellationToken).ConfigureAwait(false)
-                };
-
-                // Convert BulkOperationErrors to MigrationErrors with full details
-                var errors = result.Errors.Select(e => new MigrationError
-                {
-                    Phase = MigrationPhase.Importing,
-                    EntityLogicalName = entityName,
-                    RecordIndex = e.Index,
-                    ErrorCode = e.ErrorCode,
-                    Message = e.Message
-                }).ToList();
-
-                return new BatchImportResult
-                {
-                    SuccessCount = result.SuccessCount,
-                    FailureCount = result.FailureCount,
-                    CreatedIds = batch.Select(e => e.Id).ToList(), // For bulk, IDs are preserved
-                    Errors = errors
-                };
-            }
-            else
-            {
-                // Fallback to individual operations
-                var createdIds = new List<Guid>();
-                var errors = new List<MigrationError>();
-                var successCount = 0;
-                var failureCount = 0;
-
-                await using var client = await _connectionPool.GetClientAsync(null, cancellationToken: cancellationToken).ConfigureAwait(false);
-
-                for (var i = 0; i < batch.Count; i++)
-                {
-                    var record = batch[i];
-                    try
-                    {
-                        Guid newId;
-                        switch (options.Mode)
-                        {
-                            case ImportMode.Create:
-                                newId = await client.CreateAsync(record).ConfigureAwait(false);
-                                break;
-                            case ImportMode.Update:
-                                await client.UpdateAsync(record).ConfigureAwait(false);
-                                newId = record.Id;
-                                break;
-                            default:
-                                var response = (UpsertResponse)await client.ExecuteAsync(new UpsertRequest { Target = record }).ConfigureAwait(false);
-                                newId = response.Target?.Id ?? record.Id;
-                                break;
-                        }
-
-                        createdIds.Add(newId);
-                        successCount++;
-                    }
-                    catch (Exception ex)
-                    {
-                        failureCount++;
-                        errors.Add(new MigrationError
-                        {
-                            Phase = MigrationPhase.Importing,
-                            EntityLogicalName = entityName,
-                            RecordIndex = i,
-                            Message = ex.Message
-                        });
-
-                        if (!options.ContinueOnError)
-                        {
-                            throw;
-                        }
-                    }
-                }
-
-                return new BatchImportResult
-                {
-                    SuccessCount = successCount,
-                    FailureCount = failureCount,
-                    CreatedIds = createdIds,
-                    Errors = errors
-                };
-            }
         }
 
         private async Task<int> ProcessDeferredFieldsAsync(
@@ -842,14 +822,6 @@ namespace PPDS.Migration.Import
             // We need to find it by name, but we don't have the source name here
             // For now, return null - proper solution requires exporting role names
             return null;
-        }
-
-        private class BatchImportResult
-        {
-            public int SuccessCount { get; set; }
-            public int FailureCount { get; set; }
-            public List<Guid> CreatedIds { get; set; } = new();
-            public List<MigrationError> Errors { get; set; } = new();
         }
     }
 }
