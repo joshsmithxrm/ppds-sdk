@@ -186,14 +186,10 @@ namespace PPDS.Migration.Import
                             entityResults.Add(result);
                             Interlocked.Add(ref totalImported, result.SuccessCount);
 
-                            if (!result.Success)
+                            // Add all detailed errors from this entity
+                            foreach (var error in result.Errors)
                             {
-                                errors.Add(new MigrationError
-                                {
-                                    Phase = MigrationPhase.Importing,
-                                    EntityLogicalName = entityName,
-                                    Message = $"Entity import had {result.FailureCount} failures"
-                                });
+                                errors.Add(error);
                             }
                         }).ConfigureAwait(false);
 
@@ -312,6 +308,7 @@ namespace PPDS.Migration.Import
             var entityStopwatch = Stopwatch.StartNew();
             var successCount = 0;
             var failureCount = 0;
+            var allErrors = new List<MigrationError>();
             var deferredSet = deferredFields != null
                 ? new HashSet<string>(deferredFields, StringComparer.OrdinalIgnoreCase)
                 : new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -344,6 +341,7 @@ namespace PPDS.Migration.Import
 
                 successCount += batchResult.SuccessCount;
                 failureCount += batchResult.FailureCount;
+                allErrors.AddRange(batchResult.Errors);
 
                 // Report progress
                 var rps = entityStopwatch.Elapsed.TotalSeconds > 0
@@ -373,7 +371,8 @@ namespace PPDS.Migration.Import
                 SuccessCount = successCount,
                 FailureCount = failureCount,
                 Duration = entityStopwatch.Elapsed,
-                Success = failureCount == 0
+                Success = failureCount == 0,
+                Errors = allErrors
             };
         }
 
@@ -477,24 +476,37 @@ namespace PPDS.Migration.Import
                     _ => await _bulkExecutor.UpsertMultipleAsync(entityName, batch, bulkOptions, progress: null, cancellationToken).ConfigureAwait(false)
                 };
 
+                // Convert BulkOperationErrors to MigrationErrors with full details
+                var errors = result.Errors.Select(e => new MigrationError
+                {
+                    Phase = MigrationPhase.Importing,
+                    EntityLogicalName = entityName,
+                    RecordIndex = e.Index,
+                    ErrorCode = e.ErrorCode,
+                    Message = e.Message
+                }).ToList();
+
                 return new BatchImportResult
                 {
                     SuccessCount = result.SuccessCount,
                     FailureCount = result.FailureCount,
-                    CreatedIds = batch.Select(e => e.Id).ToList() // For bulk, IDs are preserved
+                    CreatedIds = batch.Select(e => e.Id).ToList(), // For bulk, IDs are preserved
+                    Errors = errors
                 };
             }
             else
             {
                 // Fallback to individual operations
                 var createdIds = new List<Guid>();
+                var errors = new List<MigrationError>();
                 var successCount = 0;
                 var failureCount = 0;
 
                 await using var client = await _connectionPool.GetClientAsync(null, cancellationToken: cancellationToken).ConfigureAwait(false);
 
-                foreach (var record in batch)
+                for (var i = 0; i < batch.Count; i++)
                 {
+                    var record = batch[i];
                     try
                     {
                         Guid newId;
@@ -516,9 +528,17 @@ namespace PPDS.Migration.Import
                         createdIds.Add(newId);
                         successCount++;
                     }
-                    catch
+                    catch (Exception ex)
                     {
                         failureCount++;
+                        errors.Add(new MigrationError
+                        {
+                            Phase = MigrationPhase.Importing,
+                            EntityLogicalName = entityName,
+                            RecordIndex = i,
+                            Message = ex.Message
+                        });
+
                         if (!options.ContinueOnError)
                         {
                             throw;
@@ -530,7 +550,8 @@ namespace PPDS.Migration.Import
                 {
                     SuccessCount = successCount,
                     FailureCount = failureCount,
-                    CreatedIds = createdIds
+                    CreatedIds = createdIds,
+                    Errors = errors
                 };
             }
         }
@@ -806,6 +827,7 @@ namespace PPDS.Migration.Import
             public int SuccessCount { get; set; }
             public int FailureCount { get; set; }
             public List<Guid> CreatedIds { get; set; } = new();
+            public List<MigrationError> Errors { get; set; } = new();
         }
     }
 }

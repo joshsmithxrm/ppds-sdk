@@ -96,5 +96,10 @@ namespace PPDS.Migration.Import
         /// Gets or sets whether this entity import was successful.
         /// </summary>
         public bool Success { get; set; } = true;
+
+        /// <summary>
+        /// Gets or sets the errors that occurred during import.
+        /// </summary>
+        public IReadOnlyList<Progress.MigrationError> Errors { get; set; } = Array.Empty<Progress.MigrationError>();
     }
 }
