@@ -206,7 +206,15 @@ namespace PPDS.Dataverse.Resilience
                 var reductionFactor = 1.0 - (overshootRatio / 2.0);
                 reductionFactor = Math.Max(0.5, Math.Min(1.0, reductionFactor)); // Clamp to [0.5, 1.0]
 
-                var throttleCeiling = (int)(oldParallelism * reductionFactor);
+                // Use the higher of current parallelism or existing throttle ceiling as the base.
+                // This prevents rapid throttle cascades from dropping the ceiling too aggressively -
+                // if we already have a ceiling of 29 from the first throttle, subsequent rapid
+                // throttles shouldn't keep lowering it just because parallelism has dropped.
+                var ceilingBase = state.ThrottleCeiling.HasValue
+                    ? Math.Max(oldParallelism, state.ThrottleCeiling.Value)
+                    : oldParallelism;
+
+                var throttleCeiling = (int)(ceilingBase * reductionFactor);
                 throttleCeiling = Math.Max(throttleCeiling, state.FloorParallelism);
 
                 state.ThrottleCeiling = throttleCeiling;
