@@ -5,13 +5,24 @@ using Xunit;
 
 namespace PPDS.Migration.Cli.Tests.Commands;
 
-public class MigrateCommandTests
+public class MigrateCommandTests : IDisposable
 {
     private readonly Command _command;
+    private readonly string _tempSchemaFile;
 
     public MigrateCommandTests()
     {
         _command = MigrateCommand.Create();
+
+        // Create temp schema file for parsing tests
+        _tempSchemaFile = Path.Combine(Path.GetTempPath(), $"test-schema-{Guid.NewGuid()}.xml");
+        File.WriteAllText(_tempSchemaFile, "<entities></entities>");
+    }
+
+    public void Dispose()
+    {
+        if (File.Exists(_tempSchemaFile))
+            File.Delete(_tempSchemaFile);
     }
 
     #region Command Structure Tests
@@ -31,61 +42,59 @@ public class MigrateCommandTests
     [Fact]
     public void Create_HasRequiredSchemaOption()
     {
-        var option = _command.Options.FirstOrDefault(o => o.Name == "schema");
+        var option = _command.Options.FirstOrDefault(o => o.Name == "--schema");
         Assert.NotNull(option);
-        Assert.True(option.IsRequired);
+        Assert.True(option.Required);
         Assert.Contains("-s", option.Aliases);
-        Assert.Contains("--schema", option.Aliases);
     }
 
     [Fact]
     public void Create_HasOptionalTempDirOption()
     {
-        var option = _command.Options.FirstOrDefault(o => o.Name == "temp-dir");
+        var option = _command.Options.FirstOrDefault(o => o.Name == "--temp-dir");
         Assert.NotNull(option);
-        Assert.False(option.IsRequired);
+        Assert.False(option.Required);
     }
 
     [Fact]
     public void Create_HasOptionalVerboseOption()
     {
-        var option = _command.Options.FirstOrDefault(o => o.Name == "verbose");
+        var option = _command.Options.FirstOrDefault(o => o.Name == "--verbose");
         Assert.NotNull(option);
-        Assert.False(option.IsRequired);
+        Assert.False(option.Required);
         Assert.Contains("-v", option.Aliases);
-        Assert.Contains("--verbose", option.Aliases);
     }
 
     [Fact]
     public void Create_HasOptionalBypassPluginsOption()
     {
-        var option = _command.Options.FirstOrDefault(o => o.Name == "bypass-plugins");
+        var option = _command.Options.FirstOrDefault(o => o.Name == "--bypass-plugins");
         Assert.NotNull(option);
-        Assert.False(option.IsRequired);
+        Assert.False(option.Required);
     }
 
     [Fact]
     public void Create_HasOptionalBypassFlowsOption()
     {
-        var option = _command.Options.FirstOrDefault(o => o.Name == "bypass-flows");
+        var option = _command.Options.FirstOrDefault(o => o.Name == "--bypass-flows");
         Assert.NotNull(option);
-        Assert.False(option.IsRequired);
+        Assert.False(option.Required);
     }
 
     [Fact]
     public void Create_HasOptionalJsonOption()
     {
-        var option = _command.Options.FirstOrDefault(o => o.Name == "json");
+        var option = _command.Options.FirstOrDefault(o => o.Name == "--json");
         Assert.NotNull(option);
-        Assert.False(option.IsRequired);
+        Assert.False(option.Required);
     }
 
     [Fact]
     public void Create_HasOptionalDebugOption()
     {
-        var option = _command.Options.FirstOrDefault(o => o.Name == "debug");
+        var option = _command.Options.FirstOrDefault(o => o.Name == "--debug");
         Assert.NotNull(option);
-        Assert.False(option.IsRequired);
+        Assert.False(option.Required);
     }
 
     #endregion
@@ -95,14 +104,14 @@ public class MigrateCommandTests
     [Fact]
     public void Parse_WithAllRequiredOptions_Succeeds()
     {
-        var result = _command.Parse("--schema schema.xml --source-env Dev --target-env QA");
+        var result = _command.Parse($"--schema \"{_tempSchemaFile}\" --source-env Dev --target-env QA");
         Assert.Empty(result.Errors);
     }
 
     [Fact]
     public void Parse_WithShortAliases_Succeeds()
     {
-        var result = _command.Parse("-s schema.xml --source-env Dev --target-env QA");
+        var result = _command.Parse($"-s \"{_tempSchemaFile}\" --source-env Dev --target-env QA");
         Assert.Empty(result.Errors);
     }
 
@@ -116,70 +125,70 @@ public class MigrateCommandTests
     [Fact]
     public void Parse_MissingSourceEnv_HasError()
     {
-        var result = _command.Parse("-s schema.xml --target-env QA");
+        var result = _command.Parse($"-s \"{_tempSchemaFile}\" --target-env QA");
         Assert.NotEmpty(result.Errors);
     }
 
     [Fact]
     public void Parse_MissingTargetEnv_HasError()
     {
-        var result = _command.Parse("-s schema.xml --source-env Dev");
+        var result = _command.Parse($"-s \"{_tempSchemaFile}\" --source-env Dev");
         Assert.NotEmpty(result.Errors);
     }
 
     [Fact]
     public void Parse_WithOptionalTempDir_Succeeds()
     {
-        var result = _command.Parse("-s schema.xml --source-env Dev --target-env QA --temp-dir /tmp");
+        var result = _command.Parse($"-s \"{_tempSchemaFile}\" --source-env Dev --target-env QA --temp-dir \"{Path.GetTempPath()}\"");
         Assert.Empty(result.Errors);
     }
 
     [Fact]
     public void Parse_WithOptionalVerbose_Succeeds()
     {
-        var result = _command.Parse("-s schema.xml --source-env Dev --target-env QA --verbose");
+        var result = _command.Parse($"-s \"{_tempSchemaFile}\" --source-env Dev --target-env QA --verbose");
         Assert.Empty(result.Errors);
     }
 
     [Fact]
     public void Parse_WithOptionalVerboseShortAlias_Succeeds()
     {
-        var result = _command.Parse("-s schema.xml --source-env Dev --target-env QA -v");
+        var result = _command.Parse($"-s \"{_tempSchemaFile}\" --source-env Dev --target-env QA -v");
         Assert.Empty(result.Errors);
     }
 
     [Fact]
     public void Parse_WithOptionalBypassPlugins_Succeeds()
     {
-        var result = _command.Parse("-s schema.xml --source-env Dev --target-env QA --bypass-plugins");
+        var result = _command.Parse($"-s \"{_tempSchemaFile}\" --source-env Dev --target-env QA --bypass-plugins");
         Assert.Empty(result.Errors);
     }
 
     [Fact]
     public void Parse_WithOptionalBypassFlows_Succeeds()
     {
-        var result = _command.Parse("-s schema.xml --source-env Dev --target-env QA --bypass-flows");
+        var result = _command.Parse($"-s \"{_tempSchemaFile}\" --source-env Dev --target-env QA --bypass-flows");
         Assert.Empty(result.Errors);
     }
 
     [Fact]
     public void Parse_WithAllBypassOptions_Succeeds()
     {
-        var result = _command.Parse("-s schema.xml --source-env Dev --target-env QA --bypass-plugins --bypass-flows");
+        var result = _command.Parse($"-s \"{_tempSchemaFile}\" --source-env Dev --target-env QA --bypass-plugins --bypass-flows");
         Assert.Empty(result.Errors);
     }
 
     [Fact]
     public void Parse_WithOptionalJson_Succeeds()
     {
-        var result = _command.Parse("-s schema.xml --source-env Dev --target-env QA --json");
+        var result = _command.Parse($"-s \"{_tempSchemaFile}\" --source-env Dev --target-env QA --json");
         Assert.Empty(result.Errors);
     }
 
     [Fact]
     public void Parse_WithOptionalDebug_Succeeds()
     {
-        var result = _command.Parse("-s schema.xml --source-env Dev --target-env QA --debug");
+        var result = _command.Parse($"-s \"{_tempSchemaFile}\" --source-env Dev --target-env QA --debug");
         Assert.Empty(result.Errors);
     }
 

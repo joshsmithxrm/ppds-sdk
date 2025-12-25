@@ -5,13 +5,24 @@ using Xunit;
 
 namespace PPDS.Migration.Cli.Tests.Commands;
 
-public class ImportCommandTests
+public class ImportCommandTests : IDisposable
 {
     private readonly Command _command;
+    private readonly string _tempDataFile;
 
     public ImportCommandTests()
     {
         _command = ImportCommand.Create();
+
+        // Create temp data file for parsing tests
+        _tempDataFile = Path.Combine(Path.GetTempPath(), $"test-data-{Guid.NewGuid()}.zip");
+        File.WriteAllBytes(_tempDataFile, [0x50, 0x4B, 0x05, 0x06, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]); // Empty ZIP
+    }
+
+    public void Dispose()
+    {
+        if (File.Exists(_tempDataFile))
+            File.Delete(_tempDataFile);
     }
 
     #region Command Structure Tests
@@ -31,77 +42,75 @@ public class ImportCommandTests
     [Fact]
     public void Create_HasRequiredDataOption()
     {
-        var option = _command.Options.FirstOrDefault(o => o.Name == "data");
+        var option = _command.Options.FirstOrDefault(o => o.Name == "--data");
         Assert.NotNull(option);
-        Assert.True(option.IsRequired);
+        Assert.True(option.Required);
         Assert.Contains("-d", option.Aliases);
-        Assert.Contains("--data", option.Aliases);
     }
 
     [Fact]
     public void Create_HasOptionalVerboseOption()
     {
-        var option = _command.Options.FirstOrDefault(o => o.Name == "verbose");
+        var option = _command.Options.FirstOrDefault(o => o.Name == "--verbose");
         Assert.NotNull(option);
-        Assert.False(option.IsRequired);
+        Assert.False(option.Required);
         Assert.Contains("-v", option.Aliases);
-        Assert.Contains("--verbose", option.Aliases);
     }
 
     [Fact]
     public void Create_HasOptionalBypassPluginsOption()
     {
-        var option = _command.Options.FirstOrDefault(o => o.Name == "bypass-plugins");
+        var option = _command.Options.FirstOrDefault(o => o.Name == "--bypass-plugins");
         Assert.NotNull(option);
-        Assert.False(option.IsRequired);
+        Assert.False(option.Required);
     }
 
     [Fact]
     public void Create_HasOptionalBypassFlowsOption()
     {
-        var option = _command.Options.FirstOrDefault(o => o.Name == "bypass-flows");
+        var option = _command.Options.FirstOrDefault(o => o.Name == "--bypass-flows");
         Assert.NotNull(option);
-        Assert.False(option.IsRequired);
+        Assert.False(option.Required);
     }
 
     [Fact]
     public void Create_HasOptionalContinueOnErrorOption()
     {
-        var option = _command.Options.FirstOrDefault(o => o.Name == "continue-on-error");
+        var option = _command.Options.FirstOrDefault(o => o.Name == "--continue-on-error");
         Assert.NotNull(option);
-        Assert.False(option.IsRequired);
+        Assert.False(option.Required);
     }
 
     [Fact]
     public void Create_HasOptionalModeOption()
     {
-        var option = _command.Options.FirstOrDefault(o => o.Name == "mode");
+        var option = _command.Options.FirstOrDefault(o => o.Name == "--mode");
         Assert.NotNull(option);
-        Assert.False(option.IsRequired);
+        Assert.False(option.Required);
     }
 
     [Fact]
     public void Create_HasOptionalJsonOption()
     {
-        var option = _command.Options.FirstOrDefault(o => o.Name == "json");
+        var option = _command.Options.FirstOrDefault(o => o.Name == "--json");
         Assert.NotNull(option);
-        Assert.False(option.IsRequired);
+        Assert.False(option.Required);
     }
 
     [Fact]
     public void Create_HasOptionalDebugOption()
     {
-        var option = _command.Options.FirstOrDefault(o => o.Name == "debug");
+        var option = _command.Options.FirstOrDefault(o => o.Name == "--debug");
         Assert.NotNull(option);
-        Assert.False(option.IsRequired);
+        Assert.False(option.Required);
     }
 
     [Fact]
     public void Create_HasOptionalStripOwnerFieldsOption()
     {
-        var option = _command.Options.FirstOrDefault(o => o.Name == "strip-owner-fields");
+        var option = _command.Options.FirstOrDefault(o => o.Name == "--strip-owner-fields");
         Assert.NotNull(option);
-        Assert.False(option.IsRequired);
+        Assert.False(option.Required);
     }
 
     #endregion
@@ -111,14 +120,14 @@ public class ImportCommandTests
     [Fact]
     public void Parse_WithAllRequiredOptions_Succeeds()
     {
-        var result = _command.Parse("--data data.zip --env Dev");
+        var result = _command.Parse($"--data \"{_tempDataFile}\" --env Dev");
         Assert.Empty(result.Errors);
     }
 
     [Fact]
     public void Parse_WithShortAliases_Succeeds()
     {
-        var result = _command.Parse("-d data.zip --env Dev");
+        var result = _command.Parse($"-d \"{_tempDataFile}\" --env Dev");
         Assert.Empty(result.Errors);
     }
 
@@ -132,42 +141,42 @@ public class ImportCommandTests
     [Fact]
     public void Parse_MissingEnv_HasError()
     {
-        var result = _command.Parse("-d data.zip");
+        var result = _command.Parse($"-d \"{_tempDataFile}\"");
         Assert.NotEmpty(result.Errors);
     }
 
     [Fact]
     public void Parse_WithOptionalVerbose_Succeeds()
     {
-        var result = _command.Parse("-d data.zip --env Dev --verbose");
+        var result = _command.Parse($"-d \"{_tempDataFile}\" --env Dev --verbose");
         Assert.Empty(result.Errors);
     }
 
     [Fact]
     public void Parse_WithOptionalVerboseShortAlias_Succeeds()
     {
-        var result = _command.Parse("-d data.zip --env Dev -v");
+        var result = _command.Parse($"-d \"{_tempDataFile}\" --env Dev -v");
         Assert.Empty(result.Errors);
     }
 
     [Fact]
     public void Parse_WithOptionalBypassPlugins_Succeeds()
     {
-        var result = _command.Parse("-d data.zip --env Dev --bypass-plugins");
+        var result = _command.Parse($"-d \"{_tempDataFile}\" --env Dev --bypass-plugins");
         Assert.Empty(result.Errors);
     }
 
     [Fact]
     public void Parse_WithOptionalBypassFlows_Succeeds()
     {
-        var result = _command.Parse("-d data.zip --env Dev --bypass-flows");
+        var result = _command.Parse($"-d \"{_tempDataFile}\" --env Dev --bypass-flows");
         Assert.Empty(result.Errors);
     }
 
     [Fact]
     public void Parse_WithOptionalContinueOnError_Succeeds()
     {
-        var result = _command.Parse("-d data.zip --env Dev --continue-on-error");
+        var result = _command.Parse($"-d \"{_tempDataFile}\" --env Dev --continue-on-error");
         Assert.Empty(result.Errors);
     }
 
@@ -177,21 +186,21 @@ public class ImportCommandTests
     [InlineData("Upsert")]
     public void Parse_WithValidMode_Succeeds(string mode)
     {
-        var result = _command.Parse($"-d data.zip --env Dev --mode {mode}");
+        var result = _command.Parse($"-d \"{_tempDataFile}\" --env Dev --mode {mode}");
         Assert.Empty(result.Errors);
     }
 
     [Fact]
     public void Parse_WithInvalidMode_HasError()
     {
-        var result = _command.Parse("-d data.zip --env Dev --mode Invalid");
+        var result = _command.Parse($"-d \"{_tempDataFile}\" --env Dev --mode Invalid");
         Assert.NotEmpty(result.Errors);
     }
 
     [Fact]
     public void Parse_WithAllBypassOptions_Succeeds()
     {
-        var result = _command.Parse("-d data.zip --env Dev --bypass-plugins --bypass-flows");
+        var result = _command.Parse($"-d \"{_tempDataFile}\" --env Dev --bypass-plugins --bypass-flows");
         Assert.Empty(result.Errors);
     }
 

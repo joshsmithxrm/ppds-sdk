@@ -5,13 +5,36 @@ using Xunit;
 
 namespace PPDS.Migration.Cli.Tests.Commands;
 
-public class ExportCommandTests
+public class ExportCommandTests : IDisposable
 {
     private readonly Command _command;
+    private readonly string _tempSchemaFile;
+    private readonly string _tempOutputFile;
+    private readonly string _originalDir;
 
     public ExportCommandTests()
     {
         _command = ExportCommand.Create();
+
+        // Create temp schema file for parsing tests
+        _tempSchemaFile = Path.Combine(Path.GetTempPath(), $"test-schema-{Guid.NewGuid()}.xml");
+        File.WriteAllText(_tempSchemaFile, "<entities></entities>");
+
+        // Use relative path for output to avoid Windows path issues with AcceptLegalFileNamesOnly
+        // Change to temp directory so relative path works
+        _originalDir = Directory.GetCurrentDirectory();
+        Directory.SetCurrentDirectory(Path.GetTempPath());
+        _tempOutputFile = $"test-output-{Guid.NewGuid()}.zip";
+    }
+
+    public void Dispose()
+    {
+        Directory.SetCurrentDirectory(_originalDir);
+        if (File.Exists(_tempSchemaFile))
+            File.Delete(_tempSchemaFile);
+        var fullOutputPath = Path.Combine(Path.GetTempPath(), _tempOutputFile);
+        if (File.Exists(fullOutputPath))
+            File.Delete(fullOutputPath);
     }
 
     #region Command Structure Tests
@@ -31,61 +54,59 @@ public class ExportCommandTests
     [Fact]
     public void Create_HasRequiredSchemaOption()
     {
-        var option = _command.Options.FirstOrDefault(o => o.Name == "schema");
+        var option = _command.Options.FirstOrDefault(o => o.Name == "--schema");
         Assert.NotNull(option);
-        Assert.True(option.IsRequired);
+        Assert.True(option.Required);
         Assert.Contains("-s", option.Aliases);
-        Assert.Contains("--schema", option.Aliases);
     }
 
     [Fact]
     public void Create_HasRequiredOutputOption()
     {
-        var option = _command.Options.FirstOrDefault(o => o.Name == "output");
+        var option = _command.Options.FirstOrDefault(o => o.Name == "--output");
         Assert.NotNull(option);
-        Assert.True(option.IsRequired);
+        Assert.True(option.Required);
         Assert.Contains("-o", option.Aliases);
-        Assert.Contains("--output", option.Aliases);
     }
 
     [Fact]
     public void Create_HasOptionalParallelOption()
     {
-        var option = _command.Options.FirstOrDefault(o => o.Name == "parallel");
+        var option = _command.Options.FirstOrDefault(o => o.Name == "--parallel");
         Assert.NotNull(option);
-        Assert.False(option.IsRequired);
+        Assert.False(option.Required);
     }
 
     [Fact]
     public void Create_HasOptionalPageSizeOption()
     {
-        var option = _command.Options.FirstOrDefault(o => o.Name == "page-size");
+        var option = _command.Options.FirstOrDefault(o => o.Name == "--page-size");
         Assert.NotNull(option);
-        Assert.False(option.IsRequired);
+        Assert.False(option.Required);
     }
 
     [Fact]
     public void Create_HasOptionalIncludeFilesOption()
     {
-        var option = _command.Options.FirstOrDefault(o => o.Name == "include-files");
+        var option = _command.Options.FirstOrDefault(o => o.Name == "--include-files");
         Assert.NotNull(option);
-        Assert.False(option.IsRequired);
+        Assert.False(option.Required);
     }
 
     [Fact]
     public void Create_HasOptionalJsonOption()
     {
-        var option = _command.Options.FirstOrDefault(o => o.Name == "json");
+        var option = _command.Options.FirstOrDefault(o => o.Name == "--json");
         Assert.NotNull(option);
-        Assert.False(option.IsRequired);
+        Assert.False(option.Required);
     }
 
     [Fact]
     public void Create_HasOptionalDebugOption()
     {
-        var option = _command.Options.FirstOrDefault(o => o.Name == "debug");
+        var option = _command.Options.FirstOrDefault(o => o.Name == "--debug");
         Assert.NotNull(option);
-        Assert.False(option.IsRequired);
+        Assert.False(option.Required);
     }
 
     #endregion
@@ -95,70 +116,70 @@ public class ExportCommandTests
     [Fact]
     public void Parse_WithAllRequiredOptions_Succeeds()
     {
-        var result = _command.Parse("--schema schema.xml --output data.zip --env Dev");
+        var result = _command.Parse($"--schema \"{_tempSchemaFile}\" --output \"{_tempOutputFile}\" --env Dev");
         Assert.Empty(result.Errors);
     }
 
     [Fact]
     public void Parse_WithShortAliases_Succeeds()
     {
-        var result = _command.Parse("-s schema.xml -o data.zip --env Dev");
+        var result = _command.Parse($"-s \"{_tempSchemaFile}\" -o \"{_tempOutputFile}\" --env Dev");
         Assert.Empty(result.Errors);
     }
 
     [Fact]
     public void Parse_MissingSchema_HasError()
     {
-        var result = _command.Parse("--output data.zip --env Dev");
+        var result = _command.Parse($"--output \"{_tempOutputFile}\" --env Dev");
         Assert.NotEmpty(result.Errors);
     }
 
     [Fact]
     public void Parse_MissingOutput_HasError()
     {
-        var result = _command.Parse("--schema schema.xml --env Dev");
+        var result = _command.Parse($"--schema \"{_tempSchemaFile}\" --env Dev");
         Assert.NotEmpty(result.Errors);
     }
 
     [Fact]
     public void Parse_MissingEnv_HasError()
     {
-        var result = _command.Parse("-s schema.xml -o data.zip");
+        var result = _command.Parse($"-s \"{_tempSchemaFile}\" -o \"{_tempOutputFile}\"");
         Assert.NotEmpty(result.Errors);
     }
 
     [Fact]
     public void Parse_WithOptionalParallel_Succeeds()
     {
-        var result = _command.Parse("-s schema.xml -o data.zip --env Dev --parallel 4");
+        var result = _command.Parse($"-s \"{_tempSchemaFile}\" -o \"{_tempOutputFile}\" --env Dev --parallel 4");
         Assert.Empty(result.Errors);
     }
 
     [Fact]
     public void Parse_WithOptionalPageSize_Succeeds()
     {
-        var result = _command.Parse("-s schema.xml -o data.zip --env Dev --page-size 1000");
+        var result = _command.Parse($"-s \"{_tempSchemaFile}\" -o \"{_tempOutputFile}\" --env Dev --page-size 1000");
         Assert.Empty(result.Errors);
     }
 
     [Fact]
     public void Parse_WithOptionalIncludeFiles_Succeeds()
     {
-        var result = _command.Parse("-s schema.xml -o data.zip --env Dev --include-files");
+        var result = _command.Parse($"-s \"{_tempSchemaFile}\" -o \"{_tempOutputFile}\" --env Dev --include-files");
         Assert.Empty(result.Errors);
     }
 
     [Fact]
     public void Parse_WithOptionalJson_Succeeds()
     {
-        var result = _command.Parse("-s schema.xml -o data.zip --env Dev --json");
+        var result = _command.Parse($"-s \"{_tempSchemaFile}\" -o \"{_tempOutputFile}\" --env Dev --json");
         Assert.Empty(result.Errors);
     }
 
     [Fact]
     public void Parse_WithOptionalDebug_Succeeds()
     {
-        var result = _command.Parse("-s schema.xml -o data.zip --env Dev --debug");
+        var result = _command.Parse($"-s \"{_tempSchemaFile}\" -o \"{_tempOutputFile}\" --env Dev --debug");
         Assert.Empty(result.Errors);
     }
 

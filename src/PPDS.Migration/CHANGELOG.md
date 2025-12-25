@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+#### PPDS.Migration.Cli (CLI Tool)
+
+- Global `--auth` option supporting multiple authentication modes:
+  - `config` (default): Use configuration file for connection strings
+  - `env`: Use environment variables (DATAVERSE_URL, DATAVERSE_TENANT_ID, DATAVERSE_CLIENT_ID, DATAVERSE_CLIENT_SECRET)
+  - `interactive`: Azure.Identity interactive browser login
+  - `managed`: Azure Managed Identity for CI/CD and cloud environments
+- Auth infrastructure: `AuthMode` enum, `AuthResolver`, and `ServiceFactory.CreateProviderForAuthMode()`
+- Tab completions for `--env` option from configuration
+- Validators: `AcceptExistingOnly()` for file/directory validation, numeric validators for `--parallel` and `--page-size`
+
+### Changed
+
+#### PPDS.Migration.Cli (CLI Tool)
+
+- Upgraded from System.CommandLine 2.0.0-beta4 to 2.0.1 stable
+- `--env` option now optional when using `--auth env`, `--auth interactive`, or `--auth managed`
+- `migrate` command requires configuration for environment URLs, rejects `--auth env` mode
+
 ## [1.0.0] - Unreleased
 
 ### Added

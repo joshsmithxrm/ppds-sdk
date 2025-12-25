@@ -7,6 +7,9 @@ using PPDS.Migration.Export;
 using PPDS.Migration.Import;
 using PPDS.Migration.Progress;
 
+// Aliases for clarity
+using AuthResult = PPDS.Migration.Cli.Infrastructure.AuthResolver.AuthResult;
+
 namespace PPDS.Migration.Cli.Commands;
 
 /// <summary>
@@ -115,6 +118,7 @@ public static class MigrateCommand
             var targetEnv = parseResult.GetValue(targetEnvOption)!;
             var config = parseResult.GetValue(configOption);
             var secretsId = parseResult.GetValue(Program.SecretsIdOption);
+            var authMode = parseResult.GetValue(Program.AuthOption);
             var tempDir = parseResult.GetValue(tempDirOption);
             var bypassPlugins = parseResult.GetValue(bypassPluginsOption);
             var bypassFlows = parseResult.GetValue(bypassFlowsOption);
@@ -122,15 +126,41 @@ public static class MigrateCommand
             var verbose = parseResult.GetValue(verboseOption);
             var debug = parseResult.GetValue(debugOption);
 
-            // Resolve source and target connections from configuration (validates environments exist and have connections)
-            ConnectionResolver.ResolvedConnection sourceResolved;
-            ConnectionResolver.ResolvedConnection targetResolved;
+            // Migrate always requires configuration to resolve URLs for both environments
+            // (even with --auth env/interactive/managed, we need config for the environment URLs)
             IConfiguration configuration;
             try
             {
                 configuration = ConfigurationHelper.BuildRequired(config?.FullName, secretsId);
-                sourceResolved = ConnectionResolver.ResolveFromConfig(configuration, sourceEnv, "source");
-                targetResolved = ConnectionResolver.ResolveFromConfig(configuration, targetEnv, "target");
+            }
+            catch (Exception ex) when (ex is InvalidOperationException or FileNotFoundException)
+            {
+                ConsoleOutput.WriteError(ex.Message, json);
+                return ExitCodes.InvalidArguments;
+            }
+
+            // For --auth env mode, we can't use env vars for URLs in migrate (two different envs)
+            // Fallback to config mode for URL resolution, but this is a semantic mismatch
+            // The user specified --auth env but we need config. Warn them.
+            if (authMode == AuthMode.Env)
+            {
+                ConsoleOutput.WriteError(
+                    "Migrate command requires configuration for environment URLs. " +
+                    "--auth env is not supported because it cannot specify two different environment URLs. " +
+                    "Use --auth config (default), --auth interactive, or --auth managed instead.",
+                    json);
+                return ExitCodes.InvalidArguments;
+            }
+
+            // Resolve auth for both source and target environments
+            AuthResolver.AuthResult sourceAuthResult;
+            AuthResolver.AuthResult targetAuthResult;
+            try
+            {
+                // For config/auto modes, AuthResolver returns a marker with Url=null
+                // For interactive/managed modes, AuthResolver looks up URL from config
+                sourceAuthResult = AuthResolver.Resolve(authMode, sourceEnv, configuration);
+                targetAuthResult = AuthResolver.Resolve(authMode, targetEnv, configuration);
             }
             catch (Exception ex) when (ex is InvalidOperationException or FileNotFoundException)
             {
@@ -139,7 +169,7 @@ public static class MigrateCommand
             }
 
             return await ExecuteAsync(
-                configuration, sourceEnv, targetEnv, sourceResolved.Config.Url, targetResolved.Config.Url,
+                configuration, sourceEnv, targetEnv, sourceAuthResult, targetAuthResult,
                 schema, tempDir, bypassPlugins, bypassFlows, json, verbose, debug, cancellationToken);
         });
 
@@ -150,8 +180,8 @@ public static class MigrateCommand
         IConfiguration configuration,
         string sourceEnv,
         string targetEnv,
-        string sourceUrl,
-        string targetUrl,
+        AuthResolver.AuthResult sourceAuthResult,
+        AuthResolver.AuthResult targetAuthResult,
         FileInfo schema,
         DirectoryInfo? tempDir,
         bool bypassPlugins,
@@ -181,15 +211,28 @@ public static class MigrateCommand
             // Create temp file path for intermediate data
             tempDataFile = Path.Combine(tempDirectory, $"ppds-migrate-{Guid.NewGuid():N}.zip");
 
+            // Determine URLs for status messages
+            var sourceDisplayUrl = sourceAuthResult.Url ?? "(from config)";
+            var targetDisplayUrl = targetAuthResult.Url ?? "(from config)";
+
+            // Build auth mode info for status messages
+            var authModeInfo = sourceAuthResult.Mode switch
+            {
+                AuthMode.Interactive => " (interactive login)",
+                AuthMode.Managed => " (managed identity)",
+                _ => ""
+            };
+
             // Phase 1: Export from source
             progressReporter.Report(new ProgressEventArgs
             {
                 Phase = MigrationPhase.Analyzing,
-                Message = $"Phase 1: Connecting to source ({sourceUrl})..."
+                Message = $"Phase 1: Connecting to source ({sourceDisplayUrl}){authModeInfo}..."
             });
 
-            // Use CreateProviderFromConfig to get ALL connections for the source environment
-            await using var sourceProvider = ServiceFactory.CreateProviderFromConfig(configuration, sourceEnv, verbose, debug);
+            // Create service provider for source based on auth mode
+            await using var sourceProvider = ServiceFactory.CreateProviderForAuthMode(
+                sourceAuthResult.Mode, sourceAuthResult, configuration, sourceEnv, verbose, debug);
             var exporter = sourceProvider.GetRequiredService<IExporter>();
 
             var exportResult = await exporter.ExportAsync(
@@ -208,11 +251,12 @@ public static class MigrateCommand
             progressReporter.Report(new ProgressEventArgs
             {
                 Phase = MigrationPhase.Analyzing,
-                Message = $"Phase 2: Connecting to target ({targetUrl})..."
+                Message = $"Phase 2: Connecting to target ({targetDisplayUrl}){authModeInfo}..."
             });
 
-            // Use CreateProviderFromConfig to get ALL connections for the target environment
-            await using var targetProvider = ServiceFactory.CreateProviderFromConfig(configuration, targetEnv, verbose, debug);
+            // Create service provider for target based on auth mode
+            await using var targetProvider = ServiceFactory.CreateProviderForAuthMode(
+                targetAuthResult.Mode, targetAuthResult, configuration, targetEnv, verbose, debug);
             var importer = targetProvider.GetRequiredService<IImporter>();
 
             var importOptions = new ImportOptions

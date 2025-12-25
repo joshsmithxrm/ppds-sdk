@@ -8,6 +8,9 @@ using PPDS.Migration.Import;
 using PPDS.Migration.Models;
 using PPDS.Migration.Progress;
 
+// Aliases for clarity
+using AuthResult = PPDS.Migration.Cli.Infrastructure.AuthResolver.AuthResult;
+
 namespace PPDS.Migration.Cli.Commands;
 
 /// <summary>
@@ -127,9 +130,10 @@ public static class ImportCommand
         command.SetAction(async (parseResult, cancellationToken) =>
         {
             var data = parseResult.GetValue(dataOption)!;
-            var env = parseResult.GetValue(envOption)!;
+            var env = parseResult.GetValue(envOption);
             var config = parseResult.GetValue(configOption);
             var secretsId = parseResult.GetValue(Program.SecretsIdOption);
+            var authMode = parseResult.GetValue(Program.AuthOption);
             var bypassPlugins = parseResult.GetValue(bypassPluginsOption);
             var bypassFlows = parseResult.GetValue(bypassFlowsOption);
             var continueOnError = parseResult.GetValue(continueOnErrorOption);
@@ -140,15 +144,25 @@ public static class ImportCommand
             var verbose = parseResult.GetValue(verboseOption);
             var debug = parseResult.GetValue(debugOption);
 
-            // File validation now handled by option validators (AcceptExistingOnly, custom validators)
-
-            // Resolve connection from configuration (validates environment exists and has connections)
-            ConnectionResolver.ResolvedConnection resolved;
-            IConfiguration configuration;
+            // Resolve authentication based on mode
+            AuthResolver.AuthResult authResult;
+            IConfiguration? configuration = null;
             try
             {
-                configuration = ConfigurationHelper.BuildRequired(config?.FullName, secretsId);
-                resolved = ConnectionResolver.ResolveFromConfig(configuration, env, "connection");
+                // Build configuration if needed (for config mode or auto-detect)
+                if (authMode == AuthMode.Config || authMode == AuthMode.Auto)
+                {
+                    try
+                    {
+                        configuration = ConfigurationHelper.Build(config?.FullName, secretsId);
+                    }
+                    catch (FileNotFoundException) when (authMode == AuthMode.Auto)
+                    {
+                        // In auto mode, missing config is OK if env vars are set
+                    }
+                }
+
+                authResult = AuthResolver.Resolve(authMode, env, configuration);
             }
             catch (Exception ex) when (ex is InvalidOperationException or FileNotFoundException)
             {
@@ -157,7 +171,7 @@ public static class ImportCommand
             }
 
             return await ExecuteAsync(
-                configuration, env, resolved.Config.Url, data, bypassPlugins, bypassFlows,
+                authResult, configuration, env, data, bypassPlugins, bypassFlows,
                 continueOnError, mode, userMappingFile, stripOwnerFields, json, verbose, debug, cancellationToken);
         });
 
@@ -165,9 +179,9 @@ public static class ImportCommand
     }
 
     private static async Task<int> ExecuteAsync(
-        IConfiguration configuration,
-        string environmentName,
-        string environmentUrl,
+        AuthResolver.AuthResult authResult,
+        IConfiguration? configuration,
+        string? environmentName,
         FileInfo data,
         bool bypassPlugins,
         bool bypassFlows,
@@ -185,15 +199,26 @@ public static class ImportCommand
 
         try
         {
-            // Report connecting status
+            // Determine URL for status message
+            var displayUrl = authResult.Url ?? "(from config)";
+
+            // Report connecting status with auth mode info
+            var authModeInfo = authResult.Mode switch
+            {
+                AuthMode.Interactive => " (interactive login)",
+                AuthMode.Managed => " (managed identity)",
+                AuthMode.Env => " (environment variables)",
+                _ => ""
+            };
             progressReporter.Report(new ProgressEventArgs
             {
                 Phase = MigrationPhase.Analyzing,
-                Message = $"Connecting to Dataverse ({environmentUrl})..."
+                Message = $"Connecting to Dataverse ({displayUrl}){authModeInfo}..."
             });
 
-            // Use CreateProviderFromConfig to get ALL connections for the environment
-            await using var serviceProvider = ServiceFactory.CreateProviderFromConfig(configuration, environmentName, verbose, debug);
+            // Create service provider based on auth mode
+            await using var serviceProvider = ServiceFactory.CreateProviderForAuthMode(
+                authResult.Mode, authResult, configuration, environmentName, verbose, debug);
             var importer = serviceProvider.GetRequiredService<IImporter>();
 
             // Load user mappings if provided

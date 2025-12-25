@@ -7,6 +7,9 @@ using PPDS.Migration.Formats;
 using PPDS.Migration.Progress;
 using PPDS.Migration.Schema;
 
+// Aliases for clarity
+using AuthResult = PPDS.Migration.Cli.Infrastructure.AuthResolver.AuthResult;
+
 namespace PPDS.Migration.Cli.Commands;
 
 /// <summary>
@@ -146,9 +149,10 @@ public static class SchemaCommand
         {
             var entities = parseResult.GetValue(entitiesOption)!;
             var output = parseResult.GetValue(outputOption)!;
-            var env = parseResult.GetValue(envOption)!;
+            var env = parseResult.GetValue(envOption);
             var config = parseResult.GetValue(configOption);
             var secretsId = parseResult.GetValue(Program.SecretsIdOption);
+            var authMode = parseResult.GetValue(Program.AuthOption);
             var includeSystemFields = parseResult.GetValue(includeSystemFieldsOption);
             var includeRelationships = parseResult.GetValue(includeRelationshipsOption);
             var disablePlugins = parseResult.GetValue(disablePluginsOption);
@@ -159,13 +163,25 @@ public static class SchemaCommand
             var verbose = parseResult.GetValue(verboseOption);
             var debug = parseResult.GetValue(debugOption);
 
-            // Resolve connection from configuration (validates environment exists and has connections)
-            ConnectionResolver.ResolvedConnection resolved;
-            IConfiguration configuration;
+            // Resolve authentication based on mode
+            AuthResolver.AuthResult authResult;
+            IConfiguration? configuration = null;
             try
             {
-                configuration = ConfigurationHelper.BuildRequired(config?.FullName, secretsId);
-                resolved = ConnectionResolver.ResolveFromConfig(configuration, env, "connection");
+                // Build configuration if needed (for config mode or auto-detect)
+                if (authMode == AuthMode.Config || authMode == AuthMode.Auto)
+                {
+                    try
+                    {
+                        configuration = ConfigurationHelper.Build(config?.FullName, secretsId);
+                    }
+                    catch (FileNotFoundException) when (authMode == AuthMode.Auto)
+                    {
+                        // In auto mode, missing config is OK if env vars are set
+                    }
+                }
+
+                authResult = AuthResolver.Resolve(authMode, env, configuration);
             }
             catch (Exception ex) when (ex is InvalidOperationException or FileNotFoundException)
             {
@@ -192,7 +208,7 @@ public static class SchemaCommand
             var excludePatternList = ParseAttributeList(excludePatterns);
 
             return await ExecuteGenerateAsync(
-                configuration, env, resolved.Config.Url, entityList, output,
+                authResult, configuration, env, entityList, output,
                 includeSystemFields, includeRelationships, disablePlugins,
                 includeAttrList, excludeAttrList, excludePatternList,
                 json, verbose, debug, cancellationToken);
@@ -257,19 +273,32 @@ public static class SchemaCommand
         command.SetAction(async (parseResult, cancellationToken) =>
         {
             var filter = parseResult.GetValue(filterOption);
-            var env = parseResult.GetValue(envOption)!;
+            var env = parseResult.GetValue(envOption);
             var config = parseResult.GetValue(configOption);
             var secretsId = parseResult.GetValue(Program.SecretsIdOption);
+            var authMode = parseResult.GetValue(Program.AuthOption);
             var customOnly = parseResult.GetValue(customOnlyOption);
             var json = parseResult.GetValue(jsonOption);
 
-            // Resolve connection from configuration (validates environment exists and has connections)
-            ConnectionResolver.ResolvedConnection resolved;
-            IConfiguration configuration;
+            // Resolve authentication based on mode
+            AuthResolver.AuthResult authResult;
+            IConfiguration? configuration = null;
             try
             {
-                configuration = ConfigurationHelper.BuildRequired(config?.FullName, secretsId);
-                resolved = ConnectionResolver.ResolveFromConfig(configuration, env, "connection");
+                // Build configuration if needed (for config mode or auto-detect)
+                if (authMode == AuthMode.Config || authMode == AuthMode.Auto)
+                {
+                    try
+                    {
+                        configuration = ConfigurationHelper.Build(config?.FullName, secretsId);
+                    }
+                    catch (FileNotFoundException) when (authMode == AuthMode.Auto)
+                    {
+                        // In auto mode, missing config is OK if env vars are set
+                    }
+                }
+
+                authResult = AuthResolver.Resolve(authMode, env, configuration);
             }
             catch (Exception ex) when (ex is InvalidOperationException or FileNotFoundException)
             {
@@ -278,7 +307,7 @@ public static class SchemaCommand
             }
 
             return await ExecuteListAsync(
-                configuration, env, resolved.Config.Url, filter, customOnly, json, cancellationToken);
+                authResult, configuration, env, filter, customOnly, json, cancellationToken);
         });
 
         return command;
@@ -299,9 +328,9 @@ public static class SchemaCommand
     }
 
     private static async Task<int> ExecuteGenerateAsync(
-        IConfiguration configuration,
-        string environmentName,
-        string environmentUrl,
+        AuthResolver.AuthResult authResult,
+        IConfiguration? configuration,
+        string? environmentName,
         List<string> entities,
         FileInfo output,
         bool includeSystemFields,
@@ -333,14 +362,26 @@ public static class SchemaCommand
                           (optionsMsg.Count > 0 ? $" ({string.Join(", ", optionsMsg)})" : "")
             });
 
+            // Determine URL for status message
+            var displayUrl = authResult.Url ?? "(from config)";
+
+            // Report connecting status with auth mode info
+            var authModeInfo = authResult.Mode switch
+            {
+                AuthMode.Interactive => " (interactive login)",
+                AuthMode.Managed => " (managed identity)",
+                AuthMode.Env => " (environment variables)",
+                _ => ""
+            };
             progressReporter.Report(new ProgressEventArgs
             {
                 Phase = MigrationPhase.Analyzing,
-                Message = $"Connecting to Dataverse ({environmentUrl})..."
+                Message = $"Connecting to Dataverse ({displayUrl}){authModeInfo}..."
             });
 
-            // Use CreateProviderFromConfig to get ALL connections for the environment
-            await using var serviceProvider = ServiceFactory.CreateProviderFromConfig(configuration, environmentName, verbose, debug);
+            // Create service provider based on auth mode
+            await using var serviceProvider = ServiceFactory.CreateProviderForAuthMode(
+                authResult.Mode, authResult, configuration, environmentName, verbose, debug);
             var generator = serviceProvider.GetRequiredService<ISchemaGenerator>();
             var schemaWriter = serviceProvider.GetRequiredService<ICmtSchemaWriter>();
 
@@ -396,9 +437,9 @@ public static class SchemaCommand
     }
 
     private static async Task<int> ExecuteListAsync(
-        IConfiguration configuration,
-        string environmentName,
-        string environmentUrl,
+        AuthResolver.AuthResult authResult,
+        IConfiguration? configuration,
+        string? environmentName,
         string? filter,
         bool customOnly,
         bool json,
@@ -406,14 +447,27 @@ public static class SchemaCommand
     {
         try
         {
+            // Determine URL for status message
+            var displayUrl = authResult.Url ?? "(from config)";
+
+            // Build auth mode info for status messages
+            var authModeInfo = authResult.Mode switch
+            {
+                AuthMode.Interactive => " (interactive login)",
+                AuthMode.Managed => " (managed identity)",
+                AuthMode.Env => " (environment variables)",
+                _ => ""
+            };
+
             if (!json)
             {
-                Console.WriteLine($"Connecting to Dataverse ({environmentUrl})...");
+                Console.WriteLine($"Connecting to Dataverse ({displayUrl}){authModeInfo}...");
                 Console.WriteLine("Retrieving available entities...");
             }
 
-            // Use CreateProviderFromConfig to get ALL connections for the environment
-            await using var serviceProvider = ServiceFactory.CreateProviderFromConfig(configuration, environmentName);
+            // Create service provider based on auth mode
+            await using var serviceProvider = ServiceFactory.CreateProviderForAuthMode(
+                authResult.Mode, authResult, configuration, environmentName);
             var generator = serviceProvider.GetRequiredService<ISchemaGenerator>();
 
             var entities = await generator.GetAvailableEntitiesAsync(cancellationToken);

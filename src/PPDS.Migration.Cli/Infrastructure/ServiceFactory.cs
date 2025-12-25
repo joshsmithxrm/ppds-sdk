@@ -21,6 +21,17 @@ namespace PPDS.Migration.Cli.Infrastructure;
 public static class ServiceFactory
 {
     /// <summary>
+    /// Microsoft's well-known public client ID for development/prototyping with Dataverse.
+    /// See: https://learn.microsoft.com/en-us/power-apps/developer/data-platform/xrm-tooling/use-connection-strings-xrm-tooling-connect
+    /// </summary>
+    public const string MicrosoftPublicClientId = "51f81489-12ee-4a9e-aaae-a2591f45987d";
+
+    /// <summary>
+    /// Microsoft's well-known redirect URI for the public client ID.
+    /// </summary>
+    public const string MicrosoftPublicRedirectUri = "app://58145B91-0C36-4500-8554-080854F2AC97";
+
+    /// <summary>
     /// Creates a service provider from resolved connection configuration.
     /// </summary>
     /// <param name="config">The connection configuration resolved from environment variables.</param>
@@ -217,7 +228,8 @@ public static class ServiceFactory
     }
 
     /// <summary>
-    /// Creates a service provider with interactive (device code) authentication.
+    /// Creates a service provider with interactive (browser) OAuth authentication.
+    /// Uses Microsoft's well-known public client ID for development/prototyping.
     /// </summary>
     /// <param name="url">The Dataverse environment URL.</param>
     /// <param name="verbose">Enable verbose logging output.</param>
@@ -233,13 +245,17 @@ public static class ServiceFactory
         // Add logging
         ConfigureLogging(services, verbose, debug);
 
-        // Add Dataverse connection pool with interactive auth
+        // Add Dataverse connection pool with interactive OAuth auth
+        // Uses Microsoft's well-known public client ID for interactive login
         services.AddDataverseConnectionPool(options =>
         {
             options.Connections.Add(new DataverseConnection("Interactive")
             {
                 Url = url,
-                AuthType = DataverseAuthType.OAuth
+                AuthType = DataverseAuthType.OAuth,
+                ClientId = MicrosoftPublicClientId,
+                RedirectUri = MicrosoftPublicRedirectUri,
+                LoginPrompt = OAuthLoginPrompt.SelectAccount // Always show account picker
             });
             options.Pool.Enabled = true;
             options.Pool.MinPoolSize = 0;
