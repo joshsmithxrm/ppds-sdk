@@ -1,4 +1,5 @@
 using System.CommandLine;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using PPDS.Migration.Cli.Infrastructure;
 using PPDS.Migration.Export;
@@ -96,11 +97,13 @@ public static class ExportCommand
             var verbose = context.ParseResult.GetValueForOption(verboseOption);
             var debug = context.ParseResult.GetValueForOption(debugOption);
 
-            // Resolve connection from configuration
+            // Resolve connection from configuration (validates environment exists and has connections)
             ConnectionResolver.ResolvedConnection resolved;
+            IConfiguration configuration;
             try
             {
-                resolved = ConnectionResolver.Resolve(env, config?.FullName, secretsId, "connection");
+                configuration = ConfigurationHelper.BuildRequired(config?.FullName, secretsId);
+                resolved = ConnectionResolver.ResolveFromConfig(configuration, env, "connection");
             }
             catch (Exception ex) when (ex is InvalidOperationException or FileNotFoundException)
             {
@@ -110,7 +113,7 @@ public static class ExportCommand
             }
 
             context.ExitCode = await ExecuteAsync(
-                resolved.Config, schema, output, parallel, pageSize,
+                configuration, env, resolved.Config.Url, schema, output, parallel, pageSize,
                 includeFiles, json, verbose, debug, context.GetCancellationToken());
         });
 
@@ -118,7 +121,9 @@ public static class ExportCommand
     }
 
     private static async Task<int> ExecuteAsync(
-        ConnectionResolver.ConnectionConfig connection,
+        IConfiguration configuration,
+        string environmentName,
+        string environmentUrl,
         FileInfo schema,
         FileInfo output,
         int parallel,
@@ -153,10 +158,11 @@ public static class ExportCommand
             progressReporter.Report(new ProgressEventArgs
             {
                 Phase = MigrationPhase.Analyzing,
-                Message = $"Connecting to Dataverse ({connection.Url})..."
+                Message = $"Connecting to Dataverse ({environmentUrl})..."
             });
 
-            await using var serviceProvider = ServiceFactory.CreateProvider(connection, verbose: verbose, debug: debug);
+            // Use CreateProviderFromConfig to get ALL connections for the environment
+            await using var serviceProvider = ServiceFactory.CreateProviderFromConfig(configuration, environmentName, verbose, debug);
             var exporter = serviceProvider.GetRequiredService<IExporter>();
 
             // Configure export options

@@ -577,8 +577,9 @@ namespace PPDS.Dataverse.BulkOperations
         /// <summary>
         /// Checks if an exception is a TVP race condition error that occurs on newly created tables.
         /// This happens when parallel bulk operations hit a table before Dataverse has created
-        /// the internal TVP types and stored procedures.
+        /// the internal TVP types and stored procedures, or when schema changes occur during operations.
         /// SQL Error 3732: Cannot drop type because it is being referenced by another object.
+        /// SQL Error 2766: The definition for user-defined data type has changed.
         /// </summary>
         /// <param name="exception">The exception to check.</param>
         /// <returns>True if this is a TVP race condition error.</returns>
@@ -597,9 +598,12 @@ namespace PPDS.Dataverse.BulkOperations
                 return false;
             }
 
-            // Check the message for the specific SQL error 3732 (Cannot drop type)
+            // Check the message for TVP-related SQL errors:
+            // - 3732: Cannot drop type (TVP in use by another operation)
+            // - 2766: Type definition has changed (TVP modified during operation)
             var message = fault.Message ?? string.Empty;
-            return message.Contains("3732") || message.Contains("Cannot drop type");
+            return message.Contains("3732") || message.Contains("Cannot drop type") ||
+                   message.Contains("2766") || message.Contains("definition for user-defined data type");
         }
 
         /// <summary>

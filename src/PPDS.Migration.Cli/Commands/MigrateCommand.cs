@@ -1,4 +1,5 @@
 using System.CommandLine;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using PPDS.Migration.Cli.Infrastructure;
 using PPDS.Migration.Export;
@@ -98,13 +99,15 @@ public static class MigrateCommand
             var verbose = context.ParseResult.GetValueForOption(verboseOption);
             var debug = context.ParseResult.GetValueForOption(debugOption);
 
-            // Resolve source and target connections from configuration
+            // Resolve source and target connections from configuration (validates environments exist and have connections)
             ConnectionResolver.ResolvedConnection sourceResolved;
             ConnectionResolver.ResolvedConnection targetResolved;
+            IConfiguration configuration;
             try
             {
-                (sourceResolved, targetResolved) = ConnectionResolver.ResolveSourceTarget(
-                    sourceEnv, targetEnv, config?.FullName, secretsId);
+                configuration = ConfigurationHelper.BuildRequired(config?.FullName, secretsId);
+                sourceResolved = ConnectionResolver.ResolveFromConfig(configuration, sourceEnv, "source");
+                targetResolved = ConnectionResolver.ResolveFromConfig(configuration, targetEnv, "target");
             }
             catch (Exception ex) when (ex is InvalidOperationException or FileNotFoundException)
             {
@@ -114,16 +117,19 @@ public static class MigrateCommand
             }
 
             context.ExitCode = await ExecuteAsync(
-                sourceResolved.Config, targetResolved.Config, schema, tempDir,
-                bypassPlugins, bypassFlows, json, verbose, debug, context.GetCancellationToken());
+                configuration, sourceEnv, targetEnv, sourceResolved.Config.Url, targetResolved.Config.Url,
+                schema, tempDir, bypassPlugins, bypassFlows, json, verbose, debug, context.GetCancellationToken());
         });
 
         return command;
     }
 
     private static async Task<int> ExecuteAsync(
-        ConnectionResolver.ConnectionConfig sourceConnection,
-        ConnectionResolver.ConnectionConfig targetConnection,
+        IConfiguration configuration,
+        string sourceEnv,
+        string targetEnv,
+        string sourceUrl,
+        string targetUrl,
         FileInfo schema,
         DirectoryInfo? tempDir,
         bool bypassPlugins,
@@ -162,10 +168,11 @@ public static class MigrateCommand
             progressReporter.Report(new ProgressEventArgs
             {
                 Phase = MigrationPhase.Analyzing,
-                Message = $"Phase 1: Connecting to source ({sourceConnection.Url})..."
+                Message = $"Phase 1: Connecting to source ({sourceUrl})..."
             });
 
-            await using var sourceProvider = ServiceFactory.CreateProvider(sourceConnection, "Source", verbose, debug);
+            // Use CreateProviderFromConfig to get ALL connections for the source environment
+            await using var sourceProvider = ServiceFactory.CreateProviderFromConfig(configuration, sourceEnv, verbose, debug);
             var exporter = sourceProvider.GetRequiredService<IExporter>();
 
             var exportResult = await exporter.ExportAsync(
@@ -184,10 +191,11 @@ public static class MigrateCommand
             progressReporter.Report(new ProgressEventArgs
             {
                 Phase = MigrationPhase.Analyzing,
-                Message = $"Phase 2: Connecting to target ({targetConnection.Url})..."
+                Message = $"Phase 2: Connecting to target ({targetUrl})..."
             });
 
-            await using var targetProvider = ServiceFactory.CreateProvider(targetConnection, "Target", verbose, debug);
+            // Use CreateProviderFromConfig to get ALL connections for the target environment
+            await using var targetProvider = ServiceFactory.CreateProviderFromConfig(configuration, targetEnv, verbose, debug);
             var importer = targetProvider.GetRequiredService<IImporter>();
 
             var importOptions = new ImportOptions

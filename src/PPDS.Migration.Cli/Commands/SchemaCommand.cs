@@ -1,4 +1,5 @@
 using System.CommandLine;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using PPDS.Migration.Cli.Infrastructure;
 using PPDS.Migration.Formats;
@@ -135,11 +136,13 @@ public static class SchemaCommand
             var verbose = context.ParseResult.GetValueForOption(verboseOption);
             var debug = context.ParseResult.GetValueForOption(debugOption);
 
-            // Resolve connection from configuration
+            // Resolve connection from configuration (validates environment exists and has connections)
             ConnectionResolver.ResolvedConnection resolved;
+            IConfiguration configuration;
             try
             {
-                resolved = ConnectionResolver.Resolve(env, config?.FullName, secretsId, "connection");
+                configuration = ConfigurationHelper.BuildRequired(config?.FullName, secretsId);
+                resolved = ConnectionResolver.ResolveFromConfig(configuration, env, "connection");
             }
             catch (Exception ex) when (ex is InvalidOperationException or FileNotFoundException)
             {
@@ -168,7 +171,7 @@ public static class SchemaCommand
             var excludePatternList = ParseAttributeList(excludePatterns);
 
             context.ExitCode = await ExecuteGenerateAsync(
-                resolved.Config, entityList, output,
+                configuration, env, resolved.Config.Url, entityList, output,
                 includeSystemFields, includeRelationships, disablePlugins,
                 includeAttrList, excludeAttrList, excludePatternList,
                 json, verbose, debug, context.GetCancellationToken());
@@ -222,11 +225,13 @@ public static class SchemaCommand
             var customOnly = context.ParseResult.GetValueForOption(customOnlyOption);
             var json = context.ParseResult.GetValueForOption(jsonOption);
 
-            // Resolve connection from configuration
+            // Resolve connection from configuration (validates environment exists and has connections)
             ConnectionResolver.ResolvedConnection resolved;
+            IConfiguration configuration;
             try
             {
-                resolved = ConnectionResolver.Resolve(env, config?.FullName, secretsId, "connection");
+                configuration = ConfigurationHelper.BuildRequired(config?.FullName, secretsId);
+                resolved = ConnectionResolver.ResolveFromConfig(configuration, env, "connection");
             }
             catch (Exception ex) when (ex is InvalidOperationException or FileNotFoundException)
             {
@@ -236,7 +241,7 @@ public static class SchemaCommand
             }
 
             context.ExitCode = await ExecuteListAsync(
-                resolved.Config, filter, customOnly, json, context.GetCancellationToken());
+                configuration, env, resolved.Config.Url, filter, customOnly, json, context.GetCancellationToken());
         });
 
         return command;
@@ -257,7 +262,9 @@ public static class SchemaCommand
     }
 
     private static async Task<int> ExecuteGenerateAsync(
-        ConnectionResolver.ConnectionConfig connection,
+        IConfiguration configuration,
+        string environmentName,
+        string environmentUrl,
         List<string> entities,
         FileInfo output,
         bool includeSystemFields,
@@ -292,10 +299,11 @@ public static class SchemaCommand
             progressReporter.Report(new ProgressEventArgs
             {
                 Phase = MigrationPhase.Analyzing,
-                Message = $"Connecting to Dataverse ({connection.Url})..."
+                Message = $"Connecting to Dataverse ({environmentUrl})..."
             });
 
-            await using var serviceProvider = ServiceFactory.CreateProvider(connection, verbose: verbose, debug: debug);
+            // Use CreateProviderFromConfig to get ALL connections for the environment
+            await using var serviceProvider = ServiceFactory.CreateProviderFromConfig(configuration, environmentName, verbose, debug);
             var generator = serviceProvider.GetRequiredService<ISchemaGenerator>();
             var schemaWriter = serviceProvider.GetRequiredService<ICmtSchemaWriter>();
 
@@ -351,7 +359,9 @@ public static class SchemaCommand
     }
 
     private static async Task<int> ExecuteListAsync(
-        ConnectionResolver.ConnectionConfig connection,
+        IConfiguration configuration,
+        string environmentName,
+        string environmentUrl,
         string? filter,
         bool customOnly,
         bool json,
@@ -361,11 +371,12 @@ public static class SchemaCommand
         {
             if (!json)
             {
-                Console.WriteLine($"Connecting to Dataverse ({connection.Url})...");
+                Console.WriteLine($"Connecting to Dataverse ({environmentUrl})...");
                 Console.WriteLine("Retrieving available entities...");
             }
 
-            await using var serviceProvider = ServiceFactory.CreateProvider(connection);
+            // Use CreateProviderFromConfig to get ALL connections for the environment
+            await using var serviceProvider = ServiceFactory.CreateProviderFromConfig(configuration, environmentName);
             var generator = serviceProvider.GetRequiredService<ISchemaGenerator>();
 
             var entities = await generator.GetAvailableEntitiesAsync(cancellationToken);
