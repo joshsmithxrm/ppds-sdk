@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+
+- Updated `Microsoft.PowerPlatform.Dataverse.Client` from `1.1.*` to `1.2.*` - includes CVE-2022-26907 fix
+
+### Changed
+
+- Updated test infrastructure packages:
+  - `Microsoft.NET.Test.Sdk`: 17.8.0 → 18.0.1
+  - `xunit`: 2.6.4 → 2.9.3
+  - `xunit.runner.visualstudio`: 2.5.6 → 3.0.2
+- Improved Dependabot configuration:
+  - Added `versioning-strategy: increase` to handle floating version bumps
+  - Added dependency grouping for reduced PR noise
+  - Increased PR limit to 10
+
 ### Added
 
 - **PPDS.Migration** - New library for high-performance Dataverse data migration

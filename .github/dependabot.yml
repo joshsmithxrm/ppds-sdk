@@ -6,12 +6,29 @@ updates:
     schedule:
       interval: "weekly"
       day: "monday"
-    open-pull-requests-limit: 5
+    open-pull-requests-limit: 10
     labels:
       - "dependencies"
       - "nuget"
     commit-message:
       prefix: "deps"
+    # Group related dependencies to reduce PR noise
+    groups:
+      microsoft-extensions:
+        patterns:
+          - "Microsoft.Extensions.*"
+      test-infrastructure:
+        patterns:
+          - "Microsoft.NET.Test.Sdk"
+          - "xunit*"
+          - "coverlet.*"
+          - "Moq"
+          - "FluentAssertions"
+      dataverse:
+        patterns:
+          - "Microsoft.PowerPlatform.Dataverse.*"
+    # Widen version constraints when needed (e.g., 1.1.* -> 1.2.*)
+    versioning-strategy: increase
 
   # GitHub Actions
   - package-ecosystem: "github-actions"
@@ -25,3 +42,7 @@ updates:
       - "github-actions"
     commit-message:
       prefix: "ci"
+    groups:
+      github-actions:
+        patterns:
+          - "*"
