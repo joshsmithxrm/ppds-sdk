@@ -143,19 +143,36 @@ public class PluginStepAttribute : Attribute { }
 ### Namespaces
 
 ```csharp
+// PPDS.Plugins
 namespace PPDS.Plugins;              // Root
 namespace PPDS.Plugins.Attributes;   // Attributes
 namespace PPDS.Plugins.Enums;        // Enums
+
+// PPDS.Dataverse
+namespace PPDS.Dataverse.Pooling;        // Connection pool, IConnectionSource
+namespace PPDS.Dataverse.BulkOperations; // Bulk API wrappers
+namespace PPDS.Dataverse.Configuration;  // Options, connection config
+namespace PPDS.Dataverse.Resilience;     // Throttle tracking, rate control
+
+// PPDS.Migration
+namespace PPDS.Migration.Export;     // IExporter
+namespace PPDS.Migration.Import;     // IImporter
 ```
 
 ---
 
 ## 📦 Version Management
 
-- Version is in `src/PPDS.Plugins/PPDS.Plugins.csproj`
+Each package has independent versioning using [MinVer](https://github.com/adamralph/minver):
+
+| Package | Tag Format | Example |
+|---------|------------|---------|
+| PPDS.Plugins | `Plugins-v{version}` | `Plugins-v1.2.0` |
+| PPDS.Dataverse | `Dataverse-v{version}` | `Dataverse-v1.0.0` |
+| PPDS.Migration + CLI | `Migration-v{version}` | `Migration-v1.0.0` |
+
 - Follow SemVer: `MAJOR.MINOR.PATCH`
-- Update version in `.csproj` before release
-- Tag releases as `vX.Y.Z`
+- Pre-release: `-alpha.N`, `-beta.N`, `-rc.N` suffix
 
 ---
 
@@ -173,13 +190,17 @@ namespace PPDS.Plugins.Enums;        // Enums
 
 ## 🚀 Release Process
 
-1. Update version in `PPDS.Plugins.csproj`
-2. Update `CHANGELOG.md`
-3. Merge to `main`
-4. Create GitHub Release with tag `vX.Y.Z`
-5. `publish-nuget.yml` workflow automatically publishes to NuGet.org
+1. Update per-package `CHANGELOG.md` (in `src/{package}/`)
+2. Merge to `main`
+3. Create GitHub Release with package-specific tag (e.g., `Dataverse-v1.0.0`)
+4. `publish-nuget.yml` workflow automatically publishes to NuGet.org
 
 **Required Secret:** `NUGET_API_KEY`
+
+See per-package changelogs:
+- [PPDS.Plugins](src/PPDS.Plugins/CHANGELOG.md)
+- [PPDS.Dataverse](src/PPDS.Dataverse/CHANGELOG.md)
+- [PPDS.Migration](src/PPDS.Migration/CHANGELOG.md)
 
 ---
 
@@ -191,6 +212,7 @@ namespace PPDS.Plugins.Enums;        // Enums
 |---------|--------------|
 | PPDS.Plugins | NuGet |
 | PPDS.Dataverse | NuGet |
+| PPDS.Migration | NuGet |
 | PPDS.Migration.Cli | .NET Tool |
 
 ### Consumed By
@@ -289,7 +311,40 @@ The pool implements AIMD-based (Additive Increase, Multiplicative Decrease) rate
 
 **For production bulk operations, always use `Conservative`** to prevent throttle cascades.
 
-See ADR-0006 for execution time ceiling details.
+See [ADR-0006](docs/adr/0006_EXECUTION_TIME_CEILING.md) for execution time ceiling details.
+
+### Architecture Decision Records
+
+| ADR | Summary |
+|-----|---------|
+| [0001](docs/adr/0001_DISABLE_AFFINITY_COOKIE.md) | Disable affinity cookie for 10x throughput |
+| [0002](docs/adr/0002_MULTI_CONNECTION_POOLING.md) | Multiple Application Users multiply API quota |
+| [0003](docs/adr/0003_THROTTLE_AWARE_SELECTION.md) | Route away from throttled connections |
+| [0004](docs/adr/0004_THROTTLE_RECOVERY_STRATEGY.md) | Transparent throttle waiting without blocking |
+| [0005](docs/adr/0005_POOL_SIZING_PER_CONNECTION.md) | Per-user pool sizing (52 per Application User) |
+| [0006](docs/adr/0006_EXECUTION_TIME_CEILING.md) | Execution time-aware parallelism ceiling |
+| [0007](docs/adr/0007_CONNECTION_SOURCE_ABSTRACTION.md) | IConnectionSource for custom auth methods |
+
+---
+
+## 🖥️ CLI (PPDS.Migration.Cli)
+
+### Authentication Modes
+
+| Mode | Flag | Use Case |
+|------|------|----------|
+| Interactive | `--auth interactive` (default) | Development, ad-hoc usage |
+| Environment | `--auth env` | CI/CD pipelines |
+| Managed Identity | `--auth managed` | Azure-hosted workloads |
+
+**CI/CD environment variables:**
+```bash
+DATAVERSE__URL=https://org.crm.dynamics.com
+DATAVERSE__CLIENTID=your-client-id
+DATAVERSE__CLIENTSECRET=your-secret
+```
+
+See [CLI README](src/PPDS.Migration.Cli/README.md) for full documentation.
 
 ---
 
