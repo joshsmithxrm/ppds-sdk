@@ -5,29 +5,6 @@ All notable changes to PPDS.Migration and PPDS.Migration.Cli will be documented 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
-
-### Added
-
-#### PPDS.Migration.Cli (CLI Tool)
-
-- Global `--auth` option supporting multiple authentication modes:
-  - `config` (default): Use configuration file for connection strings
-  - `env`: Use environment variables (DATAVERSE_URL, DATAVERSE_TENANT_ID, DATAVERSE_CLIENT_ID, DATAVERSE_CLIENT_SECRET)
-  - `interactive`: Azure.Identity interactive browser login
-  - `managed`: Azure Managed Identity for CI/CD and cloud environments
-- Auth infrastructure: `AuthMode` enum, `AuthResolver`, and `ServiceFactory.CreateProviderForAuthMode()`
-- Tab completions for `--env` option from configuration
-- Validators: `AcceptExistingOnly()` for file/directory validation, numeric validators for `--parallel` and `--page-size`
-
-### Changed
-
-#### PPDS.Migration.Cli (CLI Tool)
-
-- Upgraded from System.CommandLine 2.0.0-beta4 to 2.0.1 stable
-- `--env` option now optional when using `--auth env`, `--auth interactive`, or `--auth managed`
-- `migrate` command requires configuration for environment URLs, rejects `--auth env` mode
-
 ## [1.0.0] - Unreleased
 
 ### Added
@@ -41,19 +18,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Progress reporting with console and JSON output formats
 - Security-first design: connection string redaction, no PII in logs
 - DI integration via `AddDataverseMigration()` extension method
+- User mapping generation for cross-environment migrations
 - Targets: `net8.0`, `net10.0`
 
 #### PPDS.Migration.Cli (CLI Tool)
 
-- Commands: `export`, `import`, `analyze`, `migrate`, `schema generate`, `schema list`, `config list`
-- Unified configuration model using same `DataverseOptions` as PPDS.Dataverse SDK
-- Standard .NET configuration layering: appsettings.json → User Secrets → Environment variables
-- `--secrets-id` global option for cross-process User Secrets sharing
-- `--env` option to select named environment from configuration
+- Commands: `export`, `import`, `analyze`, `migrate`, `schema generate`, `schema list`, `users generate`
+- Global `--url` option for explicit environment URL
+- Global `--auth` option with three authentication modes:
+  - `interactive` (default): Device code flow with persistent token cache
+  - `env`: Environment variables (`DATAVERSE__URL`, `DATAVERSE__CLIENTID`, `DATAVERSE__CLIENTSECRET`)
+  - `managed`: Azure Managed Identity for Azure-hosted workloads
 - JSON progress output for tool integration (`--json` flag)
 - Support for bypass options (plugins, flows) during import
+- Validators: file/directory existence checks, numeric range validation
+- Upgraded to System.CommandLine 2.0.1 stable
 - Packaged as .NET global tool (`ppds-migrate`)
-- Comprehensive unit test suite
 - Targets: `net8.0`, `net10.0`
 
 [1.0.0]: https://github.com/joshsmithxrm/ppds-sdk/releases/tag/Migration-v1.0.0

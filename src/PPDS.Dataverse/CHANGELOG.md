@@ -20,12 +20,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Full `appsettings.json` configuration support for all options
 - Bulk operation wrappers: CreateMultiple, UpdateMultiple, UpsertMultiple, DeleteMultiple
 - `IProgress<ProgressSnapshot>` support for real-time progress reporting
-- Structured configuration with typed auth properties
+- `IConnectionSource` abstraction for custom authentication methods (ADR-0007)
+- `ServiceClientSource` for integrating pre-authenticated ServiceClient instances
+- Four built-in authentication types via `DataverseAuthType`:
+  - `ClientSecret`: Service principal with client ID and secret
+  - `Certificate`: Service principal with X.509 certificate
+  - `OAuth`: Interactive OAuth with configurable login prompt
+  - `ManagedIdentity`: Azure Managed Identity (system or user-assigned)
 - Key Vault secret resolution (environment variables via .NET config binding)
 - Multi-environment configuration support for source/target scenarios
 - DI integration via `AddDataverseConnectionPool()` extension method
 - Affinity cookie disabled by default for improved throughput
-- TVP race condition retry (SQL error 3732)
+- TVP race condition retry (SQL error 3732/2812)
 - SQL deadlock retry (SQL error 1205)
 - Connection validation with background health checks
 - Security-first design: connection string redaction, sensitive data attributes
