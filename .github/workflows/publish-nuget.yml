@@ -1,8 +1,11 @@
 name: Publish to NuGet
 
 on:
-  release:
-    types: [published]
+  push:
+    tags:
+      - 'Plugins-v*'
+      - 'Dataverse-v*'
+      - 'Migration-v*'
 
 jobs:
   publish:
@@ -10,6 +13,8 @@ jobs:
 
     steps:
     - uses: actions/checkout@v6
+      with:
+        fetch-depth: 0  # Required for MinVer to read git history
 
     - name: Setup .NET
       uses: actions/setup-dotnet@v5
@@ -18,27 +23,33 @@ jobs:
           8.0.x
           10.0.x
 
-    - name: Show release tag
+    - name: Determine package to publish
+      id: package
       shell: bash
       run: |
-        # Extract version from tag for logging
-        VERSION=${GITHUB_REF#refs/tags/v}
-        echo "Release triggered by tag: v$VERSION"
+        TAG=${GITHUB_REF#refs/tags/}
+        echo "tag=$TAG" >> $GITHUB_OUTPUT
 
-    - name: Show package versions
-      shell: pwsh
+        if [[ $TAG == Plugins-v* ]]; then
+          echo "package=PPDS.Plugins" >> $GITHUB_OUTPUT
+          echo "projects=src/PPDS.Plugins/PPDS.Plugins.csproj" >> $GITHUB_OUTPUT
+        elif [[ $TAG == Dataverse-v* ]]; then
+          echo "package=PPDS.Dataverse" >> $GITHUB_OUTPUT
+          echo "projects=src/PPDS.Dataverse/PPDS.Dataverse.csproj" >> $GITHUB_OUTPUT
+        elif [[ $TAG == Migration-v* ]]; then
+          echo "package=PPDS.Migration" >> $GITHUB_OUTPUT
+          echo "projects=src/PPDS.Migration/PPDS.Migration.csproj src/PPDS.Migration.Cli/PPDS.Migration.Cli.csproj" >> $GITHUB_OUTPUT
+        else
+          echo "Unknown tag format: $TAG"
+          exit 1
+        fi
+
+    - name: Show version info
+      shell: bash
       run: |
-        Write-Host "Package versions from csproj files:" -ForegroundColor Cyan
-        Get-ChildItem -Path src -Filter "*.csproj" -Recurse | ForEach-Object {
-          $content = Get-Content $_.FullName -Raw
-          if ($content -match '<PackageId>([^<]+)</PackageId>') {
-            $packageId = $Matches[1]
-            if ($content -match '<Version>([^<]+)</Version>') {
-              $version = $Matches[1]
-              Write-Host "  $packageId : $version"
-            }
-          }
-        }
+        echo "Tag: ${{ steps.package.outputs.tag }}"
+        echo "Package: ${{ steps.package.outputs.package }}"
+        echo "Projects: ${{ steps.package.outputs.projects }}"
 
     - name: Restore dependencies
       run: dotnet restore
@@ -46,8 +57,14 @@ jobs:
     - name: Build
       run: dotnet build --configuration Release --no-restore
 
-    - name: Pack
-      run: dotnet pack --configuration Release --no-build --output ./nupkgs
+    - name: Pack specific projects
+      shell: bash
+      run: |
+        mkdir -p ./nupkgs
+        for project in ${{ steps.package.outputs.projects }}; do
+          echo "Packing $project"
+          dotnet pack "$project" --configuration Release --no-build --output ./nupkgs
+        done
 
     - name: List packages
       shell: bash

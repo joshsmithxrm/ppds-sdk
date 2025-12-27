@@ -15,37 +15,45 @@ public static class AnalyzeCommand
 {
     public static Command Create()
     {
-        var schemaOption = new Option<FileInfo>(
-            aliases: ["--schema", "-s"],
-            description: "Path to schema.xml file")
+        var schemaOption = new Option<FileInfo>("--schema", "-s")
         {
-            IsRequired = true
+            Description = "Path to schema.xml file",
+            Required = true
+        }.AcceptExistingOnly();
+
+        var outputFormatOption = new Option<OutputFormat>("--output-format", "-f")
+        {
+            Description = "Output format: text or json",
+            DefaultValueFactory = _ => OutputFormat.Text
         };
 
-        var outputFormatOption = new Option<OutputFormat>(
-            aliases: ["--output-format", "-f"],
-            getDefaultValue: () => OutputFormat.Text,
-            description: "Output format: text or json");
+        var verboseOption = new Option<bool>("--verbose", "-v")
+        {
+            Description = "Enable verbose logging output",
+            DefaultValueFactory = _ => false
+        };
 
-        var verboseOption = new Option<bool>(
-            aliases: ["--verbose", "-v"],
-            getDefaultValue: () => false,
-            description: "Verbose output");
+        var debugOption = new Option<bool>("--debug")
+        {
+            Description = "Enable diagnostic logging output",
+            DefaultValueFactory = _ => false
+        };
 
         var command = new Command("analyze", "Analyze schema and display dependency graph")
         {
             schemaOption,
             outputFormatOption,
-            verboseOption
+            verboseOption,
+            debugOption
         };
 
-        command.SetHandler(async (context) =>
+        command.SetAction(async (parseResult, cancellationToken) =>
         {
-            var schema = context.ParseResult.GetValueForOption(schemaOption)!;
-            var outputFormat = context.ParseResult.GetValueForOption(outputFormatOption);
-            var verbose = context.ParseResult.GetValueForOption(verboseOption);
+            var schema = parseResult.GetValue(schemaOption)!;
+            var outputFormat = parseResult.GetValue(outputFormatOption);
+            var debug = parseResult.GetValue(debugOption);
 
-            context.ExitCode = await ExecuteAsync(schema, outputFormat, verbose, context.GetCancellationToken());
+            return await ExecuteAsync(schema, outputFormat, debug, cancellationToken);
         });
 
         return command;
@@ -54,17 +62,12 @@ public static class AnalyzeCommand
     private static async Task<int> ExecuteAsync(
         FileInfo schema,
         OutputFormat outputFormat,
-        bool verbose,
+        bool debug,
         CancellationToken cancellationToken)
     {
         try
         {
-            // Validate schema file exists
-            if (!schema.Exists)
-            {
-                Console.Error.WriteLine($"Error: Schema file not found: {schema.FullName}");
-                return ExitCodes.InvalidArguments;
-            }
+            // File validation now handled by option validators (AcceptExistingOnly)
 
             // Create service provider for analysis (no Dataverse connection needed)
             await using var serviceProvider = ServiceFactory.CreateAnalysisProvider();
@@ -99,7 +102,7 @@ public static class AnalyzeCommand
         catch (Exception ex)
         {
             Console.Error.WriteLine($"Analysis failed: {ex.Message}");
-            if (verbose)
+            if (debug)
             {
                 Console.Error.WriteLine(ex.StackTrace);
             }

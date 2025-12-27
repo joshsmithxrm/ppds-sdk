@@ -1,5 +1,6 @@
 using FluentAssertions;
 using Moq;
+using PPDS.Dataverse.Configuration;
 using PPDS.Dataverse.Pooling;
 using PPDS.Dataverse.Pooling.Strategies;
 using PPDS.Dataverse.Resilience;
@@ -24,9 +25,9 @@ public class LeastConnectionsStrategyTests
         // Arrange
         var connections = new List<DataverseConnection>
         {
-            new("Primary", "connection-string-1"),
-            new("Secondary", "connection-string-2"),
-            new("Tertiary", "connection-string-3")
+            CreateConnection("Primary"),
+            CreateConnection("Secondary"),
+            CreateConnection("Tertiary")
         };
         var activeConnections = new Dictionary<string, int>
         {
@@ -48,8 +49,8 @@ public class LeastConnectionsStrategyTests
         // Arrange
         var connections = new List<DataverseConnection>
         {
-            new("Primary", "connection-string-1"),
-            new("Secondary", "connection-string-2")
+            CreateConnection("Primary"),
+            CreateConnection("Secondary")
         };
         var activeConnections = new Dictionary<string, int>
         {
@@ -70,8 +71,8 @@ public class LeastConnectionsStrategyTests
         // Arrange
         var connections = new List<DataverseConnection>
         {
-            new("Primary", "connection-string-1"),
-            new("Secondary", "connection-string-2")
+            CreateConnection("Primary"),
+            CreateConnection("Secondary")
         };
         var activeConnections = new Dictionary<string, int>(); // Empty
 
@@ -92,5 +93,16 @@ public class LeastConnectionsStrategyTests
         // Act & Assert
         var act = () => _strategy.SelectConnection(connections, _throttleTrackerMock.Object, activeConnections);
         act.Should().Throw<InvalidOperationException>();
+    }
+
+    private static DataverseConnection CreateConnection(string name)
+    {
+        return new DataverseConnection(name)
+        {
+            Url = $"https://{name.ToLower()}.crm.dynamics.com",
+            ClientId = "test-client-id",
+            ClientSecret = "test-secret",
+            AuthType = DataverseAuthType.ClientSecret
+        };
     }
 }

@@ -14,9 +14,12 @@
     <SignAssembly>true</SignAssembly>
     <AssemblyOriginatorKeyFile>PPDS.Migration.snk</AssemblyOriginatorKeyFile>
 
+    <!-- MinVer Configuration -->
+    <MinVerTagPrefix>Migration-v</MinVerTagPrefix>
+    <MinVerDefaultPreReleaseIdentifiers>alpha.0</MinVerDefaultPreReleaseIdentifiers>
+
     <!-- NuGet Package Metadata -->
     <PackageId>PPDS.Migration</PackageId>
-    <Version>1.0.0-alpha1</Version>
     <Authors>Josh Smith</Authors>
     <Company>Power Platform Developer Suite</Company>
     <Description>High-performance Dataverse data migration engine. Provides parallel export,
@@ -51,6 +54,7 @@ dependency-aware tiered import, and CMT format compatibility for automated pipel
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.1" />
     <PackageReference Include="Microsoft.Extensions.Options" Version="10.0.1" />
     <PackageReference Include="Microsoft.SourceLink.GitHub" Version="8.0.0" PrivateAssets="All" />
+    <PackageReference Include="MinVer" Version="6.0.0" PrivateAssets="all" />
   </ItemGroup>
 
   <!-- Suppress known vulnerability in transitive dependency until upstream fix -->

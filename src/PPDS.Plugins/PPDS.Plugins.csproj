@@ -13,9 +13,12 @@
     <SignAssembly>true</SignAssembly>
     <AssemblyOriginatorKeyFile>PPDS.Plugins.snk</AssemblyOriginatorKeyFile>
 
+    <!-- MinVer Configuration -->
+    <MinVerTagPrefix>Plugins-v</MinVerTagPrefix>
+    <MinVerDefaultPreReleaseIdentifiers>alpha.0</MinVerDefaultPreReleaseIdentifiers>
+
     <!-- NuGet Package Metadata -->
     <PackageId>PPDS.Plugins</PackageId>
-    <Version>1.1.0</Version>
     <Authors>Josh Smith</Authors>
     <Company>Power Platform Developer Suite</Company>
     <Description>Plugin development attributes for Dataverse. Provides PluginStep and PluginImage attributes for declarative plugin registration configuration that can be extracted and deployed using PPDS.Tools.</Description>
@@ -26,7 +29,6 @@
     <RepositoryUrl>https://github.com/joshsmithxrm/ppds-sdk.git</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     <PackageReadmeFile>README.md</PackageReadmeFile>
-    <PackageReleaseNotes>Added SecureConfiguration property to PluginStepAttribute. Updated CI dependencies.</PackageReleaseNotes>
 
     <!-- Source Link for debugging -->
     <PublishRepositoryUrl>true</PublishRepositoryUrl>
@@ -42,6 +44,7 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.SourceLink.GitHub" Version="8.0.0" PrivateAssets="All" />
+    <PackageReference Include="MinVer" Version="6.0.0" PrivateAssets="all" />
   </ItemGroup>
 
 </Project>

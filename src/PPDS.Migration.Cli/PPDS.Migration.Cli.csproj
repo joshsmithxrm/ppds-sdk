@@ -10,11 +10,14 @@
     <!-- Suppress known vulnerability in transitive dependency until upstream fix -->
     <NoWarn>$(NoWarn);NU1903</NoWarn>
 
+    <!-- MinVer Configuration -->
+    <MinVerTagPrefix>Migration-v</MinVerTagPrefix>
+    <MinVerDefaultPreReleaseIdentifiers>alpha.0</MinVerDefaultPreReleaseIdentifiers>
+
     <!-- .NET Tool Configuration -->
     <PackAsTool>true</PackAsTool>
     <ToolCommandName>ppds-migrate</ToolCommandName>
     <PackageId>PPDS.Migration.Cli</PackageId>
-    <Version>1.0.0-alpha1</Version>
     <Authors>Josh Smith</Authors>
     <Company>Power Platform Developer Suite</Company>
     <Description>High-performance Dataverse data migration CLI tool. Export, import, and migrate
@@ -35,6 +38,10 @@
     <ProjectReference Include="..\PPDS.Migration\PPDS.Migration.csproj" />
     <ProjectReference Include="..\PPDS.Dataverse\PPDS.Dataverse.csproj" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.1" />
-    <PackageReference Include="System.CommandLine" Version="2.0.0-beta4.22272.1" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Console" Version="10.0.1" />
+    <PackageReference Include="Microsoft.Identity.Client" Version="4.68.*" />
+    <PackageReference Include="Microsoft.Identity.Client.Extensions.Msal" Version="4.68.*" />
+    <PackageReference Include="MinVer" Version="6.0.0" PrivateAssets="all" />
+    <PackageReference Include="System.CommandLine" Version="2.0.1" />
   </ItemGroup>
 </Project>

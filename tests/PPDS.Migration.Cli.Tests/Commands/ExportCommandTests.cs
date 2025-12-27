@@ -5,13 +5,36 @@ using Xunit;
 
 namespace PPDS.Migration.Cli.Tests.Commands;
 
-public class ExportCommandTests
+public class ExportCommandTests : IDisposable
 {
     private readonly Command _command;
+    private readonly string _tempSchemaFile;
+    private readonly string _tempOutputFile;
+    private readonly string _originalDir;
 
     public ExportCommandTests()
     {
         _command = ExportCommand.Create();
+
+        // Create temp schema file for parsing tests
+        _tempSchemaFile = Path.Combine(Path.GetTempPath(), $"test-schema-{Guid.NewGuid()}.xml");
+        File.WriteAllText(_tempSchemaFile, "<entities></entities>");
+
+        // Use relative path for output to avoid Windows path issues with AcceptLegalFileNamesOnly
+        // Change to temp directory so relative path works
+        _originalDir = Directory.GetCurrentDirectory();
+        Directory.SetCurrentDirectory(Path.GetTempPath());
+        _tempOutputFile = $"test-output-{Guid.NewGuid()}.zip";
+    }
+
+    public void Dispose()
+    {
+        Directory.SetCurrentDirectory(_originalDir);
+        if (File.Exists(_tempSchemaFile))
+            File.Delete(_tempSchemaFile);
+        var fullOutputPath = Path.Combine(Path.GetTempPath(), _tempOutputFile);
+        if (File.Exists(fullOutputPath))
+            File.Delete(fullOutputPath);
     }
 
     #region Command Structure Tests
@@ -25,80 +48,65 @@ public class ExportCommandTests
     [Fact]
     public void Create_ReturnsCommandWithDescription()
     {
-        Assert.Equal("Export data from Dataverse to a ZIP file", _command.Description);
-    }
-
-    [Fact]
-    public void Create_HasConnectionOption()
-    {
-        var option = _command.Options.FirstOrDefault(o => o.Name == "connection");
-        Assert.NotNull(option);
-        // Not required at parse time - can come from environment variable
-        Assert.False(option.IsRequired);
-        Assert.Contains("-c", option.Aliases);
-        Assert.Contains("--connection", option.Aliases);
+        Assert.StartsWith("Export data from Dataverse to a ZIP file", _command.Description);
     }
 
     [Fact]
     public void Create_HasRequiredSchemaOption()
     {
-        var option = _command.Options.FirstOrDefault(o => o.Name == "schema");
+        var option = _command.Options.FirstOrDefault(o => o.Name == "--schema");
         Assert.NotNull(option);
-        Assert.True(option.IsRequired);
+        Assert.True(option.Required);
         Assert.Contains("-s", option.Aliases);
-        Assert.Contains("--schema", option.Aliases);
     }
 
     [Fact]
     public void Create_HasRequiredOutputOption()
     {
-        var option = _command.Options.FirstOrDefault(o => o.Name == "output");
+        var option = _command.Options.FirstOrDefault(o => o.Name == "--output");
         Assert.NotNull(option);
-        Assert.True(option.IsRequired);
+        Assert.True(option.Required);
         Assert.Contains("-o", option.Aliases);
-        Assert.Contains("--output", option.Aliases);
     }
 
     [Fact]
     public void Create_HasOptionalParallelOption()
     {
-        var option = _command.Options.FirstOrDefault(o => o.Name == "parallel");
+        var option = _command.Options.FirstOrDefault(o => o.Name == "--parallel");
         Assert.NotNull(option);
-        Assert.False(option.IsRequired);
+        Assert.False(option.Required);
     }
 
     [Fact]
     public void Create_HasOptionalPageSizeOption()
     {
-        var option = _command.Options.FirstOrDefault(o => o.Name == "page-size");
+        var option = _command.Options.FirstOrDefault(o => o.Name == "--page-size");
         Assert.NotNull(option);
-        Assert.False(option.IsRequired);
+        Assert.False(option.Required);
     }
 
     [Fact]
     public void Create_HasOptionalIncludeFilesOption()
     {
-        var option = _command.Options.FirstOrDefault(o => o.Name == "include-files");
+        var option = _command.Options.FirstOrDefault(o => o.Name == "--include-files");
         Assert.NotNull(option);
-        Assert.False(option.IsRequired);
+        Assert.False(option.Required);
     }
 
     [Fact]
     public void Create_HasOptionalJsonOption()
     {
-        var option = _command.Options.FirstOrDefault(o => o.Name == "json");
+        var option = _command.Options.FirstOrDefault(o => o.Name == "--json");
         Assert.NotNull(option);
-        Assert.False(option.IsRequired);
+        Assert.False(option.Required);
     }
 
     [Fact]
-    public void Create_HasOptionalVerboseOption()
+    public void Create_HasOptionalDebugOption()
     {
-        var option = _command.Options.FirstOrDefault(o => o.Name == "verbose");
+        var option = _command.Options.FirstOrDefault(o => o.Name == "--debug");
         Assert.NotNull(option);
-        Assert.False(option.IsRequired);
-        Assert.Contains("-v", option.Aliases);
-        Assert.Contains("--verbose", option.Aliases);
+        Assert.False(option.Required);
     }
 
     #endregion
@@ -108,78 +116,63 @@ public class ExportCommandTests
     [Fact]
     public void Parse_WithAllRequiredOptions_Succeeds()
     {
-        var result = _command.Parse("--connection conn --schema schema.xml --output data.zip");
+        var result = _command.Parse($"--schema \"{_tempSchemaFile}\" --output \"{_tempOutputFile}\"");
         Assert.Empty(result.Errors);
     }
 
     [Fact]
     public void Parse_WithShortAliases_Succeeds()
     {
-        var result = _command.Parse("-c conn -s schema.xml -o data.zip");
-        Assert.Empty(result.Errors);
-    }
-
-    [Fact]
-    public void Parse_MissingConnection_NoParseError()
-    {
-        // Connection can come from environment variable, so no parse error
-        var result = _command.Parse("--schema schema.xml --output data.zip");
+        var result = _command.Parse($"-s \"{_tempSchemaFile}\" -o \"{_tempOutputFile}\"");
         Assert.Empty(result.Errors);
     }
 
     [Fact]
     public void Parse_MissingSchema_HasError()
     {
-        var result = _command.Parse("--connection conn --output data.zip");
+        var result = _command.Parse($"--output \"{_tempOutputFile}\"");
         Assert.NotEmpty(result.Errors);
     }
 
     [Fact]
     public void Parse_MissingOutput_HasError()
     {
-        var result = _command.Parse("--connection conn --schema schema.xml");
+        var result = _command.Parse($"--schema \"{_tempSchemaFile}\"");
         Assert.NotEmpty(result.Errors);
     }
 
     [Fact]
     public void Parse_WithOptionalParallel_Succeeds()
     {
-        var result = _command.Parse("-c conn -s schema.xml -o data.zip --parallel 4");
+        var result = _command.Parse($"-s \"{_tempSchemaFile}\" -o \"{_tempOutputFile}\" --parallel 4");
         Assert.Empty(result.Errors);
     }
 
     [Fact]
     public void Parse_WithOptionalPageSize_Succeeds()
     {
-        var result = _command.Parse("-c conn -s schema.xml -o data.zip --page-size 1000");
+        var result = _command.Parse($"-s \"{_tempSchemaFile}\" -o \"{_tempOutputFile}\" --page-size 1000");
         Assert.Empty(result.Errors);
     }
 
     [Fact]
     public void Parse_WithOptionalIncludeFiles_Succeeds()
     {
-        var result = _command.Parse("-c conn -s schema.xml -o data.zip --include-files");
+        var result = _command.Parse($"-s \"{_tempSchemaFile}\" -o \"{_tempOutputFile}\" --include-files");
         Assert.Empty(result.Errors);
     }
 
     [Fact]
     public void Parse_WithOptionalJson_Succeeds()
     {
-        var result = _command.Parse("-c conn -s schema.xml -o data.zip --json");
+        var result = _command.Parse($"-s \"{_tempSchemaFile}\" -o \"{_tempOutputFile}\" --json");
         Assert.Empty(result.Errors);
     }
 
     [Fact]
-    public void Parse_WithOptionalVerbose_Succeeds()
+    public void Parse_WithOptionalDebug_Succeeds()
     {
-        var result = _command.Parse("-c conn -s schema.xml -o data.zip --verbose");
-        Assert.Empty(result.Errors);
-    }
-
-    [Fact]
-    public void Parse_WithShortVerbose_Succeeds()
-    {
-        var result = _command.Parse("-c conn -s schema.xml -o data.zip -v");
+        var result = _command.Parse($"-s \"{_tempSchemaFile}\" -o \"{_tempOutputFile}\" --debug");
         Assert.Empty(result.Errors);
     }
 

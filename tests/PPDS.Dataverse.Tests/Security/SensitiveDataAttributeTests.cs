@@ -8,14 +8,14 @@ namespace PPDS.Dataverse.Tests.Security;
 public class SensitiveDataAttributeTests
 {
     [Fact]
-    public void DataverseConnection_ConnectionString_HasSensitiveDataAttribute()
+    public void DataverseConnection_ClientSecret_HasSensitiveDataAttribute()
     {
-        var property = typeof(DataverseConnection).GetProperty(nameof(DataverseConnection.ConnectionString));
+        var property = typeof(DataverseConnection).GetProperty(nameof(DataverseConnection.ClientSecret));
         var attribute = property?.GetCustomAttribute<SensitiveDataAttribute>();
 
         Assert.NotNull(attribute);
-        Assert.Equal("Contains authentication credentials", attribute.Reason);
-        Assert.Equal("ConnectionString", attribute.DataType);
+        Assert.Equal("Contains client secret", attribute.Reason);
+        Assert.Equal("Secret", attribute.DataType);
     }
 
     [Fact]

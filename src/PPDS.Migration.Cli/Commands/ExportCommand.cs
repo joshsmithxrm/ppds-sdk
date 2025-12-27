@@ -2,6 +2,7 @@ using System.CommandLine;
 using Microsoft.Extensions.DependencyInjection;
 using PPDS.Migration.Cli.Infrastructure;
 using PPDS.Migration.Export;
+using PPDS.Migration.Progress;
 
 namespace PPDS.Migration.Cli.Commands;
 
@@ -12,98 +13,122 @@ public static class ExportCommand
 {
     public static Command Create()
     {
-        var connectionOption = new Option<string?>(
-            aliases: ["--connection", "-c"],
-            description: ConnectionResolver.GetHelpDescription(ConnectionResolver.ConnectionEnvVar));
-
-        var schemaOption = new Option<FileInfo>(
-            aliases: ["--schema", "-s"],
-            description: "Path to schema.xml file")
+        var schemaOption = new Option<FileInfo>("--schema", "-s")
         {
-            IsRequired = true
+            Description = "Path to schema.xml file",
+            Required = true
+        }.AcceptExistingOnly();
+
+        var outputOption = new Option<FileInfo>("--output", "-o")
+        {
+            Description = "Output ZIP file path",
+            Required = true
+        }.AcceptLegalFileNamesOnly();
+
+        // Validate output directory exists
+        outputOption.Validators.Add(result =>
+        {
+            var file = result.GetValue(outputOption);
+            if (file?.Directory is { Exists: false })
+                result.AddError($"Output directory does not exist: {file.Directory.FullName}");
+        });
+
+        var parallelOption = new Option<int>("--parallel")
+        {
+            Description = "Degree of parallelism for concurrent entity exports",
+            DefaultValueFactory = _ => Environment.ProcessorCount * 2
+        };
+        parallelOption.Validators.Add(result =>
+        {
+            if (result.GetValue(parallelOption) < 1)
+                result.AddError("--parallel must be at least 1");
+        });
+
+        var pageSizeOption = new Option<int>("--page-size")
+        {
+            Description = "FetchXML page size for data retrieval",
+            DefaultValueFactory = _ => 5000
+        };
+        pageSizeOption.Validators.Add(result =>
+        {
+            var value = result.GetValue(pageSizeOption);
+            if (value < 1)
+                result.AddError("--page-size must be at least 1");
+            if (value > 5000)
+                result.AddError("--page-size cannot exceed 5000 (Dataverse limit)");
+        });
+
+        var includeFilesOption = new Option<bool>("--include-files")
+        {
+            Description = "Export file attachments (notes, annotations)",
+            DefaultValueFactory = _ => false
         };
 
-        var outputOption = new Option<FileInfo>(
-            aliases: ["--output", "-o"],
-            description: "Output ZIP file path")
+        var jsonOption = new Option<bool>("--json")
         {
-            IsRequired = true
+            Description = "Output progress as JSON (for tool integration)",
+            DefaultValueFactory = _ => false
         };
 
-        var parallelOption = new Option<int>(
-            name: "--parallel",
-            getDefaultValue: () => Environment.ProcessorCount * 2,
-            description: "Degree of parallelism for concurrent entity exports");
+        var verboseOption = new Option<bool>("--verbose", "-v")
+        {
+            Description = "Enable verbose logging output",
+            DefaultValueFactory = _ => false
+        };
 
-        var pageSizeOption = new Option<int>(
-            name: "--page-size",
-            getDefaultValue: () => 5000,
-            description: "FetchXML page size for data retrieval");
-
-        var includeFilesOption = new Option<bool>(
-            name: "--include-files",
-            getDefaultValue: () => false,
-            description: "Export file attachments (notes, annotations)");
-
-        var jsonOption = new Option<bool>(
-            name: "--json",
-            getDefaultValue: () => false,
-            description: "Output progress as JSON (for tool integration)");
-
-        var verboseOption = new Option<bool>(
-            aliases: ["--verbose", "-v"],
-            getDefaultValue: () => false,
-            description: "Verbose output");
+        var debugOption = new Option<bool>("--debug")
+        {
+            Description = "Enable diagnostic logging output",
+            DefaultValueFactory = _ => false
+        };
 
         var command = new Command("export", "Export data from Dataverse to a ZIP file")
         {
-            connectionOption,
             schemaOption,
             outputOption,
             parallelOption,
             pageSizeOption,
             includeFilesOption,
             jsonOption,
-            verboseOption
+            verboseOption,
+            debugOption
         };
 
-        command.SetHandler(async (context) =>
+        command.SetAction(async (parseResult, cancellationToken) =>
         {
-            var connectionArg = context.ParseResult.GetValueForOption(connectionOption);
-            var schema = context.ParseResult.GetValueForOption(schemaOption)!;
-            var output = context.ParseResult.GetValueForOption(outputOption)!;
-            var parallel = context.ParseResult.GetValueForOption(parallelOption);
-            var pageSize = context.ParseResult.GetValueForOption(pageSizeOption);
-            var includeFiles = context.ParseResult.GetValueForOption(includeFilesOption);
-            var json = context.ParseResult.GetValueForOption(jsonOption);
-            var verbose = context.ParseResult.GetValueForOption(verboseOption);
+            var schema = parseResult.GetValue(schemaOption)!;
+            var output = parseResult.GetValue(outputOption)!;
+            var url = parseResult.GetValue(Program.UrlOption);
+            var authMode = parseResult.GetValue(Program.AuthOption);
+            var parallel = parseResult.GetValue(parallelOption);
+            var pageSize = parseResult.GetValue(pageSizeOption);
+            var includeFiles = parseResult.GetValue(includeFilesOption);
+            var json = parseResult.GetValue(jsonOption);
+            var verbose = parseResult.GetValue(verboseOption);
+            var debug = parseResult.GetValue(debugOption);
 
-            // Resolve connection string from argument or environment variable
-            string connection;
+            // Resolve authentication
+            AuthResolver.AuthResult authResult;
             try
             {
-                connection = ConnectionResolver.Resolve(
-                    connectionArg,
-                    ConnectionResolver.ConnectionEnvVar,
-                    "connection");
+                authResult = AuthResolver.Resolve(authMode, url);
             }
             catch (InvalidOperationException ex)
             {
                 ConsoleOutput.WriteError(ex.Message, json);
-                context.ExitCode = ExitCodes.InvalidArguments;
-                return;
+                return ExitCodes.InvalidArguments;
             }
 
-            context.ExitCode = await ExecuteAsync(
-                connection, schema, output, parallel, pageSize,
-                includeFiles, json, verbose, context.GetCancellationToken());
+            return await ExecuteAsync(
+                authResult, schema, output, parallel, pageSize,
+                includeFiles, json, verbose, debug, cancellationToken);
         });
 
         return command;
     }
 
     private static async Task<int> ExecuteAsync(
-        string connection,
+        AuthResolver.AuthResult authResult,
         FileInfo schema,
         FileInfo output,
         int parallel,
@@ -111,29 +136,30 @@ public static class ExportCommand
         bool includeFiles,
         bool json,
         bool verbose,
+        bool debug,
         CancellationToken cancellationToken)
     {
+        var progressReporter = ServiceFactory.CreateProgressReporter(json);
+
         try
         {
-            // Validate schema file exists
-            if (!schema.Exists)
+            // Report connecting status with auth mode info
+            var authModeInfo = authResult.Mode switch
             {
-                ConsoleOutput.WriteError($"Schema file not found: {schema.FullName}", json);
-                return ExitCodes.InvalidArguments;
-            }
-
-            // Validate output directory exists
-            var outputDir = output.Directory;
-            if (outputDir != null && !outputDir.Exists)
+                AuthMode.Interactive => " (interactive login)",
+                AuthMode.Managed => " (managed identity)",
+                AuthMode.Env => " (environment variables)",
+                _ => ""
+            };
+            progressReporter.Report(new ProgressEventArgs
             {
-                ConsoleOutput.WriteError($"Output directory does not exist: {outputDir.FullName}", json);
-                return ExitCodes.InvalidArguments;
-            }
+                Phase = MigrationPhase.Analyzing,
+                Message = $"Connecting to Dataverse ({authResult.Url}){authModeInfo}..."
+            });
 
-            // Create service provider and get exporter
-            await using var serviceProvider = ServiceFactory.CreateProvider(connection);
+            // Create service provider based on auth mode
+            await using var serviceProvider = ServiceFactory.CreateProviderForAuthMode(authResult, verbose, debug);
             var exporter = serviceProvider.GetRequiredService<IExporter>();
-            var progressReporter = ServiceFactory.CreateProgressReporter(json);
 
             // Configure export options
             var exportOptions = new ExportOptions
@@ -151,33 +177,17 @@ public static class ExportCommand
                 progressReporter,
                 cancellationToken);
 
-            // Report completion
-            if (!result.Success)
-            {
-                ConsoleOutput.WriteError($"Export completed with {result.Errors.Count} error(s).", json);
-                return ExitCodes.Failure;
-            }
-
-            if (!json)
-            {
-                Console.WriteLine();
-                Console.WriteLine("Export completed successfully.");
-                Console.WriteLine($"Output: {output.FullName}");
-                Console.WriteLine($"Entities: {result.EntitiesExported}, Records: {result.RecordsExported:N0}");
-                Console.WriteLine($"Duration: {result.Duration:hh\\:mm\\:ss}, Rate: {result.RecordsPerSecond:F1} rec/s");
-            }
-
-            return ExitCodes.Success;
+            return result.Success ? ExitCodes.Success : ExitCodes.Failure;
         }
         catch (OperationCanceledException)
         {
-            ConsoleOutput.WriteError("Export cancelled by user.", json);
+            progressReporter.Error(new OperationCanceledException(), "Export cancelled by user.");
             return ExitCodes.Failure;
         }
         catch (Exception ex)
         {
-            ConsoleOutput.WriteError($"Export failed: {ex.Message}", json);
-            if (verbose)
+            progressReporter.Error(ex, "Export failed");
+            if (debug)
             {
                 Console.Error.WriteLine(ex.StackTrace);
             }

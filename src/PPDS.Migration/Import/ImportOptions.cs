@@ -8,12 +8,6 @@ namespace PPDS.Migration.Import
     public class ImportOptions
     {
         /// <summary>
-        /// Gets or sets the batch size for bulk operations.
-        /// Default: 1000
-        /// </summary>
-        public int BatchSize { get; set; } = 1000;
-
-        /// <summary>
         /// Gets or sets whether to use modern bulk APIs (CreateMultiple, etc.).
         /// Default: true
         /// </summary>
@@ -56,12 +50,6 @@ namespace PPDS.Migration.Import
         public bool SuppressDuplicateDetection { get; set; } = false;
 
         /// <summary>
-        /// Gets or sets the progress reporting interval in records.
-        /// Default: 100
-        /// </summary>
-        public int ProgressInterval { get; set; } = 100;
-
-        /// <summary>
         /// Gets or sets the user mappings for remapping user references.
         /// If null, user references are not remapped.
         /// </summary>
@@ -72,6 +60,16 @@ namespace PPDS.Migration.Import
         /// Default: true (respects schema setting)
         /// </summary>
         public bool RespectDisablePluginsSetting { get; set; } = true;
+
+        /// <summary>
+        /// Gets or sets whether to strip owner-related fields during import.
+        /// When true, removes ownerid, createdby, modifiedby, and related fields,
+        /// allowing Dataverse to assign the current user as owner.
+        /// Use this when importing data to a different environment where source
+        /// users don't exist.
+        /// Default: false
+        /// </summary>
+        public bool StripOwnerFields { get; set; } = false;
     }
 
     /// <summary>

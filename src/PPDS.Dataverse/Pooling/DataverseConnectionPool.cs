@@ -11,6 +11,7 @@ using Microsoft.Extensions.Options;
 using Microsoft.PowerPlatform.Dataverse.Client;
 using Microsoft.Xrm.Sdk;
 using PPDS.Dataverse.Client;
+using PPDS.Dataverse.Configuration;
 using PPDS.Dataverse.DependencyInjection;
 using PPDS.Dataverse.Pooling.Strategies;
 using PPDS.Dataverse.Resilience;
@@ -24,14 +25,18 @@ namespace PPDS.Dataverse.Pooling
     public sealed class DataverseConnectionPool : IDataverseConnectionPool
     {
         private readonly ILogger<DataverseConnectionPool> _logger;
-        private readonly DataverseOptions _options;
+        private readonly IReadOnlyList<IConnectionSource> _sources;
+        private readonly ConnectionPoolOptions _poolOptions;
         private readonly IThrottleTracker _throttleTracker;
+        private readonly IAdaptiveRateController _adaptiveRateController;
         private readonly IConnectionSelectionStrategy _selectionStrategy;
+        private readonly ConcurrentDictionary<string, ServiceClient> _seedClients = new();
 
         private readonly ConcurrentDictionary<string, ConcurrentQueue<PooledClient>> _pools;
         private readonly ConcurrentDictionary<string, int> _activeConnections;
         private readonly ConcurrentDictionary<string, long> _requestCounts;
         private readonly SemaphoreSlim _connectionSemaphore;
+        private readonly int _totalPoolCapacity;
         private readonly object _poolLock = new();
 
         private readonly CancellationTokenSource _validationCts;
@@ -46,35 +51,54 @@ namespace PPDS.Dataverse.Pooling
         private static readonly object _performanceSettingsLock = new();
 
         /// <summary>
-        /// Initializes a new instance of the <see cref="DataverseConnectionPool"/> class.
+        /// Initializes a new connection pool from connection sources.
         /// </summary>
-        /// <param name="options">Pool configuration options.</param>
+        /// <param name="sources">
+        /// One or more connection sources providing seed clients.
+        /// Each source's seed will be cloned to create pool members.
+        /// </param>
         /// <param name="throttleTracker">Throttle tracking service.</param>
+        /// <param name="adaptiveRateController">Adaptive rate control service.</param>
+        /// <param name="poolOptions">Pool configuration options.</param>
         /// <param name="logger">Logger instance.</param>
         public DataverseConnectionPool(
-            IOptions<DataverseOptions> options,
+            IEnumerable<IConnectionSource> sources,
             IThrottleTracker throttleTracker,
+            IAdaptiveRateController adaptiveRateController,
+            ConnectionPoolOptions poolOptions,
             ILogger<DataverseConnectionPool> logger)
         {
-            _options = options?.Value ?? throw new ArgumentNullException(nameof(options));
-            _throttleTracker = throttleTracker ?? throw new ArgumentNullException(nameof(throttleTracker));
-            _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+            ArgumentNullException.ThrowIfNull(sources);
+            ArgumentNullException.ThrowIfNull(throttleTracker);
+            ArgumentNullException.ThrowIfNull(adaptiveRateController);
+            ArgumentNullException.ThrowIfNull(poolOptions);
+            ArgumentNullException.ThrowIfNull(logger);
 
-            ValidateOptions();
+            _sources = sources.ToList().AsReadOnly();
+            _throttleTracker = throttleTracker;
+            _adaptiveRateController = adaptiveRateController;
+            _poolOptions = poolOptions;
+            _logger = logger;
+
+            if (_sources.Count == 0)
+            {
+                throw new ArgumentException("At least one connection source is required.", nameof(sources));
+            }
 
             _pools = new ConcurrentDictionary<string, ConcurrentQueue<PooledClient>>();
             _activeConnections = new ConcurrentDictionary<string, int>();
             _requestCounts = new ConcurrentDictionary<string, long>();
-            _connectionSemaphore = new SemaphoreSlim(_options.Pool.MaxPoolSize, _options.Pool.MaxPoolSize);
+            _totalPoolCapacity = CalculateTotalPoolCapacity();
+            _connectionSemaphore = new SemaphoreSlim(_totalPoolCapacity, _totalPoolCapacity);
 
             _selectionStrategy = CreateSelectionStrategy();
 
-            // Initialize pools for each connection
-            foreach (var connection in _options.Connections)
+            // Initialize pools for each source
+            foreach (var source in _sources)
             {
-                _pools[connection.Name] = new ConcurrentQueue<PooledClient>();
-                _activeConnections[connection.Name] = 0;
-                _requestCounts[connection.Name] = 0;
+                _pools[source.Name] = new ConcurrentQueue<PooledClient>();
+                _activeConnections[source.Name] = 0;
+                _requestCounts[source.Name] = 0;
             }
 
             // Apply performance settings once
@@ -82,7 +106,7 @@ namespace PPDS.Dataverse.Pooling
 
             // Start background validation if enabled
             _validationCts = new CancellationTokenSource();
-            if (_options.Pool.EnableValidation)
+            if (_poolOptions.EnableValidation)
             {
                 _validationTask = StartValidationLoopAsync(_validationCts.Token);
             }
@@ -95,14 +119,51 @@ namespace PPDS.Dataverse.Pooling
             InitializeMinimumConnections();
 
             _logger.LogInformation(
-                "DataverseConnectionPool initialized. Connections: {ConnectionCount}, MaxPoolSize: {MaxPoolSize}, Strategy: {Strategy}",
-                _options.Connections.Count,
-                _options.Pool.MaxPoolSize,
-                _options.Pool.SelectionStrategy);
+                "DataverseConnectionPool initialized. Sources: {SourceCount}, PoolCapacity: {PoolCapacity}, PerUser: {PerUser}, Strategy: {Strategy}",
+                _sources.Count,
+                _totalPoolCapacity,
+                _poolOptions.MaxConnectionsPerUser,
+                _poolOptions.SelectionStrategy);
+        }
+
+        /// <summary>
+        /// Initializes a new connection pool from DataverseOptions configuration.
+        /// This constructor maintains backward compatibility with existing DI registration.
+        /// </summary>
+        [Obsolete("Use the IConnectionSource-based constructor for new code.")]
+        public DataverseConnectionPool(
+            IOptions<DataverseOptions> options,
+            IThrottleTracker throttleTracker,
+            IAdaptiveRateController adaptiveRateController,
+            ILogger<DataverseConnectionPool> logger)
+            : this(
+                CreateSourcesFromOptions(options?.Value ?? throw new ArgumentNullException(nameof(options))),
+                throttleTracker,
+                adaptiveRateController,
+                options.Value.Pool,
+                logger)
+        {
+        }
+
+        private static IEnumerable<IConnectionSource> CreateSourcesFromOptions(DataverseOptions options)
+        {
+            if (options.Connections == null || options.Connections.Count == 0)
+            {
+                var environmentName = options.Connections?.FirstOrDefault()?.SourceEnvironment;
+                throw ConfigurationException.NoConnectionsConfigured(environmentName);
+            }
+
+            // Validate connections before creating sources
+            foreach (var connection in options.Connections)
+            {
+                ValidateConnection(connection);
+            }
+
+            return options.Connections.Select(c => new ConnectionStringSource(c));
         }
 
         /// <inheritdoc />
-        public bool IsEnabled => _options.Pool.Enabled;
+        public bool IsEnabled => _poolOptions.Enabled;
 
         /// <inheritdoc />
         public PoolStatistics Statistics => GetStatistics();
@@ -130,13 +191,13 @@ namespace PPDS.Dataverse.Pooling
                 await WaitForNonThrottledConnectionAsync(excludeConnectionName, cancellationToken);
 
                 // Phase 2: Acquire semaphore
-                var acquired = await _connectionSemaphore.WaitAsync(_options.Pool.AcquireTimeout, cancellationToken);
+                var acquired = await _connectionSemaphore.WaitAsync(_poolOptions.AcquireTimeout, cancellationToken);
                 if (!acquired)
                 {
                     throw new PoolExhaustedException(
                         GetTotalActiveConnections(),
-                        _options.Pool.MaxPoolSize,
-                        _options.Pool.AcquireTimeout);
+                        _totalPoolCapacity,
+                        _poolOptions.AcquireTimeout);
                 }
 
                 try
@@ -173,13 +234,13 @@ namespace PPDS.Dataverse.Pooling
                 return CreateDirectClient(options);
             }
 
-            var acquired = _connectionSemaphore.Wait(_options.Pool.AcquireTimeout);
+            var acquired = _connectionSemaphore.Wait(_poolOptions.AcquireTimeout);
             if (!acquired)
             {
                 throw new PoolExhaustedException(
                     GetTotalActiveConnections(),
-                    _options.Pool.MaxPoolSize,
-                    _options.Pool.AcquireTimeout);
+                    _totalPoolCapacity,
+                    _poolOptions.AcquireTimeout);
             }
 
             try
@@ -205,11 +266,11 @@ namespace PPDS.Dataverse.Pooling
             {
                 cancellationToken.ThrowIfCancellationRequested();
 
-                // Check if any non-excluded connection is available (not throttled)
-                var hasAvailable = _options.Connections
-                    .Where(c => string.IsNullOrEmpty(excludeConnectionName) ||
-                                !string.Equals(c.Name, excludeConnectionName, StringComparison.OrdinalIgnoreCase))
-                    .Any(c => !_throttleTracker.IsThrottled(c.Name));
+                // Check if any non-excluded source is available (not throttled)
+                var hasAvailable = _sources
+                    .Where(s => string.IsNullOrEmpty(excludeConnectionName) ||
+                                !string.Equals(s.Name, excludeConnectionName, StringComparison.OrdinalIgnoreCase))
+                    .Any(s => !_throttleTracker.IsThrottled(s.Name));
 
                 if (hasAvailable)
                 {
@@ -301,9 +362,14 @@ namespace PPDS.Dataverse.Pooling
 
         private string SelectConnection(string? excludeConnectionName)
         {
-            var connections = _options.Connections.AsReadOnly();
+            // Create DataverseConnection-like objects for the strategy
+            // The strategy expects DataverseConnection but we can create a compatible list
+            var connections = _sources.Select(s => new DataverseConnection(s.Name)
+            {
+                MaxPoolSize = s.MaxPoolSize
+            }).ToList().AsReadOnly();
 
-            // If an exclusion is requested and we have multiple connections, filter
+            // If an exclusion is requested and we have multiple sources, filter
             IReadOnlyList<DataverseConnection> filteredConnections;
             if (!string.IsNullOrEmpty(excludeConnectionName) && connections.Count > 1)
             {
@@ -328,43 +394,41 @@ namespace PPDS.Dataverse.Pooling
             return _selectionStrategy.SelectConnection(filteredConnections, _throttleTracker, activeDict);
         }
 
+        private ServiceClient GetSeedClient(string connectionName)
+        {
+            return _seedClients.GetOrAdd(connectionName, name =>
+            {
+                var source = _sources.First(s => s.Name == name);
+                return source.GetSeedClient();
+            });
+        }
+
         private PooledClient CreateNewConnection(string connectionName)
         {
-            var connectionConfig = _options.Connections.First(c => c.Name == connectionName);
-
             _logger.LogDebug("Creating new connection for {ConnectionName}", connectionName);
+
+            var seed = GetSeedClient(connectionName);
 
             ServiceClient serviceClient;
             try
             {
-                serviceClient = new ServiceClient(connectionConfig.ConnectionString);
+                serviceClient = seed.Clone();
             }
             catch (Exception ex)
             {
-                // Wrap the exception to prevent connection string leakage in error messages
                 throw DataverseConnectionException.CreateConnectionFailed(connectionName, ex);
             }
 
             if (!serviceClient.IsReady)
             {
                 var error = serviceClient.LastError ?? "Unknown error";
-                var exception = serviceClient.LastException;
-
                 serviceClient.Dispose();
-
-                if (exception != null)
-                {
-                    throw DataverseConnectionException.CreateConnectionFailed(connectionName, exception);
-                }
-
-                throw new DataverseConnectionException(
-                    connectionName,
-                    $"Connection '{connectionName}' failed to initialize: {ConnectionStringRedactor.RedactExceptionMessage(error)}",
-                    new InvalidOperationException(error));
+                throw new DataverseConnectionException(connectionName,
+                    $"Cloned connection not ready: {error}", new InvalidOperationException(error));
             }
 
             // Disable affinity cookie for better load distribution
-            if (_options.Pool.DisableAffinityCookie)
+            if (_poolOptions.DisableAffinityCookie)
             {
                 serviceClient.EnableAffinityCookie = false;
             }
@@ -392,15 +456,16 @@ namespace PPDS.Dataverse.Pooling
         private void OnThrottleDetected(string connectionName, TimeSpan retryAfter)
         {
             _throttleTracker.RecordThrottle(connectionName, retryAfter);
+            _adaptiveRateController.RecordThrottle(connectionName, retryAfter);
         }
 
         private PooledClient CreateDirectClient(DataverseClientOptions? options)
         {
             // When pooling is disabled, create a direct connection
-            var connectionConfig = _options.Connections.FirstOrDefault()
+            var source = _sources.FirstOrDefault()
                 ?? throw new InvalidOperationException("No connections configured.");
 
-            var client = CreateNewConnection(connectionConfig.Name);
+            var client = CreateNewConnection(source.Name);
 
             if (options != null)
             {
@@ -453,7 +518,10 @@ namespace PPDS.Dataverse.Pooling
                 lock (_poolLock)
                 {
                     // Check if pool is full
-                    if (pool.Count < _options.Connections.First(c => c.Name == client.ConnectionName).MaxPoolSize)
+                    var source = _sources.FirstOrDefault(s => s.Name == client.ConnectionName);
+                    var maxPoolSize = source?.MaxPoolSize ?? 10;
+
+                    if (pool.Count < maxPoolSize)
                     {
                         pool.Enqueue(client);
                         _logger.LogDebug(
@@ -497,14 +565,14 @@ namespace PPDS.Dataverse.Pooling
                 }
 
                 // Check idle timeout
-                if (DateTime.UtcNow - client.LastUsedAt > _options.Pool.MaxIdleTime)
+                if (DateTime.UtcNow - client.LastUsedAt > _poolOptions.MaxIdleTime)
                 {
                     _logger.LogDebug("Connection idle too long. ConnectionId: {ConnectionId}", client.ConnectionId);
                     return false;
                 }
 
                 // Check max lifetime
-                if (DateTime.UtcNow - client.CreatedAt > _options.Pool.MaxLifetime)
+                if (DateTime.UtcNow - client.CreatedAt > _poolOptions.MaxLifetime)
                 {
                     _logger.LogDebug("Connection exceeded max lifetime. ConnectionId: {ConnectionId}", client.ConnectionId);
                     return false;
@@ -527,7 +595,7 @@ namespace PPDS.Dataverse.Pooling
 
         private IConnectionSelectionStrategy CreateSelectionStrategy()
         {
-            return _options.Pool.SelectionStrategy switch
+            return _poolOptions.SelectionStrategy switch
             {
                 ConnectionSelectionStrategy.RoundRobin => new RoundRobinStrategy(),
                 ConnectionSelectionStrategy.LeastConnections => new LeastConnectionsStrategy(),
@@ -562,38 +630,38 @@ namespace PPDS.Dataverse.Pooling
 
         private void InitializeMinimumConnections()
         {
-            if (!IsEnabled || _options.Pool.MinPoolSize <= 0)
+            if (!IsEnabled || _poolOptions.MinPoolSize <= 0)
             {
                 return;
             }
 
             _logger.LogDebug("Initializing minimum pool connections");
 
-            foreach (var connection in _options.Connections)
+            foreach (var source in _sources)
             {
-                var pool = _pools[connection.Name];
-                var activeCount = _activeConnections.GetValueOrDefault(connection.Name, 0);
+                var pool = _pools[source.Name];
+                var activeCount = _activeConnections.GetValueOrDefault(source.Name, 0);
                 var currentTotal = pool.Count + activeCount;
-                var targetMin = Math.Min(_options.Pool.MinPoolSize, connection.MaxPoolSize);
+                var targetMin = Math.Min(_poolOptions.MinPoolSize, source.MaxPoolSize);
                 var toCreate = Math.Max(0, targetMin - currentTotal);
 
                 if (toCreate > 0)
                 {
                     _logger.LogDebug(
                         "Pool {ConnectionName}: Active={Active}, Idle={Idle}, Target={Target}, Creating={ToCreate}",
-                        connection.Name, activeCount, pool.Count, targetMin, toCreate);
+                        source.Name, activeCount, pool.Count, targetMin, toCreate);
                 }
 
                 for (int i = 0; i < toCreate; i++)
                 {
                     try
                     {
-                        var client = CreateNewConnection(connection.Name);
+                        var client = CreateNewConnection(source.Name);
                         pool.Enqueue(client);
                     }
                     catch (Exception ex)
                     {
-                        _logger.LogWarning(ex, "Failed to initialize connection for {ConnectionName}", connection.Name);
+                        _logger.LogWarning(ex, "Failed to initialize connection for {ConnectionName}", source.Name);
                     }
                 }
             }
@@ -605,7 +673,7 @@ namespace PPDS.Dataverse.Pooling
             {
                 try
                 {
-                    await Task.Delay(_options.Pool.ValidationInterval, cancellationToken);
+                    await Task.Delay(_poolOptions.ValidationInterval, cancellationToken);
                     ValidateConnections();
                 }
                 catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -652,107 +720,67 @@ namespace PPDS.Dataverse.Pooling
             InitializeMinimumConnections();
         }
 
-        private void ValidateOptions()
+        /// <summary>
+        /// Calculates the total pool capacity based on sources.
+        /// Uses per-source sizing (MaxConnectionsPerUser × source count) unless
+        /// MaxPoolSize override is set.
+        /// </summary>
+        private int CalculateTotalPoolCapacity()
         {
-            if (_options.Connections == null || _options.Connections.Count == 0)
+            // Fixed pool size override
+            if (_poolOptions.MaxPoolSize > 0)
             {
-                throw new InvalidOperationException("At least one connection must be configured.");
+                return _poolOptions.MaxPoolSize;
             }
 
-            if (_options.Pool.MaxPoolSize < _options.Pool.MinPoolSize)
-            {
-                throw new InvalidOperationException("MaxPoolSize must be >= MinPoolSize.");
-            }
-
-            foreach (var connection in _options.Connections)
-            {
-                if (string.IsNullOrWhiteSpace(connection.Name))
-                {
-                    throw new InvalidOperationException("Connection name cannot be empty.");
-                }
-
-                if (string.IsNullOrWhiteSpace(connection.ConnectionString))
-                {
-                    throw new InvalidOperationException($"Connection string for '{connection.Name}' cannot be empty.");
-                }
-            }
-
-            // Warn if multiple connections target different organizations
-            WarnIfMultipleOrganizations();
+            // Per-source sizing
+            return _sources.Count * _poolOptions.MaxConnectionsPerUser;
         }
 
-        private void WarnIfMultipleOrganizations()
+        private static void ValidateConnection(DataverseConnection connection)
         {
-            if (_options.Connections.Count < 2)
+            if (string.IsNullOrWhiteSpace(connection.Name))
             {
-                return;
+                throw ConfigurationException.MissingRequiredWithHints(
+                    propertyName: "Name",
+                    connectionName: $"[index {connection.SourceIndex}]",
+                    connectionIndex: connection.SourceIndex,
+                    environmentName: connection.SourceEnvironment);
             }
 
-            var orgUrls = new Dictionary<string, string>(); // connectionName -> orgUrl
-
-            foreach (var connection in _options.Connections)
+            if (string.IsNullOrWhiteSpace(connection.Url))
             {
-                var orgUrl = ExtractOrgUrl(connection.ConnectionString);
-                if (!string.IsNullOrEmpty(orgUrl))
-                {
-                    orgUrls[connection.Name] = orgUrl;
-                }
+                throw ConfigurationException.MissingRequiredWithHints(
+                    propertyName: "Url",
+                    connectionName: connection.Name,
+                    connectionIndex: connection.SourceIndex,
+                    environmentName: connection.SourceEnvironment);
             }
 
-            var distinctOrgs = orgUrls.Values.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
-
-            if (distinctOrgs.Count > 1)
+            if (string.IsNullOrWhiteSpace(connection.ClientId))
             {
-                _logger.LogWarning(
-                    "Connection pool contains connections to {OrgCount} different organizations: {Orgs}. " +
-                    "Requests will be load-balanced across these organizations, which is likely unintended. " +
-                    "For multi-environment scenarios (Dev/QA/Prod), create separate service providers per environment. " +
-                    "See documentation for the recommended pattern.",
-                    distinctOrgs.Count,
-                    string.Join(", ", distinctOrgs));
+                throw ConfigurationException.MissingRequiredWithHints(
+                    propertyName: "ClientId",
+                    connectionName: connection.Name,
+                    connectionIndex: connection.SourceIndex,
+                    environmentName: connection.SourceEnvironment);
             }
-        }
-
-        private static string? ExtractOrgUrl(string connectionString)
-        {
-            // Parse connection string to extract Url parameter
-            // Format: "AuthType=...;Url=https://org.crm.dynamics.com;..."
-            if (string.IsNullOrEmpty(connectionString))
-            {
-                return null;
-            }
-
-            var url = connectionString.Split(';', StringSplitOptions.RemoveEmptyEntries)
-                .Select(part => part.Split('=', 2))
-                .Where(kv => kv.Length == 2 && kv[0].Trim().Equals("Url", StringComparison.OrdinalIgnoreCase))
-                .Select(kv => kv[1].Trim())
-                .FirstOrDefault();
-
-            if (url == null)
-            {
-                return null;
-            }
-
-            // Extract just the host for comparison
-            return Uri.TryCreate(url, UriKind.Absolute, out var uri)
-                ? uri.Host.ToLowerInvariant()
-                : url.ToLowerInvariant();
         }
 
         private PoolStatistics GetStatistics()
         {
             var connectionStats = new Dictionary<string, ConnectionStatistics>();
 
-            foreach (var connection in _options.Connections)
+            foreach (var source in _sources)
             {
-                var pool = _pools.GetValueOrDefault(connection.Name);
-                connectionStats[connection.Name] = new ConnectionStatistics
+                var pool = _pools.GetValueOrDefault(source.Name);
+                connectionStats[source.Name] = new ConnectionStatistics
                 {
-                    Name = connection.Name,
-                    ActiveConnections = _activeConnections.GetValueOrDefault(connection.Name),
+                    Name = source.Name,
+                    ActiveConnections = _activeConnections.GetValueOrDefault(source.Name),
                     IdleConnections = pool?.Count ?? 0,
-                    IsThrottled = _throttleTracker.IsThrottled(connection.Name),
-                    RequestsServed = _requestCounts.GetValueOrDefault(connection.Name)
+                    IsThrottled = _throttleTracker.IsThrottled(source.Name),
+                    RequestsServed = _requestCounts.GetValueOrDefault(source.Name)
                 };
             }
 
@@ -846,6 +874,15 @@ namespace PPDS.Dataverse.Pooling
                 }
             }
 
+            // Clear seed cache (sources will dispose the actual clients)
+            _seedClients.Clear();
+
+            // Dispose sources (which dispose their clients)
+            foreach (var source in _sources)
+            {
+                source.Dispose();
+            }
+
             _connectionSemaphore.Dispose();
             _validationCts.Dispose();
         }
@@ -876,6 +913,15 @@ namespace PPDS.Dataverse.Pooling
                 {
                     client.ForceDispose();
                 }
+            }
+
+            // Clear seed cache (sources will dispose the actual clients)
+            _seedClients.Clear();
+
+            // Dispose sources (which dispose their clients)
+            foreach (var source in _sources)
+            {
+                source.Dispose();
             }
 
             _connectionSemaphore.Dispose();

@@ -2,6 +2,7 @@ using System.CommandLine;
 using Microsoft.Extensions.DependencyInjection;
 using PPDS.Migration.Cli.Infrastructure;
 using PPDS.Migration.Formats;
+using PPDS.Migration.Progress;
 using PPDS.Migration.Schema;
 
 namespace PPDS.Migration.Cli.Commands;
@@ -15,82 +16,89 @@ public static class SchemaCommand
     {
         var command = new Command("schema", "Generate and manage migration schemas");
 
-        command.AddCommand(CreateGenerateCommand());
-        command.AddCommand(CreateListCommand());
+        command.Subcommands.Add(CreateGenerateCommand());
+        command.Subcommands.Add(CreateListCommand());
 
         return command;
     }
 
     private static Command CreateGenerateCommand()
     {
-        var connectionOption = new Option<string?>(
-            aliases: ["--connection", "-c"],
-            description: ConnectionResolver.GetHelpDescription(ConnectionResolver.ConnectionEnvVar));
-
-        var entitiesOption = new Option<string[]>(
-            aliases: ["--entities", "-e"],
-            description: "Entity logical names to include (comma-separated or multiple -e flags)")
+        var entitiesOption = new Option<string[]>("--entities", "-e")
         {
-            IsRequired = true,
+            Description = "Entity logical names to include (comma-separated or multiple -e flags)",
+            Required = true,
             AllowMultipleArgumentsPerToken = true
         };
 
-        var outputOption = new Option<FileInfo>(
-            aliases: ["--output", "-o"],
-            description: "Output schema file path")
+        var outputOption = new Option<FileInfo>("--output", "-o")
         {
-            IsRequired = true
+            Description = "Output schema file path",
+            Required = true
+        }.AcceptLegalFileNamesOnly();
+        outputOption.Validators.Add(result =>
+        {
+            var file = result.GetValue(outputOption);
+            if (file?.Directory is { Exists: false })
+                result.AddError($"Output directory does not exist: {file.Directory.FullName}");
+        });
+
+        var includeSystemFieldsOption = new Option<bool>("--include-system-fields")
+        {
+            Description = "Include system fields (createdon, modifiedon, etc.)",
+            DefaultValueFactory = _ => false
         };
 
-        var includeSystemFieldsOption = new Option<bool>(
-            name: "--include-system-fields",
-            getDefaultValue: () => false,
-            description: "Include system fields (createdon, modifiedon, etc.)");
-
-        var includeRelationshipsOption = new Option<bool>(
-            name: "--include-relationships",
-            getDefaultValue: () => true,
-            description: "Include relationship definitions");
-
-        var disablePluginsOption = new Option<bool>(
-            name: "--disable-plugins",
-            getDefaultValue: () => false,
-            description: "Set disableplugins=true on all entities");
-
-        var includeAttributesOption = new Option<string[]?>(
-            aliases: ["--include-attributes", "-a"],
-            description: "Only include these attributes (whitelist, comma-separated or multiple flags)")
+        var includeRelationshipsOption = new Option<bool>("--include-relationships")
         {
+            Description = "Include relationship definitions",
+            DefaultValueFactory = _ => true
+        };
+
+        var disablePluginsOption = new Option<bool>("--disable-plugins")
+        {
+            Description = "Set disableplugins=true on all entities",
+            DefaultValueFactory = _ => false
+        };
+
+        var includeAttributesOption = new Option<string[]?>("--include-attributes", "-a")
+        {
+            Description = "Only include these attributes (whitelist, comma-separated or multiple flags)",
             AllowMultipleArgumentsPerToken = true
         };
 
-        var excludeAttributesOption = new Option<string[]?>(
-            name: "--exclude-attributes",
-            description: "Exclude these attributes (blacklist, comma-separated)")
+        var excludeAttributesOption = new Option<string[]?>("--exclude-attributes")
         {
+            Description = "Exclude these attributes (blacklist, comma-separated)",
             AllowMultipleArgumentsPerToken = true
         };
 
-        var excludePatternsOption = new Option<string[]?>(
-            name: "--exclude-patterns",
-            description: "Exclude attributes matching patterns (e.g., 'new_*', '*_base')")
+        var excludePatternsOption = new Option<string[]?>("--exclude-patterns")
         {
+            Description = "Exclude attributes matching patterns (e.g., 'new_*', '*_base')",
             AllowMultipleArgumentsPerToken = true
         };
 
-        var jsonOption = new Option<bool>(
-            name: "--json",
-            getDefaultValue: () => false,
-            description: "Output progress as JSON");
+        var jsonOption = new Option<bool>("--json")
+        {
+            Description = "Output progress as JSON",
+            DefaultValueFactory = _ => false
+        };
 
-        var verboseOption = new Option<bool>(
-            aliases: ["--verbose", "-v"],
-            getDefaultValue: () => false,
-            description: "Verbose output");
+        var verboseOption = new Option<bool>("--verbose", "-v")
+        {
+            Description = "Enable verbose logging output",
+            DefaultValueFactory = _ => false
+        };
+
+        var debugOption = new Option<bool>("--debug")
+        {
+            Description = "Enable diagnostic logging output",
+            DefaultValueFactory = _ => false
+        };
 
         var command = new Command("generate", "Generate a migration schema from Dataverse metadata")
         {
-            connectionOption,
             entitiesOption,
             outputOption,
             includeSystemFieldsOption,
@@ -100,37 +108,36 @@ public static class SchemaCommand
             excludeAttributesOption,
             excludePatternsOption,
             jsonOption,
-            verboseOption
+            verboseOption,
+            debugOption
         };
 
-        command.SetHandler(async (context) =>
+        command.SetAction(async (parseResult, cancellationToken) =>
         {
-            var connectionArg = context.ParseResult.GetValueForOption(connectionOption);
-            var entities = context.ParseResult.GetValueForOption(entitiesOption)!;
-            var output = context.ParseResult.GetValueForOption(outputOption)!;
-            var includeSystemFields = context.ParseResult.GetValueForOption(includeSystemFieldsOption);
-            var includeRelationships = context.ParseResult.GetValueForOption(includeRelationshipsOption);
-            var disablePlugins = context.ParseResult.GetValueForOption(disablePluginsOption);
-            var includeAttributes = context.ParseResult.GetValueForOption(includeAttributesOption);
-            var excludeAttributes = context.ParseResult.GetValueForOption(excludeAttributesOption);
-            var excludePatterns = context.ParseResult.GetValueForOption(excludePatternsOption);
-            var json = context.ParseResult.GetValueForOption(jsonOption);
-            var verbose = context.ParseResult.GetValueForOption(verboseOption);
+            var entities = parseResult.GetValue(entitiesOption)!;
+            var output = parseResult.GetValue(outputOption)!;
+            var url = parseResult.GetValue(Program.UrlOption);
+            var authMode = parseResult.GetValue(Program.AuthOption);
+            var includeSystemFields = parseResult.GetValue(includeSystemFieldsOption);
+            var includeRelationships = parseResult.GetValue(includeRelationshipsOption);
+            var disablePlugins = parseResult.GetValue(disablePluginsOption);
+            var includeAttributes = parseResult.GetValue(includeAttributesOption);
+            var excludeAttributes = parseResult.GetValue(excludeAttributesOption);
+            var excludePatterns = parseResult.GetValue(excludePatternsOption);
+            var json = parseResult.GetValue(jsonOption);
+            var verbose = parseResult.GetValue(verboseOption);
+            var debug = parseResult.GetValue(debugOption);
 
-            // Resolve connection string
-            string connection;
+            // Resolve authentication
+            AuthResolver.AuthResult authResult;
             try
             {
-                connection = ConnectionResolver.Resolve(
-                    connectionArg,
-                    ConnectionResolver.ConnectionEnvVar,
-                    "connection");
+                authResult = AuthResolver.Resolve(authMode, url);
             }
             catch (InvalidOperationException ex)
             {
                 ConsoleOutput.WriteError(ex.Message, json);
-                context.ExitCode = ExitCodes.InvalidArguments;
-                return;
+                return ExitCodes.InvalidArguments;
             }
 
             // Parse entities (handle comma-separated and multiple flags)
@@ -143,8 +150,7 @@ public static class SchemaCommand
             if (entityList.Count == 0)
             {
                 ConsoleOutput.WriteError("No entities specified.", json);
-                context.ExitCode = ExitCodes.InvalidArguments;
-                return;
+                return ExitCodes.InvalidArguments;
             }
 
             // Parse attribute lists (handle comma-separated)
@@ -152,11 +158,11 @@ public static class SchemaCommand
             var excludeAttrList = ParseAttributeList(excludeAttributes);
             var excludePatternList = ParseAttributeList(excludePatterns);
 
-            context.ExitCode = await ExecuteGenerateAsync(
-                connection, entityList, output,
+            return await ExecuteGenerateAsync(
+                authResult, entityList, output,
                 includeSystemFields, includeRelationships, disablePlugins,
                 includeAttrList, excludeAttrList, excludePatternList,
-                json, verbose, context.GetCancellationToken());
+                json, verbose, debug, cancellationToken);
         });
 
         return command;
@@ -164,57 +170,51 @@ public static class SchemaCommand
 
     private static Command CreateListCommand()
     {
-        var connectionOption = new Option<string?>(
-            aliases: ["--connection", "-c"],
-            description: ConnectionResolver.GetHelpDescription(ConnectionResolver.ConnectionEnvVar));
+        var filterOption = new Option<string?>("--filter", "-f")
+        {
+            Description = "Filter entities by name pattern (e.g., 'account*' or '*custom*')"
+        };
 
-        var filterOption = new Option<string?>(
-            aliases: ["--filter", "-f"],
-            description: "Filter entities by name pattern (e.g., 'account*' or '*custom*')");
+        var customOnlyOption = new Option<bool>("--custom-only")
+        {
+            Description = "Show only custom entities",
+            DefaultValueFactory = _ => false
+        };
 
-        var customOnlyOption = new Option<bool>(
-            name: "--custom-only",
-            getDefaultValue: () => false,
-            description: "Show only custom entities");
-
-        var jsonOption = new Option<bool>(
-            name: "--json",
-            getDefaultValue: () => false,
-            description: "Output as JSON");
+        var jsonOption = new Option<bool>("--json")
+        {
+            Description = "Output as JSON",
+            DefaultValueFactory = _ => false
+        };
 
         var command = new Command("list", "List available entities in Dataverse")
         {
-            connectionOption,
             filterOption,
             customOnlyOption,
             jsonOption
         };
 
-        command.SetHandler(async (context) =>
+        command.SetAction(async (parseResult, cancellationToken) =>
         {
-            var connectionArg = context.ParseResult.GetValueForOption(connectionOption);
-            var filter = context.ParseResult.GetValueForOption(filterOption);
-            var customOnly = context.ParseResult.GetValueForOption(customOnlyOption);
-            var json = context.ParseResult.GetValueForOption(jsonOption);
+            var filter = parseResult.GetValue(filterOption);
+            var url = parseResult.GetValue(Program.UrlOption);
+            var authMode = parseResult.GetValue(Program.AuthOption);
+            var customOnly = parseResult.GetValue(customOnlyOption);
+            var json = parseResult.GetValue(jsonOption);
 
-            // Resolve connection string
-            string connection;
+            // Resolve authentication
+            AuthResolver.AuthResult authResult;
             try
             {
-                connection = ConnectionResolver.Resolve(
-                    connectionArg,
-                    ConnectionResolver.ConnectionEnvVar,
-                    "connection");
+                authResult = AuthResolver.Resolve(authMode, url);
             }
             catch (InvalidOperationException ex)
             {
                 ConsoleOutput.WriteError(ex.Message, json);
-                context.ExitCode = ExitCodes.InvalidArguments;
-                return;
+                return ExitCodes.InvalidArguments;
             }
 
-            context.ExitCode = await ExecuteListAsync(
-                connection, filter, customOnly, json, context.GetCancellationToken());
+            return await ExecuteListAsync(authResult, filter, customOnly, json, cancellationToken);
         });
 
         return command;
@@ -223,9 +223,7 @@ public static class SchemaCommand
     private static List<string>? ParseAttributeList(string[]? input)
     {
         if (input == null || input.Length == 0)
-        {
             return null;
-        }
 
         return input
             .SelectMany(a => a.Split(',', StringSplitOptions.RemoveEmptyEntries))
@@ -235,7 +233,7 @@ public static class SchemaCommand
     }
 
     private static async Task<int> ExecuteGenerateAsync(
-        string connection,
+        AuthResolver.AuthResult authResult,
         List<string> entities,
         FileInfo output,
         bool includeSystemFields,
@@ -246,31 +244,44 @@ public static class SchemaCommand
         List<string>? excludePatterns,
         bool json,
         bool verbose,
+        bool debug,
         CancellationToken cancellationToken)
     {
+        var progressReporter = ServiceFactory.CreateProgressReporter(json);
+
         try
         {
-            if (!json)
-            {
-                Console.WriteLine($"Generating schema for {entities.Count} entities...");
-                if (includeAttributes != null)
-                {
-                    Console.WriteLine($"  Including only: {string.Join(", ", includeAttributes)}");
-                }
-                if (excludeAttributes != null)
-                {
-                    Console.WriteLine($"  Excluding: {string.Join(", ", excludeAttributes)}");
-                }
-                if (excludePatterns != null)
-                {
-                    Console.WriteLine($"  Excluding patterns: {string.Join(", ", excludePatterns)}");
-                }
-            }
+            // Report what we're doing
+            var optionsMsg = new List<string>();
+            if (includeAttributes != null) optionsMsg.Add($"include: {string.Join(",", includeAttributes)}");
+            if (excludeAttributes != null) optionsMsg.Add($"exclude: {string.Join(",", excludeAttributes)}");
+            if (excludePatterns != null) optionsMsg.Add($"patterns: {string.Join(",", excludePatterns)}");
 
-            await using var serviceProvider = ServiceFactory.CreateProvider(connection);
+            progressReporter.Report(new ProgressEventArgs
+            {
+                Phase = MigrationPhase.Analyzing,
+                Message = $"Generating schema for {entities.Count} entities..." +
+                          (optionsMsg.Count > 0 ? $" ({string.Join(", ", optionsMsg)})" : "")
+            });
+
+            // Report connecting status with auth mode info
+            var authModeInfo = authResult.Mode switch
+            {
+                AuthMode.Interactive => " (interactive login)",
+                AuthMode.Managed => " (managed identity)",
+                AuthMode.Env => " (environment variables)",
+                _ => ""
+            };
+            progressReporter.Report(new ProgressEventArgs
+            {
+                Phase = MigrationPhase.Analyzing,
+                Message = $"Connecting to Dataverse ({authResult.Url}){authModeInfo}..."
+            });
+
+            // Create service provider based on auth mode
+            await using var serviceProvider = ServiceFactory.CreateProviderForAuthMode(authResult, verbose, debug);
             var generator = serviceProvider.GetRequiredService<ISchemaGenerator>();
             var schemaWriter = serviceProvider.GetRequiredService<ICmtSchemaWriter>();
-            var progressReporter = ServiceFactory.CreateProgressReporter(json);
 
             var options = new SchemaGeneratorOptions
             {
@@ -287,29 +298,35 @@ public static class SchemaCommand
 
             await schemaWriter.WriteAsync(schema, output.FullName, cancellationToken);
 
-            if (!json)
-            {
-                Console.WriteLine();
-                Console.WriteLine("Schema generated successfully.");
-                Console.WriteLine($"Output: {output.FullName}");
-                Console.WriteLine($"Entities: {schema.Entities.Count}");
+            var totalFields = schema.Entities.Sum(e => e.Fields.Count);
+            var totalRelationships = schema.Entities.Sum(e => e.Relationships.Count);
 
-                var totalFields = schema.Entities.Sum(e => e.Fields.Count);
-                var totalRelationships = schema.Entities.Sum(e => e.Relationships.Count);
-                Console.WriteLine($"Fields: {totalFields}, Relationships: {totalRelationships}");
-            }
+            progressReporter.Complete(new MigrationResult
+            {
+                Success = true,
+                RecordsProcessed = schema.Entities.Count,
+                SuccessCount = schema.Entities.Count,
+                FailureCount = 0,
+                Duration = TimeSpan.Zero
+            });
+
+            progressReporter.Report(new ProgressEventArgs
+            {
+                Phase = MigrationPhase.Complete,
+                Message = $"Output: {output.FullName} ({schema.Entities.Count} entities, {totalFields} fields, {totalRelationships} relationships)"
+            });
 
             return ExitCodes.Success;
         }
         catch (OperationCanceledException)
         {
-            ConsoleOutput.WriteError("Schema generation cancelled by user.", json);
+            progressReporter.Error(new OperationCanceledException(), "Schema generation cancelled by user.");
             return ExitCodes.Failure;
         }
         catch (Exception ex)
         {
-            ConsoleOutput.WriteError($"Schema generation failed: {ex.Message}", json);
-            if (verbose)
+            progressReporter.Error(ex, "Schema generation failed");
+            if (debug)
             {
                 Console.Error.WriteLine(ex.StackTrace);
             }
@@ -318,7 +335,7 @@ public static class SchemaCommand
     }
 
     private static async Task<int> ExecuteListAsync(
-        string connection,
+        AuthResolver.AuthResult authResult,
         string? filter,
         bool customOnly,
         bool json,
@@ -326,12 +343,23 @@ public static class SchemaCommand
     {
         try
         {
+            // Build auth mode info for status messages
+            var authModeInfo = authResult.Mode switch
+            {
+                AuthMode.Interactive => " (interactive login)",
+                AuthMode.Managed => " (managed identity)",
+                AuthMode.Env => " (environment variables)",
+                _ => ""
+            };
+
             if (!json)
             {
+                Console.WriteLine($"Connecting to Dataverse ({authResult.Url}){authModeInfo}...");
                 Console.WriteLine("Retrieving available entities...");
             }
 
-            await using var serviceProvider = ServiceFactory.CreateProvider(connection);
+            // Create service provider based on auth mode
+            await using var serviceProvider = ServiceFactory.CreateProviderForAuthMode(authResult);
             var generator = serviceProvider.GetRequiredService<ISchemaGenerator>();
 
             var entities = await generator.GetAvailableEntitiesAsync(cancellationToken);

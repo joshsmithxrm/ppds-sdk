@@ -1,5 +1,6 @@
 using FluentAssertions;
 using Moq;
+using PPDS.Dataverse.Configuration;
 using PPDS.Dataverse.Pooling;
 using PPDS.Dataverse.Pooling.Strategies;
 using PPDS.Dataverse.Resilience;
@@ -37,7 +38,7 @@ public class RoundRobinStrategyTests
         // Arrange
         var connections = new List<DataverseConnection>
         {
-            new("Primary", "connection-string")
+            CreateConnection("Primary")
         };
         var activeConnections = new Dictionary<string, int>();
 
@@ -54,9 +55,9 @@ public class RoundRobinStrategyTests
         // Arrange
         var connections = new List<DataverseConnection>
         {
-            new("Primary", "connection-string-1"),
-            new("Secondary", "connection-string-2"),
-            new("Tertiary", "connection-string-3")
+            CreateConnection("Primary"),
+            CreateConnection("Secondary"),
+            CreateConnection("Tertiary")
         };
         var activeConnections = new Dictionary<string, int>();
 
@@ -79,8 +80,8 @@ public class RoundRobinStrategyTests
         // Arrange
         var connections = new List<DataverseConnection>
         {
-            new("Primary", "connection-string-1"),
-            new("Secondary", "connection-string-2")
+            CreateConnection("Primary"),
+            CreateConnection("Secondary")
         };
         var activeConnections = new Dictionary<string, int>();
         var results = new System.Collections.Concurrent.ConcurrentBag<string>();
@@ -95,5 +96,16 @@ public class RoundRobinStrategyTests
         // Assert - should have selected from both connections
         results.Should().Contain("Primary");
         results.Should().Contain("Secondary");
+    }
+
+    private static DataverseConnection CreateConnection(string name)
+    {
+        return new DataverseConnection(name)
+        {
+            Url = $"https://{name.ToLower()}.crm.dynamics.com",
+            ClientId = "test-client-id",
+            ClientSecret = "test-secret",
+            AuthType = DataverseAuthType.ClientSecret
+        };
     }
 }

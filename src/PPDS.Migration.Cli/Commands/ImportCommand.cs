@@ -4,6 +4,7 @@ using PPDS.Migration.Cli.Infrastructure;
 using PPDS.Migration.Formats;
 using PPDS.Migration.Import;
 using PPDS.Migration.Models;
+using PPDS.Migration.Progress;
 
 namespace PPDS.Migration.Cli.Commands;
 
@@ -14,170 +15,195 @@ public static class ImportCommand
 {
     public static Command Create()
     {
-        var connectionOption = new Option<string?>(
-            aliases: ["--connection", "-c"],
-            description: ConnectionResolver.GetHelpDescription(ConnectionResolver.ConnectionEnvVar));
-
-        var dataOption = new Option<FileInfo>(
-            aliases: ["--data", "-d"],
-            description: "Path to data.zip file")
+        var dataOption = new Option<FileInfo>("--data", "-d")
         {
-            IsRequired = true
+            Description = "Path to data.zip file",
+            Required = true
+        }.AcceptExistingOnly();
+
+        var bypassPluginsOption = new Option<bool>("--bypass-plugins")
+        {
+            Description = "Bypass custom plugin execution during import",
+            DefaultValueFactory = _ => false
         };
 
-        var batchSizeOption = new Option<int>(
-            name: "--batch-size",
-            getDefaultValue: () => 1000,
-            description: "Records per batch for ExecuteMultiple requests");
+        var bypassFlowsOption = new Option<bool>("--bypass-flows")
+        {
+            Description = "Bypass Power Automate flow triggers during import",
+            DefaultValueFactory = _ => false
+        };
 
-        var bypassPluginsOption = new Option<bool>(
-            name: "--bypass-plugins",
-            getDefaultValue: () => false,
-            description: "Bypass custom plugin execution during import");
+        var continueOnErrorOption = new Option<bool>("--continue-on-error")
+        {
+            Description = "Continue import on individual record failures",
+            DefaultValueFactory = _ => false
+        };
 
-        var bypassFlowsOption = new Option<bool>(
-            name: "--bypass-flows",
-            getDefaultValue: () => false,
-            description: "Bypass Power Automate flow triggers during import");
+        var modeOption = new Option<ImportMode>("--mode")
+        {
+            Description = "Import mode: Create, Update, or Upsert",
+            DefaultValueFactory = _ => ImportMode.Upsert
+        };
 
-        var continueOnErrorOption = new Option<bool>(
-            name: "--continue-on-error",
-            getDefaultValue: () => false,
-            description: "Continue import on individual record failures");
+        var userMappingOption = new Option<FileInfo?>("--user-mapping", "-u")
+        {
+            Description = "Path to user mapping XML file for remapping user references"
+        };
+        userMappingOption.Validators.Add(result =>
+        {
+            var file = result.GetValue(userMappingOption);
+            if (file is { Exists: false })
+                result.AddError($"User mapping file not found: {file.FullName}");
+        });
 
-        var modeOption = new Option<ImportMode>(
-            name: "--mode",
-            getDefaultValue: () => ImportMode.Upsert,
-            description: "Import mode: Create, Update, or Upsert");
+        var stripOwnerFieldsOption = new Option<bool>("--strip-owner-fields")
+        {
+            Description = "Strip ownership fields (ownerid, createdby, modifiedby) allowing Dataverse to assign current user",
+            DefaultValueFactory = _ => false
+        };
 
-        var userMappingOption = new Option<FileInfo?>(
-            aliases: ["--user-mapping", "-u"],
-            description: "Path to user mapping XML file for remapping user references");
+        var jsonOption = new Option<bool>("--json")
+        {
+            Description = "Output progress as JSON (for tool integration)",
+            DefaultValueFactory = _ => false
+        };
 
-        var jsonOption = new Option<bool>(
-            name: "--json",
-            getDefaultValue: () => false,
-            description: "Output progress as JSON (for tool integration)");
+        var verboseOption = new Option<bool>("--verbose", "-v")
+        {
+            Description = "Enable verbose logging output",
+            DefaultValueFactory = _ => false
+        };
 
-        var verboseOption = new Option<bool>(
-            aliases: ["--verbose", "-v"],
-            getDefaultValue: () => false,
-            description: "Verbose output");
+        var debugOption = new Option<bool>("--debug")
+        {
+            Description = "Enable diagnostic logging output",
+            DefaultValueFactory = _ => false
+        };
 
         var command = new Command("import", "Import data from a ZIP file into Dataverse")
         {
-            connectionOption,
             dataOption,
-            batchSizeOption,
             bypassPluginsOption,
             bypassFlowsOption,
             continueOnErrorOption,
             modeOption,
             userMappingOption,
+            stripOwnerFieldsOption,
             jsonOption,
-            verboseOption
+            verboseOption,
+            debugOption
         };
 
-        command.SetHandler(async (context) =>
+        command.SetAction(async (parseResult, cancellationToken) =>
         {
-            var connectionArg = context.ParseResult.GetValueForOption(connectionOption);
-            var data = context.ParseResult.GetValueForOption(dataOption)!;
-            var batchSize = context.ParseResult.GetValueForOption(batchSizeOption);
-            var bypassPlugins = context.ParseResult.GetValueForOption(bypassPluginsOption);
-            var bypassFlows = context.ParseResult.GetValueForOption(bypassFlowsOption);
-            var continueOnError = context.ParseResult.GetValueForOption(continueOnErrorOption);
-            var mode = context.ParseResult.GetValueForOption(modeOption);
-            var userMappingFile = context.ParseResult.GetValueForOption(userMappingOption);
-            var json = context.ParseResult.GetValueForOption(jsonOption);
-            var verbose = context.ParseResult.GetValueForOption(verboseOption);
+            var data = parseResult.GetValue(dataOption)!;
+            var url = parseResult.GetValue(Program.UrlOption);
+            var authMode = parseResult.GetValue(Program.AuthOption);
+            var bypassPlugins = parseResult.GetValue(bypassPluginsOption);
+            var bypassFlows = parseResult.GetValue(bypassFlowsOption);
+            var continueOnError = parseResult.GetValue(continueOnErrorOption);
+            var mode = parseResult.GetValue(modeOption);
+            var userMappingFile = parseResult.GetValue(userMappingOption);
+            var stripOwnerFields = parseResult.GetValue(stripOwnerFieldsOption);
+            var json = parseResult.GetValue(jsonOption);
+            var verbose = parseResult.GetValue(verboseOption);
+            var debug = parseResult.GetValue(debugOption);
 
-            // Validate data file exists first (explicit argument)
-            if (!data.Exists)
-            {
-                ConsoleOutput.WriteError($"Data file not found: {data.FullName}", json);
-                context.ExitCode = ExitCodes.InvalidArguments;
-                return;
-            }
-
-            // Validate user mapping file if specified
-            if (userMappingFile != null && !userMappingFile.Exists)
-            {
-                ConsoleOutput.WriteError($"User mapping file not found: {userMappingFile.FullName}", json);
-                context.ExitCode = ExitCodes.InvalidArguments;
-                return;
-            }
-
-            // Resolve connection string from argument or environment variable
-            string connection;
+            // Resolve authentication
+            AuthResolver.AuthResult authResult;
             try
             {
-                connection = ConnectionResolver.Resolve(
-                    connectionArg,
-                    ConnectionResolver.ConnectionEnvVar,
-                    "connection");
+                authResult = AuthResolver.Resolve(authMode, url);
             }
             catch (InvalidOperationException ex)
             {
                 ConsoleOutput.WriteError(ex.Message, json);
-                context.ExitCode = ExitCodes.InvalidArguments;
-                return;
+                return ExitCodes.InvalidArguments;
             }
 
-            context.ExitCode = await ExecuteAsync(
-                connection, data, batchSize, bypassPlugins, bypassFlows,
-                continueOnError, mode, userMappingFile, json, verbose, context.GetCancellationToken());
+            return await ExecuteAsync(
+                authResult, data, bypassPlugins, bypassFlows,
+                continueOnError, mode, userMappingFile, stripOwnerFields,
+                json, verbose, debug, cancellationToken);
         });
 
         return command;
     }
 
     private static async Task<int> ExecuteAsync(
-        string connection,
+        AuthResolver.AuthResult authResult,
         FileInfo data,
-        int batchSize,
         bool bypassPlugins,
         bool bypassFlows,
         bool continueOnError,
         ImportMode mode,
         FileInfo? userMappingFile,
+        bool stripOwnerFields,
         bool json,
         bool verbose,
+        bool debug,
         CancellationToken cancellationToken)
     {
+        var progressReporter = ServiceFactory.CreateProgressReporter(json);
+
         try
         {
-            // Create service provider and get importer
-            await using var serviceProvider = ServiceFactory.CreateProvider(connection);
+            // Report connecting status with auth mode info
+            var authModeInfo = authResult.Mode switch
+            {
+                AuthMode.Interactive => " (interactive login)",
+                AuthMode.Managed => " (managed identity)",
+                AuthMode.Env => " (environment variables)",
+                _ => ""
+            };
+            progressReporter.Report(new ProgressEventArgs
+            {
+                Phase = MigrationPhase.Analyzing,
+                Message = $"Connecting to Dataverse ({authResult.Url}){authModeInfo}..."
+            });
+
+            // Create service provider based on auth mode
+            await using var serviceProvider = ServiceFactory.CreateProviderForAuthMode(authResult, verbose, debug);
             var importer = serviceProvider.GetRequiredService<IImporter>();
-            var progressReporter = ServiceFactory.CreateProgressReporter(json);
 
             // Load user mappings if provided
             UserMappingCollection? userMappings = null;
             if (userMappingFile != null)
             {
-                if (!json)
+                progressReporter.Report(new ProgressEventArgs
                 {
-                    Console.WriteLine($"Loading user mappings from {userMappingFile.FullName}...");
-                }
+                    Phase = MigrationPhase.Analyzing,
+                    Message = $"Loading user mappings from {userMappingFile.Name}..."
+                });
 
                 var mappingReader = new UserMappingReader();
                 userMappings = await mappingReader.ReadAsync(userMappingFile.FullName, cancellationToken);
 
-                if (!json)
+                progressReporter.Report(new ProgressEventArgs
                 {
-                    Console.WriteLine($"Loaded {userMappings.Mappings.Count} user mapping(s).");
-                }
+                    Phase = MigrationPhase.Analyzing,
+                    Message = $"Loaded {userMappings.Mappings.Count} user mapping(s)."
+                });
+            }
+
+            if (stripOwnerFields)
+            {
+                progressReporter.Report(new ProgressEventArgs
+                {
+                    Phase = MigrationPhase.Analyzing,
+                    Message = "Owner fields will be stripped (ownerid, createdby, modifiedby, etc.)"
+                });
             }
 
             // Configure import options
             var importOptions = new ImportOptions
             {
-                BatchSize = batchSize,
                 BypassCustomPluginExecution = bypassPlugins,
                 BypassPowerAutomateFlows = bypassFlows,
                 ContinueOnError = continueOnError,
                 Mode = MapImportMode(mode),
-                UserMappings = userMappings
+                UserMappings = userMappings,
+                StripOwnerFields = stripOwnerFields
             };
 
             // Execute import
@@ -187,32 +213,17 @@ public static class ImportCommand
                 progressReporter,
                 cancellationToken);
 
-            // Report completion
-            if (!result.Success)
-            {
-                ConsoleOutput.WriteError($"Import completed with {result.Errors.Count} error(s).", json);
-                return ExitCodes.Failure;
-            }
-
-            if (!json)
-            {
-                Console.WriteLine();
-                Console.WriteLine("Import completed successfully.");
-                Console.WriteLine($"Tiers: {result.TiersProcessed}, Records: {result.RecordsImported:N0}");
-                Console.WriteLine($"Duration: {result.Duration:hh\\:mm\\:ss}, Rate: {result.RecordsPerSecond:F1} rec/s");
-            }
-
-            return ExitCodes.Success;
+            return result.Success ? ExitCodes.Success : ExitCodes.Failure;
         }
         catch (OperationCanceledException)
         {
-            ConsoleOutput.WriteError("Import cancelled by user.", json);
+            progressReporter.Error(new OperationCanceledException(), "Import cancelled by user.");
             return ExitCodes.Failure;
         }
         catch (Exception ex)
         {
-            ConsoleOutput.WriteError($"Import failed: {ex.Message}", json);
-            if (verbose)
+            progressReporter.Error(ex, "Import failed");
+            if (debug)
             {
                 Console.Error.WriteLine(ex.StackTrace);
             }
@@ -220,9 +231,6 @@ public static class ImportCommand
         }
     }
 
-    /// <summary>
-    /// Maps CLI ImportMode to Migration library ImportMode.
-    /// </summary>
     private static PPDS.Migration.Import.ImportMode MapImportMode(ImportMode mode) => mode switch
     {
         ImportMode.Create => PPDS.Migration.Import.ImportMode.Create,

@@ -4,6 +4,8 @@
 
 **Part of the PPDS Ecosystem** - See `C:\VS\ppds\CLAUDE.md` for cross-project context.
 
+**Consumption guidance:** See [CONSUMPTION_PATTERNS.md](../docs/CONSUMPTION_PATTERNS.md) for when consumers should use library vs CLI vs Tools.
+
 ---
 
 ## 🚫 NEVER
@@ -28,7 +30,7 @@
 |------|-----|
 | Strong name all assemblies | Required for Dataverse plugin sandbox |
 | XML documentation for public APIs | IntelliSense support for consumers |
-| Multi-target 4.6.2, 6.0, 8.0 | Dataverse compatibility across versions |
+| Multi-target appropriately | PPDS.Plugins: 4.6.2, 8.0, 10.0; PPDS.Dataverse: 8.0, 10.0 |
 | Run `dotnet test` before PR | Ensures no regressions |
 | Update `CHANGELOG.md` with changes | Release notes for consumers |
 | Follow SemVer versioning | Clear compatibility expectations |
@@ -36,6 +38,7 @@
 | Dispose pooled clients with `await using` | Returns connections to pool; prevents leaks |
 | Use bulk APIs (`CreateMultiple`, `UpdateMultiple`, `UpsertMultiple`) | 5x faster than `ExecuteMultiple` (~10M vs ~2M records/hour) |
 | Reference Microsoft Learn docs in ADRs | Authoritative source for Dataverse best practices |
+| Use `Conservative` preset for production bulk operations | Prevents throttle cascades; slightly lower throughput but zero throttles |
 
 ---
 
@@ -43,7 +46,7 @@
 
 | Technology | Version | Purpose |
 |------------|---------|---------|
-| .NET | 4.6.2, 6.0, 8.0 | Multi-targeting for Dataverse compatibility |
+| .NET | 4.6.2, 8.0, 10.0 | Multi-targeting (Plugins: 4.6.2+, Dataverse: 8.0+) |
 | C# | Latest (LangVersion) | Primary language |
 | NuGet | - | Package distribution |
 | Strong Naming | .snk file | Required for Dataverse plugin assemblies |
@@ -140,19 +143,36 @@ public class PluginStepAttribute : Attribute { }
 ### Namespaces
 
 ```csharp
+// PPDS.Plugins
 namespace PPDS.Plugins;              // Root
 namespace PPDS.Plugins.Attributes;   // Attributes
 namespace PPDS.Plugins.Enums;        // Enums
+
+// PPDS.Dataverse
+namespace PPDS.Dataverse.Pooling;        // Connection pool, IConnectionSource
+namespace PPDS.Dataverse.BulkOperations; // Bulk API wrappers
+namespace PPDS.Dataverse.Configuration;  // Options, connection config
+namespace PPDS.Dataverse.Resilience;     // Throttle tracking, rate control
+
+// PPDS.Migration
+namespace PPDS.Migration.Export;     // IExporter
+namespace PPDS.Migration.Import;     // IImporter
 ```
 
 ---
 
 ## 📦 Version Management
 
-- Version is in `src/PPDS.Plugins/PPDS.Plugins.csproj`
+Each package has independent versioning using [MinVer](https://github.com/adamralph/minver):
+
+| Package | Tag Format | Example |
+|---------|------------|---------|
+| PPDS.Plugins | `Plugins-v{version}` | `Plugins-v1.2.0` |
+| PPDS.Dataverse | `Dataverse-v{version}` | `Dataverse-v1.0.0` |
+| PPDS.Migration + CLI | `Migration-v{version}` | `Migration-v1.0.0` |
+
 - Follow SemVer: `MAJOR.MINOR.PATCH`
-- Update version in `.csproj` before release
-- Tag releases as `vX.Y.Z`
+- Pre-release: `-alpha.N`, `-beta.N`, `-rc.N` suffix
 
 ---
 
@@ -170,13 +190,17 @@ namespace PPDS.Plugins.Enums;        // Enums
 
 ## 🚀 Release Process
 
-1. Update version in `PPDS.Plugins.csproj`
-2. Update `CHANGELOG.md`
-3. Merge to `main`
-4. Create GitHub Release with tag `vX.Y.Z`
-5. `publish-nuget.yml` workflow automatically publishes to NuGet.org
+1. Update per-package `CHANGELOG.md` (in `src/{package}/`)
+2. Merge to `main`
+3. Create GitHub Release with package-specific tag (e.g., `Dataverse-v1.0.0`)
+4. `publish-nuget.yml` workflow automatically publishes to NuGet.org
 
 **Required Secret:** `NUGET_API_KEY`
+
+See per-package changelogs:
+- [PPDS.Plugins](src/PPDS.Plugins/CHANGELOG.md)
+- [PPDS.Dataverse](src/PPDS.Dataverse/CHANGELOG.md)
+- [PPDS.Migration](src/PPDS.Migration/CHANGELOG.md)
 
 ---
 
@@ -188,6 +212,7 @@ namespace PPDS.Plugins.Enums;        // Enums
 |---------|--------------|
 | PPDS.Plugins | NuGet |
 | PPDS.Dataverse | NuGet |
+| PPDS.Migration | NuGet |
 | PPDS.Migration.Cli | .NET Tool |
 
 ### Consumed By
@@ -263,18 +288,63 @@ ServicePointManager.UseNagleAlgorithm = false;
 - [Service protection API limits](https://learn.microsoft.com/en-us/power-apps/developer/data-platform/api-limits)
 - [Use bulk operation messages](https://learn.microsoft.com/en-us/power-apps/developer/data-platform/bulk-operations)
 
-### Throttle Recovery (Known Limitation)
+### Adaptive Rate Control
 
-The pool handles service protection errors transparently (waits and retries). However, it currently resumes at **full parallelism** after recovery, which can cause re-throttling with extended `Retry-After` durations.
+The pool implements AIMD-based (Additive Increase, Multiplicative Decrease) rate control that:
+- Starts at server-recommended parallelism
+- Increases gradually after sustained success
+- Backs off aggressively on throttle (50% reduction)
+- Applies execution time-aware ceiling for slow operations
 
-**Microsoft recommends** gradual ramp-up after throttle recovery. This is planned for a future enhancement (see ADR-0004).
+### Rate Control Presets
 
-**Workaround**: Use lower `MaxParallelBatches` to reduce throttle frequency:
+| Preset | Use Case | Behavior |
+|--------|----------|----------|
+| `Conservative` | Production bulk jobs, migrations | Lower ceiling, avoids all throttles |
+| `Balanced` | General purpose (default) | Balanced throughput vs safety |
+| `Aggressive` | Dev/test with monitoring | Higher ceiling, accepts some throttles |
 
-```csharp
-var options = new BulkOperationOptions { MaxParallelBatches = 10 };
-await executor.UpsertMultipleAsync(entities, options);
+**Configuration:**
+```json
+{"Dataverse": {"AdaptiveRate": {"Preset": "Conservative"}}}
 ```
+
+**For production bulk operations, always use `Conservative`** to prevent throttle cascades.
+
+See [ADR-0006](docs/adr/0006_EXECUTION_TIME_CEILING.md) for execution time ceiling details.
+
+### Architecture Decision Records
+
+| ADR | Summary |
+|-----|---------|
+| [0001](docs/adr/0001_DISABLE_AFFINITY_COOKIE.md) | Disable affinity cookie for 10x throughput |
+| [0002](docs/adr/0002_MULTI_CONNECTION_POOLING.md) | Multiple Application Users multiply API quota |
+| [0003](docs/adr/0003_THROTTLE_AWARE_SELECTION.md) | Route away from throttled connections |
+| [0004](docs/adr/0004_THROTTLE_RECOVERY_STRATEGY.md) | Transparent throttle waiting without blocking |
+| [0005](docs/adr/0005_POOL_SIZING_PER_CONNECTION.md) | Per-user pool sizing (52 per Application User) |
+| [0006](docs/adr/0006_EXECUTION_TIME_CEILING.md) | Execution time-aware parallelism ceiling |
+| [0007](docs/adr/0007_CONNECTION_SOURCE_ABSTRACTION.md) | IConnectionSource for custom auth methods |
+
+---
+
+## 🖥️ CLI (PPDS.Migration.Cli)
+
+### Authentication Modes
+
+| Mode | Flag | Use Case |
+|------|------|----------|
+| Interactive | `--auth interactive` (default) | Development, ad-hoc usage |
+| Environment | `--auth env` | CI/CD pipelines |
+| Managed Identity | `--auth managed` | Azure-hosted workloads |
+
+**CI/CD environment variables:**
+```bash
+DATAVERSE__URL=https://org.crm.dynamics.com
+DATAVERSE__CLIENTID=your-client-id
+DATAVERSE__CLIENTSECRET=your-secret
+```
+
+See [CLI README](src/PPDS.Migration.Cli/README.md) for full documentation.
 
 ---
 

@@ -13,9 +13,12 @@
     <SignAssembly>true</SignAssembly>
     <AssemblyOriginatorKeyFile>PPDS.Dataverse.snk</AssemblyOriginatorKeyFile>
 
+    <!-- MinVer Configuration -->
+    <MinVerTagPrefix>Dataverse-v</MinVerTagPrefix>
+    <MinVerDefaultPreReleaseIdentifiers>alpha.0</MinVerDefaultPreReleaseIdentifiers>
+
     <!-- NuGet Package Metadata -->
     <PackageId>PPDS.Dataverse</PackageId>
-    <Version>1.0.0-alpha1</Version>
     <Authors>Josh Smith</Authors>
     <Company>Power Platform Developer Suite</Company>
     <Description>High-performance Dataverse connectivity layer with connection pooling, bulk operations, and resilience. Provides multi-connection support for load distribution, throttle-aware connection selection, and modern bulk API wrappers (CreateMultiple, UpsertMultiple).</Description>
@@ -47,6 +50,7 @@
     <PackageReference Include="Microsoft.Extensions.Options" Version="10.0.1" />
     <PackageReference Include="Microsoft.Extensions.Options.ConfigurationExtensions" Version="8.0.*" />
     <PackageReference Include="Microsoft.SourceLink.GitHub" Version="8.0.0" PrivateAssets="All" />
+    <PackageReference Include="MinVer" Version="6.0.0" PrivateAssets="all" />
     <PackageReference Include="Newtonsoft.Json" Version="13.0.*" />
     <!-- Override vulnerable transitive dependency from Dataverse.Client (GHSA-555c-2p6r-68mm) -->
     <PackageReference Include="System.Security.Cryptography.Pkcs" Version="8.0.*" />

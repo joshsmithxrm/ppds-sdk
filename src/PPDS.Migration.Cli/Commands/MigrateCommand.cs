@@ -14,154 +14,153 @@ public static class MigrateCommand
 {
     public static Command Create()
     {
-        var sourceConnectionOption = new Option<string?>(
-            aliases: ["--source-connection", "--source"],
-            description: ConnectionResolver.GetHelpDescription(ConnectionResolver.SourceConnectionEnvVar));
-
-        var targetConnectionOption = new Option<string?>(
-            aliases: ["--target-connection", "--target"],
-            description: ConnectionResolver.GetHelpDescription(ConnectionResolver.TargetConnectionEnvVar));
-
-        var schemaOption = new Option<FileInfo>(
-            aliases: ["--schema", "-s"],
-            description: "Path to schema.xml file")
+        var schemaOption = new Option<FileInfo>("--schema", "-s")
         {
-            IsRequired = true
+            Description = "Path to schema.xml file",
+            Required = true
+        }.AcceptExistingOnly();
+
+        var sourceUrlOption = new Option<string>("--source-url")
+        {
+            Description = "Source Dataverse environment URL",
+            Required = true
         };
 
-        var tempDirOption = new Option<DirectoryInfo?>(
-            name: "--temp-dir",
-            description: "Temporary directory for intermediate data file (default: system temp)");
+        var targetUrlOption = new Option<string>("--target-url")
+        {
+            Description = "Target Dataverse environment URL",
+            Required = true
+        };
 
-        var batchSizeOption = new Option<int>(
-            name: "--batch-size",
-            getDefaultValue: () => 1000,
-            description: "Records per batch for import");
+        var tempDirOption = new Option<DirectoryInfo?>("--temp-dir")
+        {
+            Description = "Temporary directory for intermediate data file (default: system temp)"
+        };
 
-        var bypassPluginsOption = new Option<bool>(
-            name: "--bypass-plugins",
-            getDefaultValue: () => false,
-            description: "Bypass custom plugin execution on target");
+        var bypassPluginsOption = new Option<bool>("--bypass-plugins")
+        {
+            Description = "Bypass custom plugin execution on target",
+            DefaultValueFactory = _ => false
+        };
 
-        var bypassFlowsOption = new Option<bool>(
-            name: "--bypass-flows",
-            getDefaultValue: () => false,
-            description: "Bypass Power Automate flow triggers on target");
+        var bypassFlowsOption = new Option<bool>("--bypass-flows")
+        {
+            Description = "Bypass Power Automate flow triggers on target",
+            DefaultValueFactory = _ => false
+        };
 
-        var jsonOption = new Option<bool>(
-            name: "--json",
-            getDefaultValue: () => false,
-            description: "Output progress as JSON (for tool integration)");
+        var jsonOption = new Option<bool>("--json")
+        {
+            Description = "Output progress as JSON (for tool integration)",
+            DefaultValueFactory = _ => false
+        };
 
-        var verboseOption = new Option<bool>(
-            aliases: ["--verbose", "-v"],
-            getDefaultValue: () => false,
-            description: "Verbose output");
+        var verboseOption = new Option<bool>("--verbose", "-v")
+        {
+            Description = "Enable verbose logging output",
+            DefaultValueFactory = _ => false
+        };
+
+        var debugOption = new Option<bool>("--debug")
+        {
+            Description = "Enable diagnostic logging output",
+            DefaultValueFactory = _ => false
+        };
 
         var command = new Command("migrate", "Migrate data from source to target Dataverse environment")
         {
-            sourceConnectionOption,
-            targetConnectionOption,
             schemaOption,
+            sourceUrlOption,
+            targetUrlOption,
             tempDirOption,
-            batchSizeOption,
             bypassPluginsOption,
             bypassFlowsOption,
             jsonOption,
-            verboseOption
+            verboseOption,
+            debugOption
         };
 
-        command.SetHandler(async (context) =>
+        command.SetAction(async (parseResult, cancellationToken) =>
         {
-            var sourceArg = context.ParseResult.GetValueForOption(sourceConnectionOption);
-            var targetArg = context.ParseResult.GetValueForOption(targetConnectionOption);
-            var schema = context.ParseResult.GetValueForOption(schemaOption)!;
-            var tempDir = context.ParseResult.GetValueForOption(tempDirOption);
-            var batchSize = context.ParseResult.GetValueForOption(batchSizeOption);
-            var bypassPlugins = context.ParseResult.GetValueForOption(bypassPluginsOption);
-            var bypassFlows = context.ParseResult.GetValueForOption(bypassFlowsOption);
-            var json = context.ParseResult.GetValueForOption(jsonOption);
-            var verbose = context.ParseResult.GetValueForOption(verboseOption);
+            var schema = parseResult.GetValue(schemaOption)!;
+            var sourceUrl = parseResult.GetValue(sourceUrlOption)!;
+            var targetUrl = parseResult.GetValue(targetUrlOption)!;
+            var authMode = parseResult.GetValue(Program.AuthOption);
+            var tempDir = parseResult.GetValue(tempDirOption);
+            var bypassPlugins = parseResult.GetValue(bypassPluginsOption);
+            var bypassFlows = parseResult.GetValue(bypassFlowsOption);
+            var json = parseResult.GetValue(jsonOption);
+            var verbose = parseResult.GetValue(verboseOption);
+            var debug = parseResult.GetValue(debugOption);
 
-            // Resolve connection strings from arguments or environment variables
-            string sourceConnection;
-            string targetConnection;
-            try
+            // Migrate only supports interactive and managed auth
+            // (env auth has only one set of credentials, can't work with two environments)
+            if (authMode == AuthMode.Env)
             {
-                sourceConnection = ConnectionResolver.Resolve(
-                    sourceArg,
-                    ConnectionResolver.SourceConnectionEnvVar,
-                    "source-connection");
-
-                targetConnection = ConnectionResolver.Resolve(
-                    targetArg,
-                    ConnectionResolver.TargetConnectionEnvVar,
-                    "target-connection");
-            }
-            catch (InvalidOperationException ex)
-            {
-                ConsoleOutput.WriteError(ex.Message, json);
-                context.ExitCode = ExitCodes.InvalidArguments;
-                return;
+                ConsoleOutput.WriteError(
+                    "--auth env is not supported for migrate command because it uses a single credential. " +
+                    "Use --auth interactive (default) or --auth managed instead. " +
+                    "For service principal auth with two environments, use 'export' then 'import' separately.",
+                    json);
+                return ExitCodes.InvalidArguments;
             }
 
-            context.ExitCode = await ExecuteAsync(
-                sourceConnection, targetConnection, schema, tempDir,
-                batchSize, bypassPlugins, bypassFlows, json, verbose, context.GetCancellationToken());
+            // Create auth results for both environments
+            var sourceAuth = new AuthResolver.AuthResult(authMode, sourceUrl);
+            var targetAuth = new AuthResolver.AuthResult(authMode, targetUrl);
+
+            return await ExecuteAsync(
+                sourceAuth, targetAuth, schema, tempDir, bypassPlugins, bypassFlows,
+                json, verbose, debug, cancellationToken);
         });
 
         return command;
     }
 
     private static async Task<int> ExecuteAsync(
-        string sourceConnection,
-        string targetConnection,
+        AuthResolver.AuthResult sourceAuth,
+        AuthResolver.AuthResult targetAuth,
         FileInfo schema,
         DirectoryInfo? tempDir,
-        int batchSize,
         bool bypassPlugins,
         bool bypassFlows,
         bool json,
         bool verbose,
+        bool debug,
         CancellationToken cancellationToken)
     {
         string? tempDataFile = null;
+        var progressReporter = ServiceFactory.CreateProgressReporter(json);
 
         try
         {
-            // Validate schema file exists
-            if (!schema.Exists)
-            {
-                ConsoleOutput.WriteError($"Schema file not found: {schema.FullName}", json);
-                return ExitCodes.InvalidArguments;
-            }
-
             // Determine temp directory
             var tempDirectory = tempDir?.FullName ?? Path.GetTempPath();
             if (!Directory.Exists(tempDirectory))
             {
-                ConsoleOutput.WriteError($"Temporary directory does not exist: {tempDirectory}", json);
+                progressReporter.Error(new DirectoryNotFoundException($"Temporary directory does not exist: {tempDirectory}"), null);
                 return ExitCodes.InvalidArguments;
             }
 
             // Create temp file path for intermediate data
             tempDataFile = Path.Combine(tempDirectory, $"ppds-migrate-{Guid.NewGuid():N}.zip");
 
-            // Create progress reporter
-            var progressReporter = ServiceFactory.CreateProgressReporter(json);
+            // Build auth mode info for status messages
+            var authModeInfo = sourceAuth.Mode switch
+            {
+                AuthMode.Interactive => " (interactive login)",
+                AuthMode.Managed => " (managed identity)",
+                _ => ""
+            };
 
             // Phase 1: Export from source
-            if (!json)
-            {
-                Console.WriteLine("Phase 1: Exporting from source environment...");
-            }
             progressReporter.Report(new ProgressEventArgs
             {
                 Phase = MigrationPhase.Analyzing,
-                Message = "Connecting to source environment..."
+                Message = $"Phase 1: Connecting to source ({sourceAuth.Url}){authModeInfo}..."
             });
 
-            await using var sourceProvider = ServiceFactory.CreateProvider(sourceConnection, "Source");
+            await using var sourceProvider = ServiceFactory.CreateProviderForAuthMode(sourceAuth, verbose, debug);
             var exporter = sourceProvider.GetRequiredService<IExporter>();
 
             var exportResult = await exporter.ExportAsync(
@@ -173,28 +172,21 @@ public static class MigrateCommand
 
             if (!exportResult.Success)
             {
-                ConsoleOutput.WriteError($"Export failed with {exportResult.Errors.Count} error(s).", json);
                 return ExitCodes.Failure;
             }
 
             // Phase 2: Import to target
-            if (!json)
-            {
-                Console.WriteLine();
-                Console.WriteLine("Phase 2: Importing to target environment...");
-            }
             progressReporter.Report(new ProgressEventArgs
             {
                 Phase = MigrationPhase.Analyzing,
-                Message = "Connecting to target environment..."
+                Message = $"Phase 2: Connecting to target ({targetAuth.Url}){authModeInfo}..."
             });
 
-            await using var targetProvider = ServiceFactory.CreateProvider(targetConnection, "Target");
+            await using var targetProvider = ServiceFactory.CreateProviderForAuthMode(targetAuth, verbose, debug);
             var importer = targetProvider.GetRequiredService<IImporter>();
 
             var importOptions = new ImportOptions
             {
-                BatchSize = batchSize,
                 BypassCustomPluginExecution = bypassPlugins,
                 BypassPowerAutomateFlows = bypassFlows
             };
@@ -205,39 +197,17 @@ public static class MigrateCommand
                 progressReporter,
                 cancellationToken);
 
-            if (!importResult.Success)
-            {
-                ConsoleOutput.WriteError($"Import failed with {importResult.Errors.Count} error(s).", json);
-                return ExitCodes.Failure;
-            }
-
-            // Report completion
-            if (!json)
-            {
-                Console.WriteLine();
-                Console.WriteLine("Migration completed successfully.");
-                Console.WriteLine($"Exported: {exportResult.RecordsExported:N0} records");
-                Console.WriteLine($"Imported: {importResult.RecordsImported:N0} records");
-                Console.WriteLine($"Total duration: {exportResult.Duration + importResult.Duration:hh\\:mm\\:ss}");
-            }
-            else
-            {
-                var totalRecords = exportResult.RecordsExported;
-                var totalDuration = exportResult.Duration + importResult.Duration;
-                ConsoleOutput.WriteCompletion(totalDuration, totalRecords, 0, json);
-            }
-
-            return ExitCodes.Success;
+            return importResult.Success ? ExitCodes.Success : ExitCodes.Failure;
         }
         catch (OperationCanceledException)
         {
-            ConsoleOutput.WriteError("Migration cancelled by user.", json);
+            progressReporter.Error(new OperationCanceledException(), "Migration cancelled by user.");
             return ExitCodes.Failure;
         }
         catch (Exception ex)
         {
-            ConsoleOutput.WriteError($"Migration failed: {ex.Message}", json);
-            if (verbose)
+            progressReporter.Error(ex, "Migration failed");
+            if (debug)
             {
                 Console.Error.WriteLine(ex.StackTrace);
             }
@@ -251,10 +221,11 @@ public static class MigrateCommand
                 try
                 {
                     File.Delete(tempDataFile);
-                    if (!json)
+                    progressReporter.Report(new ProgressEventArgs
                     {
-                        Console.WriteLine($"Cleaned up temporary file: {tempDataFile}");
-                    }
+                        Phase = MigrationPhase.Complete,
+                        Message = "Cleaned up temporary file."
+                    });
                 }
                 catch
                 {
