@@ -1,0 +1,63 @@
+using System;
+using PPDS.Auth.Profiles;
+
+namespace PPDS.Auth.Credentials;
+
+/// <summary>
+/// Factory for creating credential providers from auth profiles.
+/// </summary>
+public static class CredentialProviderFactory
+{
+    /// <summary>
+    /// Creates a credential provider for the specified auth profile.
+    /// </summary>
+    /// <param name="profile">The auth profile.</param>
+    /// <param name="deviceCodeCallback">Optional callback for device code display (for DeviceCode auth).</param>
+    /// <returns>A credential provider for the profile's auth method.</returns>
+    /// <exception cref="NotSupportedException">If the auth method is not supported.</exception>
+    public static ICredentialProvider Create(
+        AuthProfile profile,
+        Action<DeviceCodeInfo>? deviceCodeCallback = null)
+    {
+        if (profile == null)
+            throw new ArgumentNullException(nameof(profile));
+
+        return profile.AuthMethod switch
+        {
+            AuthMethod.DeviceCode => DeviceCodeCredentialProvider.FromProfile(profile, deviceCodeCallback),
+            AuthMethod.ClientSecret => ClientSecretCredentialProvider.FromProfile(profile),
+            AuthMethod.CertificateFile => throw new NotSupportedException("CertificateFile auth is not yet implemented."),
+            AuthMethod.CertificateStore => throw new NotSupportedException("CertificateStore auth is not yet implemented."),
+            AuthMethod.ManagedIdentity => throw new NotSupportedException("ManagedIdentity auth is not yet implemented."),
+            AuthMethod.GitHubFederated => throw new NotSupportedException("GitHubFederated auth is not yet implemented."),
+            AuthMethod.AzureDevOpsFederated => throw new NotSupportedException("AzureDevOpsFederated auth is not yet implemented."),
+#pragma warning disable CS0618 // Type or member is obsolete
+            AuthMethod.UsernamePassword => throw new NotSupportedException("UsernamePassword auth is deprecated and not supported."),
+#pragma warning restore CS0618
+            _ => throw new NotSupportedException($"Unknown auth method: {profile.AuthMethod}")
+        };
+    }
+
+    /// <summary>
+    /// Checks if the specified auth method is supported.
+    /// </summary>
+    /// <param name="authMethod">The auth method to check.</param>
+    /// <returns>True if supported, false otherwise.</returns>
+    public static bool IsSupported(AuthMethod authMethod)
+    {
+        return authMethod switch
+        {
+            AuthMethod.DeviceCode => true,
+            AuthMethod.ClientSecret => true,
+            AuthMethod.CertificateFile => false, // Not yet implemented
+            AuthMethod.CertificateStore => false, // Not yet implemented
+            AuthMethod.ManagedIdentity => false, // Not yet implemented
+            AuthMethod.GitHubFederated => false, // Not yet implemented
+            AuthMethod.AzureDevOpsFederated => false, // Not yet implemented
+#pragma warning disable CS0618
+            AuthMethod.UsernamePassword => false, // Deprecated
+#pragma warning restore CS0618
+            _ => false
+        };
+    }
+}
