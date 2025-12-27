@@ -26,181 +26,131 @@ ppds-migrate --version
 | `schema generate` | Generate schema from Dataverse metadata |
 | `schema list` | List available entities |
 | `users generate` | Generate user mapping file for cross-environment migration |
-| `config list` | List available environments from configuration |
 
-## Configuration
+## Authentication
 
-The CLI uses the same configuration model as [PPDS.Dataverse](../PPDS.Dataverse/), following standard .NET configuration patterns.
+The CLI supports three authentication modes via the `--auth` option:
 
-### Configuration Sources (Priority Order)
+| Mode | Flag | Description | Use Case |
+|------|------|-------------|----------|
+| **Interactive** | `--auth interactive` (default) | Device code flow - opens browser | Development, ad-hoc usage |
+| **Environment Variables** | `--auth env` | Uses `DATAVERSE__*` environment variables | CI/CD pipelines |
+| **Managed Identity** | `--auth managed` | Azure Managed Identity | Azure-hosted workloads |
 
-Configuration is loaded from multiple sources, with later sources overriding earlier ones:
-
-1. **appsettings.json** - Base configuration file
-2. **appsettings.{Environment}.json** - Environment-specific overrides (e.g., `appsettings.Development.json`)
-3. **User Secrets** - Development-time secrets (via `--secrets-id`)
-4. **Environment variables** - Runtime overrides (`Dataverse__*` format)
-
-### appsettings.json Structure
-
-```json
-{
-  "Dataverse": {
-    "DefaultEnvironment": "Dev",
-    "Environments": {
-      "Dev": {
-        "Url": "https://contoso-dev.crm.dynamics.com",
-        "Connections": [
-          {
-            "Name": "Primary",
-            "ClientId": "00000000-0000-0000-0000-000000000000"
-          }
-        ]
-      },
-      "QA": {
-        "Url": "https://contoso-qa.crm.dynamics.com",
-        "Connections": [
-          {
-            "Name": "Primary",
-            "ClientId": "00000000-0000-0000-0000-000000000000"
-          }
-        ]
-      },
-      "Prod": {
-        "Url": "https://contoso.crm.dynamics.com",
-        "Connections": [
-          {
-            "Name": "Primary",
-            "ClientId": "00000000-0000-0000-0000-000000000000"
-          }
-        ]
-      }
-    }
-  }
-}
-```
-
-### User Secrets (Local Development)
-
-Store sensitive credentials in User Secrets, not in appsettings.json:
+### Interactive Authentication (Default)
 
 ```bash
-# Initialize User Secrets (in your project directory)
-dotnet user-secrets init
-
-# Set credentials for each environment
-dotnet user-secrets set "Dataverse:Environments:Dev:Connections:0:ClientSecret" "your-dev-secret"
-dotnet user-secrets set "Dataverse:Environments:QA:Connections:0:ClientSecret" "your-qa-secret"
-dotnet user-secrets set "Dataverse:Environments:Prod:Connections:0:ClientSecret" "your-prod-secret"
+ppds-migrate export --url https://contoso.crm.dynamics.com --schema schema.xml --output data.zip
 ```
+
+The CLI will display a device code and prompt you to authenticate in a browser.
 
 ### Environment Variables (CI/CD)
 
-For CI/CD pipelines, use environment variables with the `Dataverse__` prefix (double underscore):
+Set these environment variables, then use `--auth env`:
+
+| Variable | Description | Required |
+|----------|-------------|----------|
+| `DATAVERSE__URL` | Environment URL | Yes |
+| `DATAVERSE__CLIENTID` | Azure AD Application ID | Yes |
+| `DATAVERSE__CLIENTSECRET` | Azure AD Client Secret | Yes |
+| `DATAVERSE__TENANTID` | Azure AD Tenant ID | Optional |
 
 ```bash
-# Single environment
-export Dataverse__Environments__Dev__Url="https://contoso-dev.crm.dynamics.com"
-export Dataverse__Environments__Dev__Connections__0__ClientId="your-client-id"
-export Dataverse__Environments__Dev__Connections__0__ClientSecret="your-secret"
+# Set environment variables
+export DATAVERSE__URL="https://contoso.crm.dynamics.com"
+export DATAVERSE__CLIENTID="00000000-0000-0000-0000-000000000000"
+export DATAVERSE__CLIENTSECRET="your-secret"
+
+# Run with env auth
+ppds-migrate export --auth env --schema schema.xml --output data.zip
 ```
 
 GitHub Actions example:
 ```yaml
 env:
-  Dataverse__Environments__Dev__Url: ${{ vars.DEV_URL }}
-  Dataverse__Environments__Dev__Connections__0__ClientId: ${{ vars.DEV_CLIENT_ID }}
-  Dataverse__Environments__Dev__Connections__0__ClientSecret: ${{ secrets.DEV_CLIENT_SECRET }}
+  DATAVERSE__URL: ${{ vars.DATAVERSE_URL }}
+  DATAVERSE__CLIENTID: ${{ vars.DATAVERSE_CLIENT_ID }}
+  DATAVERSE__CLIENTSECRET: ${{ secrets.DATAVERSE_CLIENT_SECRET }}
+
+steps:
+  - run: ppds-migrate export --auth env --schema schema.xml --output data.zip
 ```
 
-### Cross-Process Invocation
+### Managed Identity (Azure-Hosted)
 
-When calling the CLI from another .NET application (e.g., the demo project), use `--secrets-id` to share User Secrets:
+For Azure Functions, App Service, or VMs with managed identity:
 
 ```bash
-ppds-migrate export --env Dev --secrets-id ppds-dataverse-demo --schema schema.xml --output data.zip
+ppds-migrate export --auth managed --url https://contoso.crm.dynamics.com --schema schema.xml --output data.zip
 ```
 
-This allows the CLI to read secrets from the calling application's User Secrets store.
-
 ## Usage
+
+### Global Options
+
+All commands support these options:
+
+| Option | Description |
+|--------|-------------|
+| `--url` | Dataverse environment URL (e.g., `https://org.crm.dynamics.com`) |
+| `--auth` | Authentication mode: `interactive` (default), `env`, `managed` |
 
 ### Export
 
 ```bash
-ppds-migrate export --env Dev --schema ./schema.xml --output ./data.zip
+ppds-migrate export --url https://contoso.crm.dynamics.com --schema ./schema.xml --output ./data.zip
 ```
 
 Options:
-- `--env` (required) - Environment name from configuration
+- `--url` (required) - Dataverse environment URL
 - `--schema`, `-s` (required) - Path to schema.xml file
 - `--output`, `-o` (required) - Output ZIP file path
-- `--config` - Path to configuration file (default: appsettings.json in CWD)
-- `--secrets-id` - User Secrets ID for cross-process secret sharing
-- `--parallel` - Degree of parallelism (default: processor count * 2)
+- `--parallel` - Degree of parallelism (default: 16)
 - `--page-size` - FetchXML page size (default: 5000)
 - `--include-files` - Export file attachments
 - `--json` - Output progress as JSON
 - `--verbose`, `-v` - Verbose output
+- `--debug` - Diagnostic logging output
 
 ### Import
 
 ```bash
-ppds-migrate import --env Dev --data ./data.zip
+ppds-migrate import --url https://contoso.crm.dynamics.com --data ./data.zip --mode Upsert
 ```
 
 Options:
-- `--env` (required) - Environment name from configuration
+- `--url` (required) - Dataverse environment URL
 - `--data`, `-d` (required) - Path to data.zip file
-- `--config` - Path to configuration file
-- `--secrets-id` - User Secrets ID
-- `--batch-size` - Records per batch (default: 1000)
+- `--mode` - Import mode: `Create`, `Update`, or `Upsert` (default: Upsert)
+- `--user-mapping`, `-u` - Path to user mapping XML file
+- `--strip-owner-fields` - Strip ownership fields, let Dataverse assign current user
 - `--bypass-plugins` - Bypass custom plugin execution
 - `--bypass-flows` - Bypass Power Automate flows
 - `--continue-on-error` - Continue on individual record failures
-- `--mode` - Import mode: Create, Update, or Upsert (default: Upsert)
-- `--user-mapping`, `-u` - Path to user mapping XML file
 - `--json` - Output progress as JSON
 - `--verbose`, `-v` - Verbose output
+- `--debug` - Diagnostic logging output
 
 ### Analyze
 
 ```bash
 # No connection required - analyzes schema file locally
-ppds-migrate analyze --schema ./schema.xml --output-format json
+ppds-migrate analyze --schema ./schema.xml
 ```
-
-### Migrate
-
-```bash
-ppds-migrate migrate --source-env Dev --target-env Prod --schema ./schema.xml
-```
-
-Options:
-- `--source-env` (required) - Source environment name
-- `--target-env` (required) - Target environment name
-- `--schema`, `-s` (required) - Path to schema.xml file
-- `--config` - Path to configuration file
-- `--secrets-id` - User Secrets ID
-- `--temp-dir` - Temporary directory for intermediate data
-- `--batch-size` - Records per batch (default: 1000)
-- `--bypass-plugins` - Bypass plugins on target
-- `--bypass-flows` - Bypass flows on target
-- `--json` - Output progress as JSON
-- `--verbose`, `-v` - Verbose output
 
 ### Generate Schema
 
 ```bash
-ppds-migrate schema generate --env Dev --entities account,contact --output ./schema.xml
+ppds-migrate schema generate --url https://contoso.crm.dynamics.com \
+  --entities account,contact \
+  --output ./schema.xml
 ```
 
 Options:
-- `--env` (required) - Environment name from configuration
+- `--url` (required) - Dataverse environment URL
 - `--entities`, `-e` (required) - Entity logical names (comma-separated or multiple flags)
 - `--output`, `-o` (required) - Output schema file path
-- `--config` - Path to configuration file
-- `--secrets-id` - User Secrets ID
 - `--include-system-fields` - Include system fields (createdon, modifiedon, etc.)
 - `--include-relationships` - Include relationship definitions (default: true)
 - `--disable-plugins` - Set disableplugins=true on all entities
@@ -209,30 +159,29 @@ Options:
 - `--exclude-patterns` - Exclude attributes matching patterns (e.g., 'new_*')
 - `--json` - Output progress as JSON
 - `--verbose`, `-v` - Verbose output
+- `--debug` - Diagnostic logging output
 
 ### List Entities
 
 ```bash
-ppds-migrate schema list --env Dev --filter "account*"
+ppds-migrate schema list --url https://contoso.crm.dynamics.com --filter "account*"
 ```
+
+Options:
+- `--url` (required) - Dataverse environment URL
+- `--filter`, `-f` - Filter entities by name pattern
+- `--custom-only` - Show only custom entities
+- `--json` - Output as JSON
 
 ### Generate User Mapping
 
 Generate a user mapping file for cross-environment migrations. Maps users by Azure AD Object ID (preferred) or domain name fallback.
 
 ```bash
-# Interactive auth mode
 ppds-migrate users generate \
   --source-url "https://dev.crm.dynamics.com" \
   --target-url "https://qa.crm.dynamics.com" \
   --output ./user-mapping.xml
-
-# Analyze mode (preview without generating file)
-ppds-migrate users generate \
-  --source-url "https://dev.crm.dynamics.com" \
-  --target-url "https://qa.crm.dynamics.com" \
-  --output ./user-mapping.xml \
-  --analyze
 ```
 
 Options:
@@ -242,16 +191,13 @@ Options:
 - `--analyze` - Preview user differences without generating file
 - `--json` - Output as JSON
 - `--verbose`, `-v` - Verbose output
+- `--debug` - Diagnostic logging output
 
 Use the generated mapping file with import:
 ```bash
-ppds-migrate import --data ./data.zip --user-mapping ./user-mapping.xml
-```
-
-### List Environments
-
-```bash
-ppds-migrate config list
+ppds-migrate import --url https://qa.crm.dynamics.com \
+  --data ./data.zip \
+  --user-mapping ./user-mapping.xml
 ```
 
 ## Exit Codes
@@ -267,7 +213,7 @@ ppds-migrate config list
 The `--json` flag enables structured JSON output for tool integration. This format is a **public contract** used by [PPDS.Tools](https://github.com/joshsmithxrm/ppds-tools) PowerShell cmdlets.
 
 ```bash
-ppds-migrate export --env Dev --schema ./schema.xml --output ./data.zip --json
+ppds-migrate export --url https://contoso.crm.dynamics.com --schema ./schema.xml --output ./data.zip --json
 ```
 
 **Output format (one JSON object per line):**
@@ -291,12 +237,12 @@ ppds-migrate export --env Dev --schema ./schema.xml --output ./data.zip --json
 
 ## Security Best Practices
 
-1. **Never commit secrets to source control** - Use User Secrets for local development
+1. **Never pass secrets as CLI arguments** - Use environment variables or managed identity
 2. **Use CI/CD secrets** - Store credentials in GitHub Actions secrets or Azure DevOps variables
-3. **Use Key Vault in production** - For deployed scenarios, integrate with Azure Key Vault
+3. **Use managed identity in Azure** - Avoid storing credentials entirely
 4. **Rotate secrets regularly** - Follow your organization's credential rotation policy
 
 ## Related
 
-- [PPDS.Dataverse](../PPDS.Dataverse/) - High-performance Dataverse connectivity (same configuration model)
+- [PPDS.Dataverse](../PPDS.Dataverse/) - High-performance Dataverse connectivity
 - [PPDS.Tools](https://github.com/joshsmithxrm/ppds-tools) - PowerShell cmdlets that wrap this CLI

@@ -1,8 +1,8 @@
 # PPDS Migration CLI v1 Enhancements Specification
 
-**Status:** Implementation in Progress
+**Status:** Partially Implemented
 **Branch:** `feature/v2-alpha`
-**Date:** 2025-12-25
+**Date:** 2025-12-27
 
 ---
 
@@ -16,6 +16,69 @@ This specification covers CLI enhancements for the v1 release, building on the S
 2. **Improved UX** - Tab completions, response files, directives
 3. **Flexible authentication** - Support multiple auth methods for different scenarios
 4. **Security** - Never accept secrets as CLI arguments
+
+### Implementation Status
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| Validators | Implemented | AcceptExistingOnly, AcceptLegalFileNamesOnly |
+| Tab Completions | Not Started | Deferred |
+| `--auth env` | Implemented | Environment variable auth |
+| `--auth interactive` | Implemented | Device code flow (default) |
+| `--auth managed` | Implemented | Azure Managed Identity |
+| `--auth config` | **Abandoned** | See [Decision: Config-Based Auth](#decision-config-based-auth-abandoned) |
+| `--env` option | **Abandoned** | See [Decision: Config-Based Auth](#decision-config-based-auth-abandoned) |
+| `--secrets-id` option | **Abandoned** | See [Decision: Config-Based Auth](#decision-config-based-auth-abandoned) |
+
+---
+
+## Decision: Config-Based Auth (Abandoned)
+
+**Date:** 2025-12-27
+
+The original spec included `--auth config`, `--env`, and `--secrets-id` options for configuration-file-based authentication. These have been **abandoned** in favor of the simpler URL-based approach.
+
+### Original Design
+
+```bash
+# Would have required appsettings.json with environment definitions
+ppds-migrate export --env Dev --secrets-id ppds-dataverse-demo --schema schema.xml
+```
+
+### Why Abandoned
+
+1. **Primary consumer changed** - Demo app now uses PPDS.Migration library directly instead of shelling out to CLI. The `--secrets-id` option was designed for cross-process User Secrets sharing, which is no longer needed.
+
+2. **Configuration file discovery is ambiguous** - Where should CLI look for appsettings.json? CWD changes behavior unexpectedly. Explicit `--config` path is as verbose as `--url`.
+
+3. **Current auth modes cover all use cases**:
+   - Interactive (default): Ad-hoc developer usage
+   - Environment variables: CI/CD pipelines
+   - Managed identity: Azure-hosted workloads
+
+4. **Simpler is better** - `--url` is explicit and unambiguous. No configuration file discovery complexity.
+
+### Current Design
+
+```bash
+# Explicit URL - no config file needed
+ppds-migrate export --url https://contoso.crm.dynamics.com --schema schema.xml --output data.zip
+
+# CI/CD with environment variables
+export DATAVERSE__URL="https://contoso.crm.dynamics.com"
+export DATAVERSE__CLIENTID="..."
+export DATAVERSE__CLIENTSECRET="..."
+ppds-migrate export --auth env --schema schema.xml --output data.zip
+```
+
+### Library vs CLI Configuration
+
+Note: The **library** (PPDS.Dataverse, PPDS.Migration) fully supports multi-environment configuration via appsettings.json. This is appropriate for library consumers who integrate via DI.
+
+The **CLI** uses explicit `--url` because:
+- CLI is standalone, not integrated into a host application
+- CLI users expect explicit, predictable behavior
+- No ambiguity about which configuration file is used
 
 ---
 
@@ -86,36 +149,9 @@ parallelOption.Validators.Add(result =>
 
 ## 2. Tab Completions
 
-### 2.1 Environment Name Completion
+> **Status:** Deferred. Tab completions for entity names and auth modes may be added in a future release.
 
-Dynamic completions for `--env` based on configuration.
-
-```csharp
-var envOption = new Option<string>("--env")
-{
-    Description = "Environment name from configuration",
-    Required = true
-};
-envOption.CompletionSources.Add(ctx =>
-{
-    try
-    {
-        var config = ConfigurationHelper.Build(null, null);
-        return ConfigurationHelper.GetEnvironmentNames(config)
-            .Select(name => new CompletionItem(name));
-    }
-    catch
-    {
-        return Enumerable.Empty<CompletionItem>();
-    }
-});
-```
-
-**User experience:**
-```bash
-ppds-migrate export --env <TAB>
-# Shows: Dev  QA  Prod
-```
+~~### 2.1 Environment Name Completion~~ (Abandoned - see [Decision: Config-Based Auth](#decision-config-based-auth-abandoned))
 
 ---
 
@@ -123,26 +159,16 @@ ppds-migrate export --env <TAB>
 
 ### 3.1 Auth Modes
 
-| Mode | Flag | Description | Use Case |
-|------|------|-------------|----------|
-| `config` | `--auth config` (default) | appsettings.json + User Secrets | Development |
-| `env` | `--auth env` | Environment variables only | CI/CD, containers |
-| `interactive` | `--auth interactive` | Device code flow (browser) | Humans, first-time setup |
-| `managed` | `--auth managed` | Azure Managed Identity | Azure-hosted production |
+| Mode | Flag | Description | Use Case | Status |
+|------|------|-------------|----------|--------|
+| `interactive` | `--auth interactive` (default) | Device code flow (browser) | Development, ad-hoc | **Implemented** |
+| `env` | `--auth env` | Environment variables only | CI/CD, containers | **Implemented** |
+| `managed` | `--auth managed` | Azure Managed Identity | Azure-hosted production | **Implemented** |
+| ~~`config`~~ | ~~`--auth config`~~ | ~~appsettings.json + User Secrets~~ | ~~Development~~ | **Abandoned** |
 
-### 3.2 Resolution Order
+### 3.2 Authentication Resolution
 
-When `--auth` is not specified (auto-detect):
-
-```
-1. Check for DATAVERSE__URL environment variable
-   └── If found: use environment variables (ClientCredentials)
-
-2. Check for appsettings.json + User Secrets
-   └── If found: use configuration (ClientCredentials)
-
-3. Fail with helpful error message
-```
+The CLI requires explicit `--url` for the target environment. When `--auth` is not specified, interactive mode is used (device code flow).
 
 ### 3.3 Environment Variable Schema
 
@@ -218,24 +244,31 @@ var client = new ServiceClient(
 
 ## 4. CLI Option Changes
 
-### 4.1 New Global Option
+### 4.1 Global Options (Implemented)
 
 ```csharp
+public static readonly Option<string?> UrlOption = new("--url")
+{
+    Description = "Dataverse environment URL (e.g., https://org.crm.dynamics.com)",
+    Recursive = true
+};
+
 public static readonly Option<AuthMode> AuthOption = new("--auth")
 {
-    Description = "Authentication mode: config (default), env, interactive, managed"
+    Description = "Authentication mode: interactive (default), env, managed",
+    DefaultValueFactory = _ => AuthMode.Interactive,
+    Recursive = true
 };
 
 public enum AuthMode
 {
-    Config,      // appsettings.json + User Secrets
+    Interactive, // Device code flow (default)
     Env,         // Environment variables
-    Interactive, // Device code flow
     Managed      // Azure Managed Identity
 }
 ```
 
-### 4.2 Updated Help Output
+### 4.2 Current Help Output
 
 ```
 Description:
@@ -245,18 +278,18 @@ Usage:
   ppds-migrate [command] [options]
 
 Options:
-  --auth <mode>          Authentication mode: config, env, interactive, managed [default: config]
-  --secrets-id <id>      User Secrets ID for cross-process sharing (used with --auth config)
-  -?, -h, --help         Show help and usage information
-  --version              Show version information
+  --url <url>                       Dataverse environment URL (e.g., https://org.crm.dynamics.com)
+  --auth <Env|Interactive|Managed>  Authentication mode: interactive (default), env, managed [default: Interactive]
+  -?, -h, --help                    Show help and usage information
+  --version                         Show version information
 
 Commands:
   export   Export data from Dataverse to a ZIP file
   import   Import data from a ZIP file into Dataverse
   analyze  Analyze schema and display dependency graph
-  migrate  Migrate data between Dataverse environments
+  migrate  Migrate data from source to target Dataverse environment
   schema   Generate and manage migration schemas
-  config   Configuration management and diagnostics
+  users    User mapping commands for cross-environment migration
 ```
 
 ---
@@ -316,9 +349,8 @@ Document in README:
 
 | Scenario | Recommended | Command |
 |----------|-------------|---------|
-| First-time / human | Interactive | `--auth interactive` |
-| Development | Config + Secrets | `--secrets-id <id>` |
-| CI/CD pipeline | Environment vars | Set `DATAVERSE__*` vars |
+| Development / ad-hoc | Interactive | `--auth interactive` (default) |
+| CI/CD pipeline | Environment vars | `--auth env` with `DATAVERSE__*` vars |
 | Azure hosted | Managed Identity | `--auth managed` |
 ```
 
@@ -341,13 +373,16 @@ Document in README:
 
 ## 7. Implementation Order
 
-1. **Validators** - AcceptExistingOnly, custom numeric validators
-2. **Tab Completions** - Environment name completion
-3. **Environment Variable Auth** - DATAVERSE__* support
-4. **Auth Infrastructure** - --auth option, AuthMode enum, resolution logic
-5. **Interactive Auth** - Device code flow
-6. **Managed Identity** - Azure.Identity integration
-7. **Documentation** - README updates, help text
+| Step | Feature | Status |
+|------|---------|--------|
+| 1 | Validators (AcceptExistingOnly, numeric) | **Done** |
+| 2 | ~~Tab Completions~~ | Deferred |
+| 3 | Environment Variable Auth (DATAVERSE__*) | **Done** |
+| 4 | Auth Infrastructure (--auth option, AuthMode) | **Done** |
+| 5 | Interactive Auth (device code flow) | **Done** |
+| 6 | Managed Identity (Azure.Identity) | **Done** |
+| 7 | Documentation (README updates) | **Done** |
+| - | ~~Config-based auth (--env, --secrets-id)~~ | **Abandoned** |
 
 ---
 
@@ -356,22 +391,22 @@ Document in README:
 ### Unit Tests
 
 - Validator behavior (file exists, numeric ranges)
-- Auth resolution logic (env vars → config → error)
+- Auth mode resolution
 - Environment variable parsing
 
 ### Integration Tests
 
 - Interactive auth: Manual testing with real Azure AD
 - Managed Identity: Test in Azure VM or use emulator
-- Config auth: Existing tests cover this
+- Environment variable auth: CI/CD pipeline testing
 
 ### Manual Testing Checklist
 
-- [ ] `ppds-migrate --help` shows --auth option
-- [ ] `ppds-migrate export --auth interactive` opens browser
+- [x] `ppds-migrate --help` shows --auth option
+- [x] `ppds-migrate export --auth interactive` prompts device code
+- [x] `ppds-migrate export --auth env` uses environment variables
 - [ ] `ppds-migrate export --auth managed` works in Azure VM
-- [ ] Tab completion shows environment names
-- [ ] Invalid file paths show clear error before handler runs
+- [x] Invalid file paths show clear error before handler runs
 - [ ] `@response.rsp` file works
 - [ ] `[diagram]` directive works
 
