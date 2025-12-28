@@ -383,10 +383,12 @@ public static class EnvCommandGroup
                 var output = new
                 {
                     userId = whoAmIResponse.UserId,
+                    userEmail = profile.Username,
                     businessUnitId = whoAmIResponse.BusinessUnitId,
                     organizationId = orgId,
                     organizationName = orgName,
                     organizationUniqueName = orgUniqueName,
+                    environmentId = env.EnvironmentId,
                     environmentUrl = env.Url,
                     environmentName = env.DisplayName
                 };
@@ -401,15 +403,20 @@ public static class EnvCommandGroup
             else
             {
                 Console.WriteLine();
-                Console.ForegroundColor = ConsoleColor.Green;
-                Console.WriteLine("Connected successfully!");
-                Console.ResetColor();
-                Console.WriteLine();
-                Console.WriteLine($"  Org ID:        {orgId}");
-                Console.WriteLine($"  Unique Name:   {orgUniqueName}");
-                Console.WriteLine($"  Friendly Name: {orgName}");
-                Console.WriteLine($"  Org URL:       {env.Url}");
-                Console.WriteLine($"  User ID:       {whoAmIResponse.UserId}");
+                Console.WriteLine("Organization Information");
+                Console.WriteLine($"  Org ID:         {orgId}");
+                Console.WriteLine($"  Unique Name:    {orgUniqueName}");
+                Console.WriteLine($"  Friendly Name:  {orgName}");
+                Console.WriteLine($"  Org URL:        {env.Url}");
+                if (!string.IsNullOrEmpty(profile.Username))
+                {
+                    Console.WriteLine($"  User Email:     {profile.Username}");
+                }
+                Console.WriteLine($"  User ID:        {whoAmIResponse.UserId}");
+                if (!string.IsNullOrEmpty(env.EnvironmentId))
+                {
+                    Console.WriteLine($"  Environment ID: {env.EnvironmentId}");
+                }
             }
 
             return ExitCodes.Success;

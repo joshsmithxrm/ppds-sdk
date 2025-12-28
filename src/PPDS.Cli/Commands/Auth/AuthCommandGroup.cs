@@ -1130,7 +1130,7 @@ public static class AuthCommandGroup
                         userCountry = profile.UserCountry,
                         applicationId = profile.ApplicationId,
                         authority = CloudEndpoints.GetAuthorityUrl(profile.Cloud, profile.TenantId),
-                        tokenExpiresOn = profile.TokenExpiresOn,
+                        tokenExpires = profile.TokenExpiresOn,
                         environment = profile.Environment != null ? new
                         {
                             url = profile.Environment.Url,
@@ -1211,7 +1211,7 @@ public static class AuthCommandGroup
 
                 if (profile.TokenExpiresOn.HasValue)
                 {
-                    Console.WriteLine($"Token Expires On:            {profile.TokenExpiresOn.Value:yyyy-MM-dd HH:mm:ss zzz}");
+                    Console.WriteLine($"Token Expires:               {profile.TokenExpiresOn.Value:yyyy-MM-dd HH:mm:ss zzz}");
                 }
 
                 // Environment section
