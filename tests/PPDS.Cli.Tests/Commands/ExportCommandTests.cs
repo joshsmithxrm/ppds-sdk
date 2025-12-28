@@ -78,9 +78,9 @@ public class ExportCommandTests : IDisposable
     }
 
     [Fact]
-    public void Create_HasOptionalPageSizeOption()
+    public void Create_HasOptionalBatchSizeOption()
     {
-        var option = _command.Options.FirstOrDefault(o => o.Name == "--page-size");
+        var option = _command.Options.FirstOrDefault(o => o.Name == "--batch-size");
         Assert.NotNull(option);
         Assert.False(option.Required);
     }
@@ -149,9 +149,9 @@ public class ExportCommandTests : IDisposable
     }
 
     [Fact]
-    public void Parse_WithOptionalPageSize_Succeeds()
+    public void Parse_WithOptionalBatchSize_Succeeds()
     {
-        var result = _command.Parse($"-s \"{_tempSchemaFile}\" -o \"{_tempOutputFile}\" --page-size 1000");
+        var result = _command.Parse($"-s \"{_tempSchemaFile}\" -o \"{_tempOutputFile}\" --batch-size 1000");
         Assert.Empty(result.Errors);
     }
 
