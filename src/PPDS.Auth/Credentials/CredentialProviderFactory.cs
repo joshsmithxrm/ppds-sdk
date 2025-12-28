@@ -26,9 +26,9 @@ public static class CredentialProviderFactory
         {
             AuthMethod.DeviceCode => DeviceCodeCredentialProvider.FromProfile(profile, deviceCodeCallback),
             AuthMethod.ClientSecret => ClientSecretCredentialProvider.FromProfile(profile),
-            AuthMethod.CertificateFile => throw new NotSupportedException("CertificateFile auth is not yet implemented."),
-            AuthMethod.CertificateStore => throw new NotSupportedException("CertificateStore auth is not yet implemented."),
-            AuthMethod.ManagedIdentity => throw new NotSupportedException("ManagedIdentity auth is not yet implemented."),
+            AuthMethod.CertificateFile => CertificateFileCredentialProvider.FromProfile(profile),
+            AuthMethod.CertificateStore => CertificateStoreCredentialProvider.FromProfile(profile),
+            AuthMethod.ManagedIdentity => ManagedIdentityCredentialProvider.FromProfile(profile),
             AuthMethod.GitHubFederated => throw new NotSupportedException("GitHubFederated auth is not yet implemented."),
             AuthMethod.AzureDevOpsFederated => throw new NotSupportedException("AzureDevOpsFederated auth is not yet implemented."),
 #pragma warning disable CS0618 // Type or member is obsolete
@@ -49,9 +49,9 @@ public static class CredentialProviderFactory
         {
             AuthMethod.DeviceCode => true,
             AuthMethod.ClientSecret => true,
-            AuthMethod.CertificateFile => false, // Not yet implemented
-            AuthMethod.CertificateStore => false, // Not yet implemented
-            AuthMethod.ManagedIdentity => false, // Not yet implemented
+            AuthMethod.CertificateFile => true,
+            AuthMethod.CertificateStore => true,
+            AuthMethod.ManagedIdentity => true,
             AuthMethod.GitHubFederated => false, // Not yet implemented
             AuthMethod.AzureDevOpsFederated => false, // Not yet implemented
 #pragma warning disable CS0618

@@ -14,7 +14,7 @@
 | 1 | PPDS.Auth Foundation | **Complete** | - |
 | 2 | CLI Restructure + Auth Commands | **Complete** | Phase 1 |
 | 3 | Environment Discovery | **Complete** | Phase 1, 2 |
-| 4 | Additional Auth Methods | Not Started | Phase 2 |
+| 4 | Additional Auth Methods | **Complete** | Phase 2 |
 | 5 | Data Command Integration | Not Started | Phase 2, 3 |
 | 6 | Pooling Support | Not Started | Phase 5 |
 | 7 | Polish & Documentation | Not Started | All |
@@ -157,16 +157,45 @@
 
 ---
 
-## Phase 4: Additional Auth Methods - NOT STARTED
+## Phase 4: Additional Auth Methods - COMPLETE
 
 **Goal:** Implement remaining credential providers.
 
-- [ ] Certificate File Credential (--certificateDiskPath)
-- [ ] Certificate Store Credential (--certificateThumbprint, Windows only)
-- [ ] Managed Identity Credential (--managedIdentity)
-- [ ] GitHub OIDC Credential (--githubFederated)
-- [ ] Azure DevOps OIDC Credential (--azureDevOpsFederated)
-- [ ] Username/Password Credential (deprecated warning)
+### 4.1 Certificate File Auth - COMPLETE
+- [x] Create `CertificateFileCredentialProvider.cs`
+- [x] Load PFX/P12 from disk with optional password
+- [x] Store cert temporarily in user store for ServiceClient
+- [x] Add `--certificate-path` and `--certificate-password` options
+
+### 4.2 Certificate Store Auth - COMPLETE
+- [x] Create `CertificateStoreCredentialProvider.cs`
+- [x] Find certificate by thumbprint in Windows store
+- [x] Support StoreName and StoreLocation options
+- [x] Add `--certificate-thumbprint` option
+- [x] Platform check (Windows only)
+
+### 4.3 Managed Identity Auth - COMPLETE
+- [x] Create `ManagedIdentityCredentialProvider.cs`
+- [x] Support system-assigned identity (no client ID)
+- [x] Support user-assigned identity (with --application-id)
+- [x] Add `--managed-identity` option
+- [x] Use Azure.Identity.ManagedIdentityCredential
+
+### 4.4 Auth Create Updates - COMPLETE
+- [x] Update auth create with all new options
+- [x] Auto-detect auth method from provided options
+- [x] Validation for required fields per auth method
+- [x] Platform checks for Windows-only features
+
+### 4.5 Not Implemented (Future)
+- [ ] GitHub OIDC Credential (--github-federated)
+- [ ] Azure DevOps OIDC Credential (--azure-devops-federated)
+- [ ] Username/Password Credential (deprecated)
+
+**Files Created:**
+- src/PPDS.Auth/Credentials/CertificateFileCredentialProvider.cs
+- src/PPDS.Auth/Credentials/CertificateStoreCredentialProvider.cs
+- src/PPDS.Auth/Credentials/ManagedIdentityCredentialProvider.cs
 
 ---
 
@@ -235,12 +264,12 @@
 | 1 | PPDS.Auth Foundation | **Complete** |
 | 2 | CLI Restructure + Auth Commands | **Complete** |
 | 3 | Environment Discovery | **Complete** |
-| 4 | Additional Auth Methods | Not Started |
+| 4 | Additional Auth Methods | **Complete** |
 | 5 | Data Command Integration | Not Started |
 | 6 | Pooling Support | Not Started |
 | 7 | Polish & Documentation | Not Started |
 
-**Overall Progress:** Phase 3 of 7 complete (~43%)
+**Overall Progress:** Phase 4 of 7 complete (~57%)
 
 ---
 

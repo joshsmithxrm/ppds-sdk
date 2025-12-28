@@ -34,6 +34,7 @@ public static class AuthCommandGroup
 
     private static Command CreateCreateCommand()
     {
+        // Profile options
         var nameOption = new Option<string?>("--name", "-n")
         {
             Description = "Profile name (optional, max 30 characters)"
@@ -58,76 +59,168 @@ public static class AuthCommandGroup
 
         var tenantOption = new Option<string?>("--tenant", "-t")
         {
-            Description = "Tenant ID (optional)"
+            Description = "Tenant ID (required for service principal auth)"
         };
 
-        var command = new Command("create", "Create a new authentication profile (interactive login)")
+        // Auth method options
+        var deviceCodeOption = new Option<bool>("--device-code")
+        {
+            Description = "Use interactive device code authentication (default)",
+            DefaultValueFactory = _ => false
+        };
+
+        var applicationIdOption = new Option<string?>("--application-id")
+        {
+            Description = "Application (client) ID for service principal auth"
+        };
+
+        var clientSecretOption = new Option<string?>("--client-secret")
+        {
+            Description = "Client secret for service principal auth"
+        };
+
+        var certificatePathOption = new Option<string?>("--certificate-path")
+        {
+            Description = "Path to certificate file (PFX/P12) for certificate auth"
+        };
+
+        var certificatePasswordOption = new Option<string?>("--certificate-password")
+        {
+            Description = "Password for certificate file"
+        };
+
+        var certificateThumbprintOption = new Option<string?>("--certificate-thumbprint")
+        {
+            Description = "Certificate thumbprint for Windows certificate store auth"
+        };
+
+        var managedIdentityOption = new Option<bool>("--managed-identity")
+        {
+            Description = "Use Azure Managed Identity (system-assigned or user-assigned)",
+            DefaultValueFactory = _ => false
+        };
+
+        var command = new Command("create", "Create a new authentication profile")
         {
             nameOption,
             environmentOption,
             cloudOption,
-            tenantOption
+            tenantOption,
+            deviceCodeOption,
+            applicationIdOption,
+            clientSecretOption,
+            certificatePathOption,
+            certificatePasswordOption,
+            certificateThumbprintOption,
+            managedIdentityOption
         };
 
         command.SetAction(async (parseResult, cancellationToken) =>
         {
-            var name = parseResult.GetValue(nameOption);
-            var environment = parseResult.GetValue(environmentOption);
-            var cloud = parseResult.GetValue(cloudOption);
-            var tenant = parseResult.GetValue(tenantOption);
+            var options = new CreateOptions
+            {
+                Name = parseResult.GetValue(nameOption),
+                Environment = parseResult.GetValue(environmentOption),
+                Cloud = parseResult.GetValue(cloudOption),
+                Tenant = parseResult.GetValue(tenantOption),
+                DeviceCode = parseResult.GetValue(deviceCodeOption),
+                ApplicationId = parseResult.GetValue(applicationIdOption),
+                ClientSecret = parseResult.GetValue(clientSecretOption),
+                CertificatePath = parseResult.GetValue(certificatePathOption),
+                CertificatePassword = parseResult.GetValue(certificatePasswordOption),
+                CertificateThumbprint = parseResult.GetValue(certificateThumbprintOption),
+                ManagedIdentity = parseResult.GetValue(managedIdentityOption)
+            };
 
-            return await ExecuteCreateAsync(name, environment, cloud, tenant, cancellationToken);
+            return await ExecuteCreateAsync(options, cancellationToken);
         });
 
         return command;
     }
 
-    private static async Task<int> ExecuteCreateAsync(
-        string? name,
-        string? environmentUrl,
-        CloudEnvironment cloud,
-        string? tenantId,
-        CancellationToken cancellationToken)
+    private sealed class CreateOptions
+    {
+        public string? Name { get; set; }
+        public string? Environment { get; set; }
+        public CloudEnvironment Cloud { get; set; }
+        public string? Tenant { get; set; }
+        public bool DeviceCode { get; set; }
+        public string? ApplicationId { get; set; }
+        public string? ClientSecret { get; set; }
+        public string? CertificatePath { get; set; }
+        public string? CertificatePassword { get; set; }
+        public string? CertificateThumbprint { get; set; }
+        public bool ManagedIdentity { get; set; }
+    }
+
+    private static async Task<int> ExecuteCreateAsync(CreateOptions options, CancellationToken cancellationToken)
     {
         try
         {
+            // Determine auth method from options
+            var authMethod = DetermineAuthMethod(options);
+
+            // Validate required fields for auth method
+            var validationError = ValidateAuthOptions(options, authMethod);
+            if (validationError != null)
+            {
+                Console.Error.WriteLine($"Error: {validationError}");
+                return ExitCodes.Failure;
+            }
+
             using var store = new ProfileStore();
             var collection = await store.LoadAsync(cancellationToken);
 
             // Check for duplicate name
-            if (!string.IsNullOrWhiteSpace(name) && collection.IsNameInUse(name))
+            if (!string.IsNullOrWhiteSpace(options.Name) && collection.IsNameInUse(options.Name))
             {
-                Console.Error.WriteLine($"Error: Profile name '{name}' is already in use.");
+                Console.Error.WriteLine($"Error: Profile name '{options.Name}' is already in use.");
                 return ExitCodes.Failure;
             }
 
             // Create profile
             var profile = new AuthProfile
             {
-                Name = name,
-                AuthMethod = AuthMethod.DeviceCode,
-                Cloud = cloud,
-                TenantId = tenantId
+                Name = options.Name,
+                AuthMethod = authMethod,
+                Cloud = options.Cloud,
+                TenantId = options.Tenant,
+                ApplicationId = options.ApplicationId,
+                ClientSecret = options.ClientSecret,
+                CertificatePath = options.CertificatePath,
+                CertificatePassword = options.CertificatePassword,
+                CertificateThumbprint = options.CertificateThumbprint
             };
 
             // Add environment if provided
-            if (!string.IsNullOrWhiteSpace(environmentUrl))
+            if (!string.IsNullOrWhiteSpace(options.Environment))
             {
                 profile.Environment = new EnvironmentInfo
                 {
-                    Url = environmentUrl.TrimEnd('/'),
-                    DisplayName = ExtractEnvironmentName(environmentUrl)
+                    Url = options.Environment.TrimEnd('/'),
+                    DisplayName = ExtractEnvironmentName(options.Environment)
                 };
             }
 
-            // Authenticate now to verify credentials and get username
-            Console.WriteLine("Authenticating...");
+            // Authenticate to verify credentials
+            Console.WriteLine($"Authenticating with {authMethod}...");
             Console.WriteLine();
 
-            // We need to authenticate to an environment to get the identity
-            var targetUrl = environmentUrl ?? "https://globaldisco.crm.dynamics.com";
+            var targetUrl = options.Environment ?? "https://globaldisco.crm.dynamics.com";
 
-            var provider = new DeviceCodeCredentialProvider(cloud, tenantId);
+            ICredentialProvider provider = authMethod switch
+            {
+                AuthMethod.DeviceCode => new DeviceCodeCredentialProvider(options.Cloud, options.Tenant),
+                AuthMethod.ClientSecret => new ClientSecretCredentialProvider(
+                    options.ApplicationId!, options.ClientSecret!, options.Tenant!, options.Cloud),
+                AuthMethod.CertificateFile => new CertificateFileCredentialProvider(
+                    options.ApplicationId!, options.CertificatePath!, options.CertificatePassword, options.Tenant!, options.Cloud),
+                AuthMethod.CertificateStore => new CertificateStoreCredentialProvider(
+                    options.ApplicationId!, options.CertificateThumbprint!, options.Tenant!, cloud: options.Cloud),
+                AuthMethod.ManagedIdentity => new ManagedIdentityCredentialProvider(options.ApplicationId),
+                _ => throw new NotSupportedException($"Auth method {authMethod} is not supported for profile creation.")
+            };
+
             try
             {
                 var client = await provider.CreateServiceClientAsync(targetUrl, cancellationToken);
@@ -152,6 +245,7 @@ public static class AuthCommandGroup
             Console.ForegroundColor = ConsoleColor.Green;
             Console.WriteLine($"Profile created: {profile.DisplayIdentifier}");
             Console.ResetColor();
+            Console.WriteLine($"  Auth: {profile.AuthMethod}");
             Console.WriteLine($"  Identity: {profile.IdentityDisplay}");
             Console.WriteLine($"  Cloud: {profile.Cloud}");
             if (profile.HasEnvironment)
@@ -176,6 +270,80 @@ public static class AuthCommandGroup
             Console.Error.WriteLine($"Error: {ex.Message}");
             return ExitCodes.Failure;
         }
+    }
+
+    private static AuthMethod DetermineAuthMethod(CreateOptions options)
+    {
+        // Check for explicit auth method options
+        if (options.ManagedIdentity)
+            return AuthMethod.ManagedIdentity;
+
+        if (!string.IsNullOrWhiteSpace(options.CertificateThumbprint))
+            return AuthMethod.CertificateStore;
+
+        if (!string.IsNullOrWhiteSpace(options.CertificatePath))
+            return AuthMethod.CertificateFile;
+
+        if (!string.IsNullOrWhiteSpace(options.ClientSecret))
+            return AuthMethod.ClientSecret;
+
+        // Default to device code
+        return AuthMethod.DeviceCode;
+    }
+
+    private static string? ValidateAuthOptions(CreateOptions options, AuthMethod authMethod)
+    {
+        return authMethod switch
+        {
+            AuthMethod.DeviceCode => null, // No required options
+
+            AuthMethod.ClientSecret => ValidateClientSecret(options),
+
+            AuthMethod.CertificateFile => ValidateCertificateFile(options),
+
+            AuthMethod.CertificateStore => ValidateCertificateStore(options),
+
+            AuthMethod.ManagedIdentity => null, // ApplicationId is optional (for user-assigned)
+
+            _ => $"Auth method {authMethod} is not supported."
+        };
+    }
+
+    private static string? ValidateClientSecret(CreateOptions options)
+    {
+        if (string.IsNullOrWhiteSpace(options.ApplicationId))
+            return "--application-id is required for client secret authentication.";
+        if (string.IsNullOrWhiteSpace(options.ClientSecret))
+            return "--client-secret is required for client secret authentication.";
+        if (string.IsNullOrWhiteSpace(options.Tenant))
+            return "--tenant is required for client secret authentication.";
+        return null;
+    }
+
+    private static string? ValidateCertificateFile(CreateOptions options)
+    {
+        if (string.IsNullOrWhiteSpace(options.ApplicationId))
+            return "--application-id is required for certificate authentication.";
+        if (string.IsNullOrWhiteSpace(options.CertificatePath))
+            return "--certificate-path is required for certificate file authentication.";
+        if (string.IsNullOrWhiteSpace(options.Tenant))
+            return "--tenant is required for certificate authentication.";
+        if (!System.IO.File.Exists(options.CertificatePath))
+            return $"Certificate file not found: {options.CertificatePath}";
+        return null;
+    }
+
+    private static string? ValidateCertificateStore(CreateOptions options)
+    {
+        if (string.IsNullOrWhiteSpace(options.ApplicationId))
+            return "--application-id is required for certificate authentication.";
+        if (string.IsNullOrWhiteSpace(options.CertificateThumbprint))
+            return "--certificate-thumbprint is required for certificate store authentication.";
+        if (string.IsNullOrWhiteSpace(options.Tenant))
+            return "--tenant is required for certificate authentication.";
+        if (!System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(System.Runtime.InteropServices.OSPlatform.Windows))
+            return "Certificate store authentication is only supported on Windows. Use --certificate-path instead.";
+        return null;
     }
 
     #endregion
