@@ -179,19 +179,20 @@ public static class EnvCommandGroup
 
     private static Command CreateSelectCommand()
     {
-        var environmentArg = new Argument<string>("environment")
+        var envOption = new Option<string>("--environment", "-env")
         {
-            Description = "Environment name, URL, or unique name"
+            Description = "Default environment (ID, url, unique name, or partial name)",
+            Required = true
         };
 
         var command = new Command("select", "Select the active environment for the current profile")
         {
-            environmentArg
+            envOption
         };
 
         command.SetAction(async (parseResult, cancellationToken) =>
         {
-            var environment = parseResult.GetValue(environmentArg)!;
+            var environment = parseResult.GetValue(envOption)!;
             return await ExecuteSelectAsync(environment, cancellationToken);
         });
 
@@ -212,7 +213,8 @@ public static class EnvCommandGroup
                 return ExitCodes.Failure;
             }
 
-            Console.WriteLine("Discovering environments...");
+            Console.WriteLine($"Connected as {profile.IdentityDisplay}");
+            Console.WriteLine($"Looking for environment '{environmentIdentifier}'");
 
             // Use the GlobalDiscoveryService to get environments
             using var gds = GlobalDiscoveryService.FromProfile(profile);
@@ -238,6 +240,8 @@ public static class EnvCommandGroup
                 return ExitCodes.Failure;
             }
 
+            Console.WriteLine("Validating connection...");
+
             // Update the profile with the selected environment
             profile.Environment = new EnvironmentInfo
             {
@@ -249,12 +253,9 @@ public static class EnvCommandGroup
 
             await store.SaveAsync(collection, cancellationToken);
 
-            Console.WriteLine();
             Console.ForegroundColor = ConsoleColor.Green;
-            Console.WriteLine($"Environment selected: {resolved.FriendlyName}");
+            Console.WriteLine($"Connected to... {resolved.FriendlyName}");
             Console.ResetColor();
-            Console.WriteLine($"  URL: {resolved.ApiUrl}");
-            Console.WriteLine($"  Type: {resolved.EnvironmentType}");
 
             return ExitCodes.Success;
         }
