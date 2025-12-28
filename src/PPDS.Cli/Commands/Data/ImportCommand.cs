@@ -140,9 +140,9 @@ public static class ImportCommand
 
         try
         {
-            // Create service provider from profile(s)
+            // Create service provider from profile(s) - null uses active profile
             await using var serviceProvider = await ProfileServiceFactory.CreateFromProfilesAsync(
-                profile ?? string.Empty,
+                profile,
                 environment,
                 verbose,
                 debug,

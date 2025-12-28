@@ -110,7 +110,7 @@ public static class ProfileServiceFactory
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>A configured service provider.</returns>
     public static async Task<ServiceProvider> CreateFromProfilesAsync(
-        string profileNames,
+        string? profileNames,
         string? environmentOverride,
         bool verbose = false,
         bool debug = false,
@@ -118,9 +118,16 @@ public static class ProfileServiceFactory
         CancellationToken cancellationToken = default)
     {
         var names = ConnectionResolver.ParseProfileString(profileNames);
-        if (names.Count == 0)
-            throw new ArgumentException("At least one profile name is required.", nameof(profileNames));
 
+        // No profiles specified - use active profile
+        if (names.Count == 0)
+        {
+            return await CreateFromProfileAsync(
+                null, environmentOverride, verbose, debug, deviceCodeCallback, cancellationToken)
+                .ConfigureAwait(false);
+        }
+
+        // Single profile specified
         if (names.Count == 1)
         {
             return await CreateFromProfileAsync(
