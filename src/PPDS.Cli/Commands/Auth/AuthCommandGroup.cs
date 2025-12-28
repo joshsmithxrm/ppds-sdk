@@ -258,6 +258,7 @@ public static class AuthCommandGroup
                 // forceInteractive=true ensures we always prompt, never reuse cached tokens
                 var client = await provider.CreateServiceClientAsync(targetUrl, cancellationToken, forceInteractive: true);
                 profile.Username = provider.Identity;
+                profile.ObjectId = provider.ObjectId;
                 // Store tenant ID from auth result if not already set
                 if (string.IsNullOrEmpty(profile.TenantId) && !string.IsNullOrEmpty(provider.TenantId))
                 {
@@ -298,7 +299,10 @@ public static class AuthCommandGroup
                             Url = resolved.ApiUrl,
                             DisplayName = resolved.FriendlyName,
                             UniqueName = resolved.UniqueName,
-                            EnvironmentId = resolved.EnvironmentId
+                            EnvironmentId = resolved.EnvironmentId,
+                            OrganizationId = resolved.Id.ToString(),
+                            Type = resolved.EnvironmentType,
+                            Region = resolved.Region
                         };
                     }
                     catch (Exception ex)
@@ -1107,13 +1111,18 @@ public static class AuthCommandGroup
                         cloud = profile.Cloud.ToString(),
                         tenantId = profile.TenantId,
                         user = profile.Username,
+                        objectId = profile.ObjectId,
                         applicationId = profile.ApplicationId,
+                        authority = CloudEndpoints.GetAuthorityUrl(profile.Cloud, profile.TenantId),
                         environment = profile.Environment != null ? new
                         {
                             url = profile.Environment.Url,
                             displayName = profile.Environment.DisplayName,
-                            uniqueName = profile.Environment.UniqueName,
-                            environmentId = profile.Environment.EnvironmentId
+                            environmentId = profile.Environment.EnvironmentId,
+                            environmentType = profile.Environment.Type,
+                            region = profile.Environment.Region,
+                            organizationId = profile.Environment.OrganizationId,
+                            uniqueName = profile.Environment.UniqueName
                         } : null,
                         createdAt = profile.CreatedAt,
                         lastUsedAt = profile.LastUsedAt
@@ -1139,37 +1148,65 @@ public static class AuthCommandGroup
                 Console.WriteLine($"Connected as {identity}");
                 Console.WriteLine();
 
-                Console.WriteLine($"Method:              {profile.AuthMethod}");
-                Console.WriteLine($"Type:                {cacheType}");
-                Console.WriteLine($"Cloud:               {profile.Cloud}");
+                // Auth info section
+                Console.WriteLine($"Method:                      {profile.AuthMethod}");
+                Console.WriteLine($"Type:                        {cacheType}");
+                Console.WriteLine($"Cloud:                       {profile.Cloud}");
 
                 if (!string.IsNullOrEmpty(profile.TenantId))
                 {
-                    Console.WriteLine($"Tenant Id:           {profile.TenantId}");
+                    Console.WriteLine($"Tenant Id:                   {profile.TenantId}");
                 }
 
                 if (!string.IsNullOrEmpty(profile.Username))
                 {
-                    Console.WriteLine($"User:                {profile.Username}");
+                    Console.WriteLine($"User:                        {profile.Username}");
+                }
+
+                if (!string.IsNullOrEmpty(profile.ObjectId))
+                {
+                    Console.WriteLine($"Entra ID Object Id:          {profile.ObjectId}");
                 }
 
                 if (!string.IsNullOrEmpty(profile.ApplicationId))
                 {
-                    Console.WriteLine($"Application Id:      {profile.ApplicationId}");
+                    Console.WriteLine($"Application Id:              {profile.ApplicationId}");
                 }
 
+                // Show authority based on cloud
+                var authority = CloudEndpoints.GetAuthorityUrl(profile.Cloud, profile.TenantId);
+                Console.WriteLine($"Authority:                   {authority}");
+
+                // Environment section
                 if (profile.HasEnvironment)
                 {
                     Console.WriteLine();
-                    Console.WriteLine($"Environment:         {profile.Environment!.DisplayName}");
-                    Console.WriteLine($"Environment URL:     {profile.Environment.Url}");
-                    if (!string.IsNullOrEmpty(profile.Environment.UniqueName))
-                    {
-                        Console.WriteLine($"Unique Name:         {profile.Environment.UniqueName}");
-                    }
+                    Console.WriteLine($"Environment:                 {profile.Environment!.DisplayName}");
+                    Console.WriteLine($"Environment URL:             {profile.Environment.Url}");
+
                     if (!string.IsNullOrEmpty(profile.Environment.EnvironmentId))
                     {
-                        Console.WriteLine($"Environment ID:      {profile.Environment.EnvironmentId}");
+                        Console.WriteLine($"Environment Id:              {profile.Environment.EnvironmentId}");
+                    }
+
+                    if (!string.IsNullOrEmpty(profile.Environment.Type))
+                    {
+                        Console.WriteLine($"Environment Type:            {profile.Environment.Type}");
+                    }
+
+                    if (!string.IsNullOrEmpty(profile.Environment.Region))
+                    {
+                        Console.WriteLine($"Environment Geo:             {profile.Environment.Region}");
+                    }
+
+                    if (!string.IsNullOrEmpty(profile.Environment.OrganizationId))
+                    {
+                        Console.WriteLine($"Organization Id:             {profile.Environment.OrganizationId}");
+                    }
+
+                    if (!string.IsNullOrEmpty(profile.Environment.UniqueName))
+                    {
+                        Console.WriteLine($"Organization Unique Name:    {profile.Environment.UniqueName}");
                     }
                 }
                 else

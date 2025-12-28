@@ -264,7 +264,10 @@ public static class EnvCommandGroup
                 Url = resolved.ApiUrl,
                 DisplayName = resolved.FriendlyName,
                 UniqueName = resolved.UniqueName,
-                EnvironmentId = resolved.EnvironmentId
+                EnvironmentId = resolved.EnvironmentId,
+                OrganizationId = resolved.Id.ToString(),
+                Type = resolved.EnvironmentType,
+                Region = resolved.Region
             };
 
             await store.SaveAsync(collection, cancellationToken);

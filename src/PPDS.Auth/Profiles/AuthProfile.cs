@@ -51,6 +51,13 @@ public sealed class AuthProfile
     public string? Username { get; set; }
 
     /// <summary>
+    /// Gets or sets the Entra ID Object ID (user or service principal).
+    /// Populated after successful authentication.
+    /// </summary>
+    [JsonPropertyName("objectId")]
+    public string? ObjectId { get; set; }
+
+    /// <summary>
     /// Gets or sets the password (encrypted).
     /// For UsernamePassword auth.
     /// </summary>
