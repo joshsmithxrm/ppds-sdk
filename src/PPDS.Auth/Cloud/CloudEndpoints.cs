@@ -1,4 +1,5 @@
 using System;
+using Azure.Identity;
 using Microsoft.Identity.Client;
 
 namespace PPDS.Auth.Cloud;
@@ -71,6 +72,24 @@ public static class CloudEndpoints
             CloudEnvironment.UsGovHigh => "https://globaldisco.crm.microsoftdynamics.us",
             CloudEnvironment.UsGovDod => "https://globaldisco.crm.appsplatform.us",
             CloudEnvironment.China => "https://globaldisco.crm.dynamics.cn",
+            _ => throw new ArgumentOutOfRangeException(nameof(cloud), cloud, "Unknown cloud environment")
+        };
+    }
+
+    /// <summary>
+    /// Gets the Azure.Identity authority host URI for the specified cloud environment.
+    /// </summary>
+    /// <param name="cloud">The cloud environment.</param>
+    /// <returns>The authority host URI.</returns>
+    public static Uri GetAuthorityHost(CloudEnvironment cloud)
+    {
+        return cloud switch
+        {
+            CloudEnvironment.Public => AzureAuthorityHosts.AzurePublicCloud,
+            CloudEnvironment.UsGov => AzureAuthorityHosts.AzureGovernment,
+            CloudEnvironment.UsGovHigh => AzureAuthorityHosts.AzureGovernment,
+            CloudEnvironment.UsGovDod => AzureAuthorityHosts.AzureGovernment,
+            CloudEnvironment.China => AzureAuthorityHosts.AzureChina,
             _ => throw new ArgumentOutOfRangeException(nameof(cloud), cloud, "Unknown cloud environment")
         };
     }

@@ -18,6 +18,7 @@ public static class Program
         // Add command groups
         rootCommand.Subcommands.Add(AuthCommandGroup.Create());
         rootCommand.Subcommands.Add(EnvCommandGroup.Create());
+        rootCommand.Subcommands.Add(EnvCommandGroup.CreateOrgAlias()); // 'org' alias for 'env'
         rootCommand.Subcommands.Add(DataCommandGroup.Create());
         rootCommand.Subcommands.Add(SchemaCommand.Create());
         rootCommand.Subcommands.Add(UsersCommand.Create());

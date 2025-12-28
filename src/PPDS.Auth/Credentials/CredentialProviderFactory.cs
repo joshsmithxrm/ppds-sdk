@@ -24,16 +24,18 @@ public static class CredentialProviderFactory
 
         return profile.AuthMethod switch
         {
+            AuthMethod.InteractiveBrowser => InteractiveBrowserCredentialProvider.FromProfile(profile),
             AuthMethod.DeviceCode => CreateInteractiveProvider(profile, deviceCodeCallback),
             AuthMethod.ClientSecret => ClientSecretCredentialProvider.FromProfile(profile),
             AuthMethod.CertificateFile => CertificateFileCredentialProvider.FromProfile(profile),
             AuthMethod.CertificateStore => CertificateStoreCredentialProvider.FromProfile(profile),
             AuthMethod.ManagedIdentity => ManagedIdentityCredentialProvider.FromProfile(profile),
-            AuthMethod.GitHubFederated => throw new NotSupportedException("GitHubFederated auth is not yet implemented."),
-            AuthMethod.AzureDevOpsFederated => throw new NotSupportedException("AzureDevOpsFederated auth is not yet implemented."),
-#pragma warning disable CS0618 // Type or member is obsolete
-            AuthMethod.UsernamePassword => throw new NotSupportedException("UsernamePassword auth is not supported. Use interactive browser or service principal instead."),
-#pragma warning restore CS0618
+            AuthMethod.GitHubFederated => new GitHubFederatedCredentialProvider(
+                profile.ApplicationId!, profile.TenantId!, profile.Cloud),
+            AuthMethod.AzureDevOpsFederated => new AzureDevOpsFederatedCredentialProvider(
+                profile.ApplicationId!, profile.TenantId!, profile.Cloud),
+            AuthMethod.UsernamePassword => new UsernamePasswordCredentialProvider(
+                profile.Username!, profile.Password!, profile.Cloud, profile.TenantId),
             _ => throw new NotSupportedException($"Unknown auth method: {profile.AuthMethod}")
         };
     }
@@ -66,16 +68,15 @@ public static class CredentialProviderFactory
     {
         return authMethod switch
         {
+            AuthMethod.InteractiveBrowser => true,
             AuthMethod.DeviceCode => true,
             AuthMethod.ClientSecret => true,
             AuthMethod.CertificateFile => true,
             AuthMethod.CertificateStore => true,
             AuthMethod.ManagedIdentity => true,
-            AuthMethod.GitHubFederated => false, // Not yet implemented
-            AuthMethod.AzureDevOpsFederated => false, // Not yet implemented
-#pragma warning disable CS0618
-            AuthMethod.UsernamePassword => false, // Deprecated
-#pragma warning restore CS0618
+            AuthMethod.GitHubFederated => true,
+            AuthMethod.AzureDevOpsFederated => true,
+            AuthMethod.UsernamePassword => true,
             _ => false
         };
     }

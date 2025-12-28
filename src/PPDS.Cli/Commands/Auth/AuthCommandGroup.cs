@@ -37,7 +37,7 @@ public static class AuthCommandGroup
         // Profile options
         var nameOption = new Option<string?>("--name", "-n")
         {
-            Description = "Profile name (optional, max 30 characters)"
+            Description = "The name you want to give to this authentication profile (maximum 30 characters)"
         };
         nameOption.Validators.Add(result =>
         {
@@ -46,61 +46,83 @@ public static class AuthCommandGroup
                 result.AddError("Profile name cannot exceed 30 characters");
         });
 
-        var environmentOption = new Option<string?>("--environment", "-e")
+        var environmentOption = new Option<string?>("--environment", "-env")
         {
-            Description = "Environment URL (optional, can be set later with 'env select')"
+            Description = "Default environment (ID, url, unique name, or partial name)"
         };
 
-        var cloudOption = new Option<CloudEnvironment>("--cloud", "-c")
+        var cloudOption = new Option<CloudEnvironment>("--cloud", "-ci")
         {
-            Description = "Cloud environment",
+            Description = "Optional: The cloud instance to authenticate with",
             DefaultValueFactory = _ => CloudEnvironment.Public
         };
 
         var tenantOption = new Option<string?>("--tenant", "-t")
         {
-            Description = "Tenant ID (required for service principal auth)"
+            Description = "Tenant ID if using application ID/client secret or application ID/client certificate"
         };
 
         // Auth method options
-        var deviceCodeOption = new Option<bool>("--device-code")
+        var deviceCodeOption = new Option<bool>("--deviceCode", "-dc")
         {
-            Description = "Use device code authentication (fallback when browser unavailable)",
+            Description = "Use the Microsoft Entra ID Device Code flow for interactive sign-in",
             DefaultValueFactory = _ => false
         };
 
-        var applicationIdOption = new Option<string?>("--application-id")
+        var applicationIdOption = new Option<string?>("--applicationId", "-id")
         {
-            Description = "Application (client) ID for service principal auth"
+            Description = "Optional: The application ID to authenticate with"
         };
 
-        var clientSecretOption = new Option<string?>("--client-secret")
+        var clientSecretOption = new Option<string?>("--clientSecret", "-cs")
         {
-            Description = "Client secret for service principal auth"
+            Description = "Optional: The client secret to authenticate with"
         };
 
-        var certificatePathOption = new Option<string?>("--certificate-path")
+        var certificatePathOption = new Option<string?>("--certificateDiskPath", "-cdp")
         {
-            Description = "Path to certificate file (PFX/P12) for certificate auth"
+            Description = "Optional: The certificate disk path to authenticate with"
         };
 
-        var certificatePasswordOption = new Option<string?>("--certificate-password")
+        var certificatePasswordOption = new Option<string?>("--certificatePassword", "-cp")
         {
-            Description = "Password for certificate file"
+            Description = "Optional: The certificate password to authenticate with"
         };
 
-        var certificateThumbprintOption = new Option<string?>("--certificate-thumbprint")
+        var certificateThumbprintOption = new Option<string?>("--certificateThumbprint")
         {
-            Description = "Certificate thumbprint for Windows certificate store auth"
+            Description = "Certificate thumbprint for Windows certificate store authentication"
         };
 
-        var managedIdentityOption = new Option<bool>("--managed-identity")
+        var managedIdentityOption = new Option<bool>("--managedIdentity", "-mi")
         {
-            Description = "Use Azure Managed Identity (system-assigned or user-assigned)",
+            Description = "Use Azure Managed Identity",
             DefaultValueFactory = _ => false
         };
 
-        var command = new Command("create", "Create a new authentication profile")
+        var usernameOption = new Option<string?>("--username", "-un")
+        {
+            Description = "Optional: The username to authenticate with; shows a Microsoft Entra ID dialog if not specified"
+        };
+
+        var passwordOption = new Option<string?>("--password", "-p")
+        {
+            Description = "Optional: The password to authenticate with"
+        };
+
+        var githubFederatedOption = new Option<bool>("--githubFederated", "-ghf")
+        {
+            Description = "(Preview) Use GitHub Federation for Service Principal Auth; requires --tenant and --applicationId arguments",
+            DefaultValueFactory = _ => false
+        };
+
+        var azureDevOpsFederatedOption = new Option<bool>("--azureDevOpsFederated", "-adof")
+        {
+            Description = "(Preview) Use Azure DevOps Federation for Service Principal Auth; requires --tenant and --applicationId arguments",
+            DefaultValueFactory = _ => false
+        };
+
+        var command = new Command("create", "Create and store authentication profiles on this computer")
         {
             nameOption,
             environmentOption,
@@ -112,7 +134,11 @@ public static class AuthCommandGroup
             certificatePathOption,
             certificatePasswordOption,
             certificateThumbprintOption,
-            managedIdentityOption
+            managedIdentityOption,
+            usernameOption,
+            passwordOption,
+            githubFederatedOption,
+            azureDevOpsFederatedOption
         };
 
         command.SetAction(async (parseResult, cancellationToken) =>
@@ -129,7 +155,11 @@ public static class AuthCommandGroup
                 CertificatePath = parseResult.GetValue(certificatePathOption),
                 CertificatePassword = parseResult.GetValue(certificatePasswordOption),
                 CertificateThumbprint = parseResult.GetValue(certificateThumbprintOption),
-                ManagedIdentity = parseResult.GetValue(managedIdentityOption)
+                ManagedIdentity = parseResult.GetValue(managedIdentityOption),
+                Username = parseResult.GetValue(usernameOption),
+                Password = parseResult.GetValue(passwordOption),
+                GitHubFederated = parseResult.GetValue(githubFederatedOption),
+                AzureDevOpsFederated = parseResult.GetValue(azureDevOpsFederatedOption)
             };
 
             return await ExecuteCreateAsync(options, cancellationToken);
@@ -151,6 +181,10 @@ public static class AuthCommandGroup
         public string? CertificatePassword { get; set; }
         public string? CertificateThumbprint { get; set; }
         public bool ManagedIdentity { get; set; }
+        public string? Username { get; set; }
+        public string? Password { get; set; }
+        public bool GitHubFederated { get; set; }
+        public bool AzureDevOpsFederated { get; set; }
     }
 
     private static async Task<int> ExecuteCreateAsync(CreateOptions options, CancellationToken cancellationToken)
@@ -219,6 +253,12 @@ public static class AuthCommandGroup
                 AuthMethod.CertificateStore => new CertificateStoreCredentialProvider(
                     options.ApplicationId!, options.CertificateThumbprint!, options.Tenant!, cloud: options.Cloud),
                 AuthMethod.ManagedIdentity => new ManagedIdentityCredentialProvider(options.ApplicationId),
+                AuthMethod.GitHubFederated => new GitHubFederatedCredentialProvider(
+                    options.ApplicationId!, options.Tenant!, options.Cloud),
+                AuthMethod.AzureDevOpsFederated => new AzureDevOpsFederatedCredentialProvider(
+                    options.ApplicationId!, options.Tenant!, options.Cloud),
+                AuthMethod.UsernamePassword => new UsernamePasswordCredentialProvider(
+                    options.Username!, options.Password!, options.Cloud, options.Tenant),
                 _ => throw new NotSupportedException($"Auth method {authMethod} is not supported for profile creation.")
             };
 
@@ -282,6 +322,12 @@ public static class AuthCommandGroup
     private static AuthMethod DetermineAuthMethod(CreateOptions options)
     {
         // Check for explicit auth method options
+        if (options.GitHubFederated)
+            return AuthMethod.GitHubFederated;
+
+        if (options.AzureDevOpsFederated)
+            return AuthMethod.AzureDevOpsFederated;
+
         if (options.ManagedIdentity)
             return AuthMethod.ManagedIdentity;
 
@@ -293,6 +339,10 @@ public static class AuthCommandGroup
 
         if (!string.IsNullOrWhiteSpace(options.ClientSecret))
             return AuthMethod.ClientSecret;
+
+        // Username/password auth
+        if (!string.IsNullOrWhiteSpace(options.Password))
+            return AuthMethod.UsernamePassword;
 
         // Explicit device code requested
         if (options.DeviceCode)
@@ -319,6 +369,12 @@ public static class AuthCommandGroup
 
             AuthMethod.ManagedIdentity => null, // ApplicationId is optional (for user-assigned)
 
+            AuthMethod.GitHubFederated => ValidateFederated(options, "GitHub"),
+
+            AuthMethod.AzureDevOpsFederated => ValidateFederated(options, "Azure DevOps"),
+
+            AuthMethod.UsernamePassword => ValidateUsernamePassword(options),
+
             _ => $"Auth method {authMethod} is not supported."
         };
     }
@@ -326,9 +382,9 @@ public static class AuthCommandGroup
     private static string? ValidateClientSecret(CreateOptions options)
     {
         if (string.IsNullOrWhiteSpace(options.ApplicationId))
-            return "--application-id is required for client secret authentication.";
+            return "--applicationId is required for client secret authentication.";
         if (string.IsNullOrWhiteSpace(options.ClientSecret))
-            return "--client-secret is required for client secret authentication.";
+            return "--clientSecret is required for client secret authentication.";
         if (string.IsNullOrWhiteSpace(options.Tenant))
             return "--tenant is required for client secret authentication.";
         return null;
@@ -337,9 +393,9 @@ public static class AuthCommandGroup
     private static string? ValidateCertificateFile(CreateOptions options)
     {
         if (string.IsNullOrWhiteSpace(options.ApplicationId))
-            return "--application-id is required for certificate authentication.";
+            return "--applicationId is required for certificate authentication.";
         if (string.IsNullOrWhiteSpace(options.CertificatePath))
-            return "--certificate-path is required for certificate file authentication.";
+            return "--certificateDiskPath is required for certificate file authentication.";
         if (string.IsNullOrWhiteSpace(options.Tenant))
             return "--tenant is required for certificate authentication.";
         if (!System.IO.File.Exists(options.CertificatePath))
@@ -350,13 +406,31 @@ public static class AuthCommandGroup
     private static string? ValidateCertificateStore(CreateOptions options)
     {
         if (string.IsNullOrWhiteSpace(options.ApplicationId))
-            return "--application-id is required for certificate authentication.";
+            return "--applicationId is required for certificate authentication.";
         if (string.IsNullOrWhiteSpace(options.CertificateThumbprint))
-            return "--certificate-thumbprint is required for certificate store authentication.";
+            return "--certificateThumbprint is required for certificate store authentication.";
         if (string.IsNullOrWhiteSpace(options.Tenant))
             return "--tenant is required for certificate authentication.";
         if (!System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(System.Runtime.InteropServices.OSPlatform.Windows))
-            return "Certificate store authentication is only supported on Windows. Use --certificate-path instead.";
+            return "Certificate store authentication is only supported on Windows. Use --certificateDiskPath instead.";
+        return null;
+    }
+
+    private static string? ValidateFederated(CreateOptions options, string federationType)
+    {
+        if (string.IsNullOrWhiteSpace(options.ApplicationId))
+            return $"--applicationId is required for {federationType} federated authentication.";
+        if (string.IsNullOrWhiteSpace(options.Tenant))
+            return $"--tenant is required for {federationType} federated authentication.";
+        return null;
+    }
+
+    private static string? ValidateUsernamePassword(CreateOptions options)
+    {
+        if (string.IsNullOrWhiteSpace(options.Username))
+            return "--username is required for username/password authentication.";
+        if (string.IsNullOrWhiteSpace(options.Password))
+            return "--password is required for username/password authentication.";
         return null;
     }
 
@@ -511,39 +585,74 @@ public static class AuthCommandGroup
 
     private static Command CreateSelectCommand()
     {
-        var profileArg = new Argument<string>("profile")
+        var indexOption = new Option<int?>("--index", "-i")
         {
-            Description = "Profile name or index"
+            Description = "The index of the profile to be active"
         };
 
-        var command = new Command("select", "Select the active profile")
+        var nameOption = new Option<string?>("--name", "-n")
         {
-            profileArg
+            Description = "The name of the profile to be active"
+        };
+
+        var command = new Command("select", "Select which authentication profile should be active")
+        {
+            indexOption,
+            nameOption
         };
 
         command.SetAction(async (parseResult, cancellationToken) =>
         {
-            var profile = parseResult.GetValue(profileArg)!;
-            return await ExecuteSelectAsync(profile, cancellationToken);
+            var index = parseResult.GetValue(indexOption);
+            var name = parseResult.GetValue(nameOption);
+            return await ExecuteSelectAsync(index, name, cancellationToken);
         });
 
         return command;
     }
 
-    private static async Task<int> ExecuteSelectAsync(string profileNameOrIndex, CancellationToken cancellationToken)
+    private static async Task<int> ExecuteSelectAsync(int? index, string? name, CancellationToken cancellationToken)
     {
         try
         {
+            // Validate: must provide exactly one of --index or --name
+            if (index == null && string.IsNullOrWhiteSpace(name))
+            {
+                Console.Error.WriteLine("Error: Must provide either --index or --name.");
+                return ExitCodes.Failure;
+            }
+
+            if (index != null && !string.IsNullOrWhiteSpace(name))
+            {
+                Console.Error.WriteLine("Error: Must provide either --index or --name but not both.");
+                return ExitCodes.Failure;
+            }
+
             using var store = new ProfileStore();
             var collection = await store.LoadAsync(cancellationToken);
 
-            var profile = collection.GetByNameOrIndex(profileNameOrIndex);
-            if (profile == null)
+            AuthProfile? profile;
+            if (index != null)
             {
-                Console.Error.WriteLine($"Error: Profile '{profileNameOrIndex}' not found.");
-                Console.Error.WriteLine();
-                Console.Error.WriteLine("Use 'ppds auth list' to see available profiles.");
-                return ExitCodes.Failure;
+                profile = collection.GetByIndex(index.Value);
+                if (profile == null)
+                {
+                    Console.Error.WriteLine($"Error: Profile with index {index} not found.");
+                    Console.Error.WriteLine();
+                    Console.Error.WriteLine("Use 'ppds auth list' to see available profiles.");
+                    return ExitCodes.Failure;
+                }
+            }
+            else
+            {
+                profile = collection.GetByName(name!);
+                if (profile == null)
+                {
+                    Console.Error.WriteLine($"Error: Profile '{name}' not found.");
+                    Console.Error.WriteLine();
+                    Console.Error.WriteLine("Use 'ppds auth list' to see available profiles.");
+                    return ExitCodes.Failure;
+                }
             }
 
             collection.SetActiveByIndex(profile.Index);
@@ -573,9 +682,14 @@ public static class AuthCommandGroup
 
     private static Command CreateDeleteCommand()
     {
-        var profileArg = new Argument<string>("profile")
+        var indexOption = new Option<int?>("--index", "-i")
         {
-            Description = "Profile name or index"
+            Description = "The index of the profile to be deleted"
+        };
+
+        var nameOption = new Option<string?>("--name", "-n")
+        {
+            Description = "The name of the profile to be deleted"
         };
 
         var forceOption = new Option<bool>("--force", "-f")
@@ -584,34 +698,62 @@ public static class AuthCommandGroup
             DefaultValueFactory = _ => false
         };
 
-        var command = new Command("delete", "Delete an authentication profile")
+        var command = new Command("delete", "Delete a particular authentication profile")
         {
-            profileArg,
+            indexOption,
+            nameOption,
             forceOption
         };
 
         command.SetAction(async (parseResult, cancellationToken) =>
         {
-            var profile = parseResult.GetValue(profileArg)!;
+            var index = parseResult.GetValue(indexOption);
+            var name = parseResult.GetValue(nameOption);
             var force = parseResult.GetValue(forceOption);
-            return await ExecuteDeleteAsync(profile, force, cancellationToken);
+            return await ExecuteDeleteAsync(index, name, force, cancellationToken);
         });
 
         return command;
     }
 
-    private static async Task<int> ExecuteDeleteAsync(string profileNameOrIndex, bool force, CancellationToken cancellationToken)
+    private static async Task<int> ExecuteDeleteAsync(int? index, string? name, bool force, CancellationToken cancellationToken)
     {
         try
         {
+            // Validate: must provide exactly one of --index or --name
+            if (index == null && string.IsNullOrWhiteSpace(name))
+            {
+                Console.Error.WriteLine("Error: Must provide either --index or --name.");
+                return ExitCodes.Failure;
+            }
+
+            if (index != null && !string.IsNullOrWhiteSpace(name))
+            {
+                Console.Error.WriteLine("Error: Must provide either --index or --name but not both.");
+                return ExitCodes.Failure;
+            }
+
             using var store = new ProfileStore();
             var collection = await store.LoadAsync(cancellationToken);
 
-            var profile = collection.GetByNameOrIndex(profileNameOrIndex);
-            if (profile == null)
+            AuthProfile? profile;
+            if (index != null)
             {
-                Console.Error.WriteLine($"Error: Profile '{profileNameOrIndex}' not found.");
-                return ExitCodes.Failure;
+                profile = collection.GetByIndex(index.Value);
+                if (profile == null)
+                {
+                    Console.Error.WriteLine($"Error: Profile with index {index} not found.");
+                    return ExitCodes.Failure;
+                }
+            }
+            else
+            {
+                profile = collection.GetByName(name!);
+                if (profile == null)
+                {
+                    Console.Error.WriteLine($"Error: Profile '{name}' not found.");
+                    return ExitCodes.Failure;
+                }
             }
 
             if (!force)
@@ -765,49 +907,51 @@ public static class AuthCommandGroup
 
     private static Command CreateNameCommand()
     {
-        var profileArg = new Argument<string>("profile")
+        var indexOption = new Option<int>("--index", "-i")
         {
-            Description = "Profile name or index to rename"
+            Description = "The index of the profile to be named/renamed",
+            Required = true
         };
 
-        var newNameArg = new Argument<string>("new-name")
+        var nameOption = new Option<string>("--name", "-n")
         {
-            Description = "New name for the profile (max 30 characters)"
+            Description = "The name you want to give to this authentication profile (maximum 30 characters)",
+            Required = true
         };
-
-        var command = new Command("name", "Rename a profile")
+        nameOption.Validators.Add(result =>
         {
-            profileArg,
-            newNameArg
+            var name = result.GetValue(nameOption);
+            if (name?.Length > 30)
+                result.AddError("Profile name cannot exceed 30 characters");
+        });
+
+        var command = new Command("name", "Name or rename an existing authentication profile")
+        {
+            indexOption,
+            nameOption
         };
 
         command.SetAction(async (parseResult, cancellationToken) =>
         {
-            var profile = parseResult.GetValue(profileArg)!;
-            var newName = parseResult.GetValue(newNameArg)!;
-            return await ExecuteNameAsync(profile, newName, cancellationToken);
+            var index = parseResult.GetValue(indexOption);
+            var name = parseResult.GetValue(nameOption)!;
+            return await ExecuteNameAsync(index, name, cancellationToken);
         });
 
         return command;
     }
 
-    private static async Task<int> ExecuteNameAsync(string profileNameOrIndex, string newName, CancellationToken cancellationToken)
+    private static async Task<int> ExecuteNameAsync(int index, string newName, CancellationToken cancellationToken)
     {
         try
         {
-            if (newName.Length > 30)
-            {
-                Console.Error.WriteLine("Error: Profile name cannot exceed 30 characters.");
-                return ExitCodes.Failure;
-            }
-
             using var store = new ProfileStore();
             var collection = await store.LoadAsync(cancellationToken);
 
-            var profile = collection.GetByNameOrIndex(profileNameOrIndex);
+            var profile = collection.GetByIndex(index);
             if (profile == null)
             {
-                Console.Error.WriteLine($"Error: Profile '{profileNameOrIndex}' not found.");
+                Console.Error.WriteLine($"Error: Profile with index {index} not found.");
                 return ExitCodes.Failure;
             }
 
@@ -873,9 +1017,7 @@ public static class AuthCommandGroup
                 File.Delete(tokenCachePath);
             }
 
-            Console.ForegroundColor = ConsoleColor.Green;
-            Console.WriteLine($"Deleted {count} profile(s) and cached credentials.");
-            Console.ResetColor();
+            Console.WriteLine("Authentication profiles and token cache removed");
 
             return ExitCodes.Success;
         }
@@ -935,6 +1077,9 @@ public static class AuthCommandGroup
                 return ExitCodes.Success;
             }
 
+            // Get token cache type
+            var cacheType = TokenCacheDetector.GetCacheType();
+
             if (json)
             {
                 var output = new
@@ -943,7 +1088,8 @@ public static class AuthCommandGroup
                     {
                         index = profile.Index,
                         name = profile.Name,
-                        authMethod = profile.AuthMethod.ToString(),
+                        method = profile.AuthMethod.ToString(),
+                        type = cacheType.ToString(),
                         cloud = profile.Cloud.ToString(),
                         tenantId = profile.TenantId,
                         user = profile.Username,
@@ -969,34 +1115,47 @@ public static class AuthCommandGroup
             }
             else
             {
+                // Show "Connected as" header like PAC
+                var identity = !string.IsNullOrEmpty(profile.Username)
+                    ? profile.Username
+                    : !string.IsNullOrEmpty(profile.ApplicationId)
+                        ? $"app:{profile.ApplicationId}"
+                        : "(unknown)";
+
+                Console.WriteLine($"Connected as {identity}");
                 Console.WriteLine();
-                Console.WriteLine($"Type:        {profile.AuthMethod}");
-                Console.WriteLine($"Cloud:       {profile.Cloud}");
+
+                Console.WriteLine($"Method:              {profile.AuthMethod}");
+                Console.WriteLine($"Type:                {cacheType}");
+                Console.WriteLine($"Cloud:               {profile.Cloud}");
+
                 if (!string.IsNullOrEmpty(profile.TenantId))
                 {
-                    Console.WriteLine($"Tenant ID:   {profile.TenantId}");
+                    Console.WriteLine($"Tenant Id:           {profile.TenantId}");
                 }
+
                 if (!string.IsNullOrEmpty(profile.Username))
                 {
-                    Console.WriteLine($"User:        {profile.Username}");
+                    Console.WriteLine($"User:                {profile.Username}");
                 }
+
                 if (!string.IsNullOrEmpty(profile.ApplicationId))
                 {
-                    Console.WriteLine($"App ID:      {profile.ApplicationId}");
+                    Console.WriteLine($"Application Id:      {profile.ApplicationId}");
                 }
 
                 if (profile.HasEnvironment)
                 {
                     Console.WriteLine();
-                    Console.WriteLine($"Environment:   {profile.Environment!.DisplayName}");
-                    Console.WriteLine($"Environment URL: {profile.Environment.Url}");
+                    Console.WriteLine($"Environment:         {profile.Environment!.DisplayName}");
+                    Console.WriteLine($"Environment URL:     {profile.Environment.Url}");
                     if (!string.IsNullOrEmpty(profile.Environment.UniqueName))
                     {
-                        Console.WriteLine($"Unique Name:   {profile.Environment.UniqueName}");
+                        Console.WriteLine($"Unique Name:         {profile.Environment.UniqueName}");
                     }
                     if (!string.IsNullOrEmpty(profile.Environment.EnvironmentId))
                     {
-                        Console.WriteLine($"Environment ID: {profile.Environment.EnvironmentId}");
+                        Console.WriteLine($"Environment ID:      {profile.Environment.EnvironmentId}");
                     }
                 }
                 else

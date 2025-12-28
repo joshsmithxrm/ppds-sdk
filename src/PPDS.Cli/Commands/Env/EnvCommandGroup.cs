@@ -29,6 +29,20 @@ public static class EnvCommandGroup
         return command;
     }
 
+    /// <summary>
+    /// Creates the 'org' command group as an alias for 'env'.
+    /// </summary>
+    public static Command CreateOrgAlias()
+    {
+        var command = new Command("org", "Manage environment selection (alias for 'env')");
+
+        command.Subcommands.Add(CreateListCommand());
+        command.Subcommands.Add(CreateSelectCommand());
+        command.Subcommands.Add(CreateWhoCommand());
+
+        return command;
+    }
+
     #region List Command
 
     private static Command CreateListCommand()
@@ -68,6 +82,8 @@ public static class EnvCommandGroup
                 return ExitCodes.Failure;
             }
 
+            // Show connection header
+            ConsoleHeader.WriteConnectedAs(profile);
             Console.WriteLine("Discovering environments...");
             Console.WriteLine();
 
@@ -213,7 +229,7 @@ public static class EnvCommandGroup
                 return ExitCodes.Failure;
             }
 
-            Console.WriteLine($"Connected as {profile.IdentityDisplay}");
+            ConsoleHeader.WriteConnectedAs(profile);
             Console.WriteLine($"Looking for environment '{environmentIdentifier}'");
 
             // Use the GlobalDiscoveryService to get environments
@@ -337,7 +353,7 @@ public static class EnvCommandGroup
 
             if (!json)
             {
-                Console.WriteLine($"Connecting to {env.DisplayName}...");
+                ConsoleHeader.WriteConnectedAs(profile, env.DisplayName);
             }
 
             // Create connection and execute WhoAmI

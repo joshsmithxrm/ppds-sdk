@@ -52,7 +52,7 @@ public sealed class AuthProfile
 
     /// <summary>
     /// Gets or sets the password (encrypted).
-    /// Only for deprecated UsernamePassword auth.
+    /// For UsernamePassword auth.
     /// </summary>
     [JsonPropertyName("password")]
     public string? Password { get; set; }
@@ -227,12 +227,10 @@ public sealed class AuthProfile
                 RequireField(TenantId, nameof(TenantId));
                 break;
 
-#pragma warning disable CS0618 // Type or member is obsolete
             case AuthMethod.UsernamePassword:
                 RequireField(Username, nameof(Username));
                 RequireField(Password, nameof(Password));
                 break;
-#pragma warning restore CS0618
 
             default:
                 throw new InvalidOperationException($"Unknown auth method: {AuthMethod}");
