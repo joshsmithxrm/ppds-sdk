@@ -40,6 +40,19 @@ namespace PPDS.Migration.Progress
 
                 case MigrationPhase.Exporting:
                 case MigrationPhase.Importing:
+                    // Handle message-only events (e.g., "Writing output file...")
+                    if (!string.IsNullOrEmpty(args.Message) && string.IsNullOrEmpty(args.Entity))
+                    {
+                        Console.WriteLine($"{prefix} {args.Message}");
+                        break;
+                    }
+
+                    // Handle entity progress events - skip if no entity specified
+                    if (string.IsNullOrEmpty(args.Entity))
+                    {
+                        break;
+                    }
+
                     if (args.Entity != _lastEntity || args.Current == args.Total || ShouldUpdate(args.Current))
                     {
                         var phase = args.Phase == MigrationPhase.Exporting ? "Export" : "Import";
