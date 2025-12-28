@@ -2,6 +2,7 @@ using System.CommandLine;
 using PPDS.Cli.Commands;
 using PPDS.Cli.Commands.Auth;
 using PPDS.Cli.Commands.Data;
+using PPDS.Cli.Commands.Env;
 using PPDS.Cli.Infrastructure;
 
 namespace PPDS.Cli;
@@ -41,7 +42,7 @@ public static class Program
 
         // Add command groups
         rootCommand.Subcommands.Add(AuthCommandGroup.Create());
-        // rootCommand.Subcommands.Add(EnvCommandGroup.Create());  // TODO: Phase 3
+        rootCommand.Subcommands.Add(EnvCommandGroup.Create());
         rootCommand.Subcommands.Add(DataCommandGroup.Create());
         rootCommand.Subcommands.Add(SchemaCommand.Create());
         rootCommand.Subcommands.Add(UsersCommand.Create());

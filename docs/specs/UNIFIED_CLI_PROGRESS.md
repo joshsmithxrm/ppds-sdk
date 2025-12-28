@@ -13,7 +13,7 @@
 |-------|-------------|--------|--------------|
 | 1 | PPDS.Auth Foundation | **Complete** | - |
 | 2 | CLI Restructure + Auth Commands | **Complete** | Phase 1 |
-| 3 | Environment Discovery | Not Started | Phase 1, 2 |
+| 3 | Environment Discovery | **Complete** | Phase 1, 2 |
 | 4 | Additional Auth Methods | Not Started | Phase 2 |
 | 5 | Data Command Integration | Not Started | Phase 2, 3 |
 | 6 | Pooling Support | Not Started | Phase 5 |
@@ -73,7 +73,7 @@
 
 ### 2.3 Command Folder Restructure - COMPLETE
 - [x] Create `Commands/Auth/` folder
-- [x] Create `Commands/Env/` folder (placeholder)
+- [x] Create `Commands/Env/` folder
 - [x] Create `Commands/Data/` folder
 - [x] Move existing commands to Data folder:
   - [x] ExportCommand.cs → Commands/Data/
@@ -114,32 +114,46 @@
 
 ---
 
-## Phase 3: Environment Discovery - NOT STARTED
+## Phase 3: Environment Discovery - COMPLETE
 
 **Goal:** Integrate Global Discovery Service for environment listing and selection.
 
-### 3.1 GDS Client
-- [ ] Create `Discovery/IGlobalDiscoveryService.cs` interface
-- [ ] Create `Discovery/GlobalDiscoveryService.cs`
-- [ ] Implement environment enumeration via GDS API
-- [ ] Handle pagination if needed
-- [ ] Cache results briefly (5 min?)
+### 3.1 Discovery Infrastructure - COMPLETE
+- [x] Create `Discovery/` folder in PPDS.Auth
+- [x] Create `DiscoveredEnvironment.cs` - model for GDS results
+- [x] Create `IGlobalDiscoveryService.cs` interface
+- [x] Create `GlobalDiscoveryService.cs` - uses ServiceClient.DiscoverOnlineOrganizationsAsync
+- [x] Map OrganizationDetail to DiscoveredEnvironment
+- [x] Support all cloud environments via CloudEndpoints
 
-### 3.2 Environment Resolution
-- [ ] Create `Discovery/EnvironmentResolver.cs`
-- [ ] Match by Environment ID, URL, Display Name, Unique Name
-- [ ] Handle ambiguous matches
+### 3.2 Environment Resolution - COMPLETE
+- [x] Create `EnvironmentResolver.cs`
+- [x] Match by GUID (environment ID)
+- [x] Match by exact URL
+- [x] Match by unique name
+- [x] Match by friendly name (exact and partial)
+- [x] Handle ambiguous matches with AmbiguousMatchException
+- [x] Create `AmbiguousMatchException.cs`
 
-### 3.3 Env Commands
-- [ ] Create `Commands/Env/EnvCommandGroup.cs`
-- [ ] Create `ppds env list` - List accessible environments
-- [ ] Create `ppds env select` - Bind environment to profile
-- [ ] Create `ppds env who` - Show current environment
+### 3.3 Env Commands - COMPLETE
+- [x] Create `Commands/Env/EnvCommandGroup.cs`
+- [x] `ppds env list` - Discover and list environments via GDS
+- [x] `ppds env select` - Resolve environment and bind to profile
+- [x] `ppds env who` - Show current profile and environment
+- [x] JSON output support for all commands
+- [x] Active environment marker in list output
 
-### 3.4 Auth Create Integration
-- [ ] Update auth create to support --environment
-- [ ] Resolve environment via GDS during creation
-- [ ] Bind environment to profile
+### 3.4 Profile Integration - COMPLETE
+- [x] Add `EnvironmentId` property to EnvironmentInfo
+- [x] Store full environment info on select
+- [x] Wire up EnvCommandGroup in Program.cs
+
+**Files Created:**
+- src/PPDS.Auth/Discovery/DiscoveredEnvironment.cs
+- src/PPDS.Auth/Discovery/IGlobalDiscoveryService.cs
+- src/PPDS.Auth/Discovery/GlobalDiscoveryService.cs
+- src/PPDS.Auth/Discovery/EnvironmentResolver.cs
+- src/PPDS.Cli/Commands/Env/EnvCommandGroup.cs
 
 ---
 
@@ -202,6 +216,7 @@
 | 2025-01-27 | No confirmation for `auth clear` | CI-friendly, PAC parity |
 | 2025-01-27 | Environment not auto-selected | Explicit is safer, PAC parity |
 | 2025-12-27 | Combined CLI restructure and auth commands in Phase 2 | Reduced context switches |
+| 2025-12-27 | Use ServiceClient.DiscoverOnlineOrganizationsAsync | Built-in GDS support, no custom HTTP |
 
 ---
 
@@ -219,13 +234,13 @@
 |-------|-------------|--------|
 | 1 | PPDS.Auth Foundation | **Complete** |
 | 2 | CLI Restructure + Auth Commands | **Complete** |
-| 3 | Environment Discovery | Not Started |
+| 3 | Environment Discovery | **Complete** |
 | 4 | Additional Auth Methods | Not Started |
 | 5 | Data Command Integration | Not Started |
 | 6 | Pooling Support | Not Started |
 | 7 | Polish & Documentation | Not Started |
 
-**Overall Progress:** Phase 2 of 7 complete (~30%)
+**Overall Progress:** Phase 3 of 7 complete (~43%)
 
 ---
 
@@ -245,12 +260,13 @@ dotnet tool install --global --add-source ./nupkgs PPDS.Cli
 # Uninstall for re-testing
 dotnet tool uninstall --global PPDS.Cli
 
-# Test auth commands
-ppds auth create --name dev --cloud Public
+# Auth workflow
+ppds auth create --name dev
 ppds auth list
 ppds auth who
-ppds auth select dev
-ppds auth name dev prod
-ppds auth delete dev --force
-ppds auth clear --force
+
+# Environment workflow
+ppds env list
+ppds env select "My Environment"
+ppds env who
 ```

@@ -42,6 +42,12 @@ public sealed class EnvironmentInfo
     public string? OrganizationId { get; set; }
 
     /// <summary>
+    /// Gets or sets the Power Platform environment ID.
+    /// </summary>
+    [JsonPropertyName("environmentId")]
+    public string? EnvironmentId { get; set; }
+
+    /// <summary>
     /// Gets or sets the environment type.
     /// Example: Sandbox, Production
     /// </summary>
