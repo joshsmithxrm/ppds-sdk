@@ -1,4 +1,4 @@
-namespace PPDS.Migration.Cli.Commands;
+namespace PPDS.Cli.Commands;
 
 /// <summary>
 /// Import mode for handling existing records.

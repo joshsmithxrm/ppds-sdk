@@ -9,7 +9,7 @@ using PPDS.Dataverse.Resilience;
 using PPDS.Migration.DependencyInjection;
 using PPDS.Migration.Progress;
 
-namespace PPDS.Migration.Cli.Infrastructure;
+namespace PPDS.Cli.Infrastructure;
 
 /// <summary>
 /// Factory for creating configured service providers for CLI commands.

@@ -1,6 +1,6 @@
 using System.Text.Json;
 
-namespace PPDS.Migration.Cli.Commands;
+namespace PPDS.Cli.Commands;
 
 /// <summary>
 /// Shared console output helpers for CLI commands.

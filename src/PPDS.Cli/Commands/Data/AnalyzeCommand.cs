@@ -1,12 +1,12 @@
 using System.CommandLine;
 using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
+using PPDS.Cli.Infrastructure;
 using PPDS.Migration.Analysis;
-using PPDS.Migration.Cli.Infrastructure;
 using PPDS.Migration.Formats;
 using PPDS.Migration.Models;
 
-namespace PPDS.Migration.Cli.Commands;
+namespace PPDS.Cli.Commands.Data;
 
 /// <summary>
 /// Analyze a schema file and display dependency information.

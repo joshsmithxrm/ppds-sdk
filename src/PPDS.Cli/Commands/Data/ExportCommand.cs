@@ -1,10 +1,10 @@
 using System.CommandLine;
 using Microsoft.Extensions.DependencyInjection;
-using PPDS.Migration.Cli.Infrastructure;
+using PPDS.Cli.Infrastructure;
 using PPDS.Migration.Export;
 using PPDS.Migration.Progress;
 
-namespace PPDS.Migration.Cli.Commands;
+namespace PPDS.Cli.Commands.Data;
 
 /// <summary>
 /// Export data from a Dataverse environment to a ZIP file.

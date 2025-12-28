@@ -1,16 +1,16 @@
 using System.CommandLine;
 using Microsoft.Extensions.DependencyInjection;
-using PPDS.Migration.Cli.Infrastructure;
+using PPDS.Cli.Infrastructure;
 using PPDS.Migration.Export;
 using PPDS.Migration.Import;
 using PPDS.Migration.Progress;
 
-namespace PPDS.Migration.Cli.Commands;
+namespace PPDS.Cli.Commands.Data;
 
 /// <summary>
-/// Migrate data from one Dataverse environment to another.
+/// Copy data from one Dataverse environment to another.
 /// </summary>
-public static class MigrateCommand
+public static class CopyCommand
 {
     public static Command Create()
     {
@@ -67,7 +67,7 @@ public static class MigrateCommand
             DefaultValueFactory = _ => false
         };
 
-        var command = new Command("migrate", "Migrate data from source to target Dataverse environment")
+        var command = new Command("copy", "Copy data from source to target Dataverse environment")
         {
             schemaOption,
             sourceUrlOption,
@@ -93,12 +93,12 @@ public static class MigrateCommand
             var verbose = parseResult.GetValue(verboseOption);
             var debug = parseResult.GetValue(debugOption);
 
-            // Migrate only supports interactive and managed auth
+            // Copy only supports interactive and managed auth
             // (env auth has only one set of credentials, can't work with two environments)
             if (authMode == AuthMode.Env)
             {
                 ConsoleOutput.WriteError(
-                    "--auth env is not supported for migrate command because it uses a single credential. " +
+                    "--auth env is not supported for copy command because it uses a single credential. " +
                     "Use --auth interactive (default) or --auth managed instead. " +
                     "For service principal auth with two environments, use 'export' then 'import' separately.",
                     json);
@@ -143,7 +143,7 @@ public static class MigrateCommand
             }
 
             // Create temp file path for intermediate data
-            tempDataFile = Path.Combine(tempDirectory, $"ppds-migrate-{Guid.NewGuid():N}.zip");
+            tempDataFile = Path.Combine(tempDirectory, $"ppds-copy-{Guid.NewGuid():N}.zip");
 
             // Build auth mode info for status messages
             var authModeInfo = sourceAuth.Mode switch
@@ -201,12 +201,12 @@ public static class MigrateCommand
         }
         catch (OperationCanceledException)
         {
-            progressReporter.Error(new OperationCanceledException(), "Migration cancelled by user.");
+            progressReporter.Error(new OperationCanceledException(), "Copy cancelled by user.");
             return ExitCodes.Failure;
         }
         catch (Exception ex)
         {
-            progressReporter.Error(ex, "Migration failed");
+            progressReporter.Error(ex, "Copy failed");
             if (debug)
             {
                 Console.Error.WriteLine(ex.StackTrace);

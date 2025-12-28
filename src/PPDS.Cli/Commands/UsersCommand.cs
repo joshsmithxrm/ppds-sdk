@@ -2,14 +2,14 @@ using System.CommandLine;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.PowerPlatform.Dataverse.Client;
+using PPDS.Cli.Infrastructure;
 using PPDS.Dataverse.BulkOperations;
 using PPDS.Dataverse.Pooling;
 using PPDS.Dataverse.Resilience;
-using PPDS.Migration.Cli.Infrastructure;
 using PPDS.Migration.DependencyInjection;
 using PPDS.Migration.UserMapping;
 
-namespace PPDS.Migration.Cli.Commands;
+namespace PPDS.Cli.Commands;
 
 /// <summary>
 /// User management commands for migration.

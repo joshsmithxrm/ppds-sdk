@@ -1,11 +1,13 @@
 using System.CommandLine;
-using PPDS.Migration.Cli.Commands;
-using PPDS.Migration.Cli.Infrastructure;
+using PPDS.Cli.Commands;
+using PPDS.Cli.Commands.Auth;
+using PPDS.Cli.Commands.Data;
+using PPDS.Cli.Infrastructure;
 
-namespace PPDS.Migration.Cli;
+namespace PPDS.Cli;
 
 /// <summary>
-/// Entry point for the ppds-migrate CLI tool.
+/// Entry point for the ppds CLI tool.
 /// </summary>
 public static class Program
 {
@@ -31,17 +33,16 @@ public static class Program
 
     public static async Task<int> Main(string[] args)
     {
-        var rootCommand = new RootCommand("PPDS Migration CLI - High-performance Dataverse data migration tool");
+        var rootCommand = new RootCommand("PPDS CLI - Unified Power Platform Developer Suite command-line tool");
 
         // Add global options (Recursive = true makes them available to all subcommands)
         rootCommand.Options.Add(UrlOption);
         rootCommand.Options.Add(AuthOption);
 
-        // Add subcommands
-        rootCommand.Subcommands.Add(ExportCommand.Create());
-        rootCommand.Subcommands.Add(ImportCommand.Create());
-        rootCommand.Subcommands.Add(AnalyzeCommand.Create());
-        rootCommand.Subcommands.Add(MigrateCommand.Create());
+        // Add command groups
+        rootCommand.Subcommands.Add(AuthCommandGroup.Create());
+        // rootCommand.Subcommands.Add(EnvCommandGroup.Create());  // TODO: Phase 3
+        rootCommand.Subcommands.Add(DataCommandGroup.Create());
         rootCommand.Subcommands.Add(SchemaCommand.Create());
         rootCommand.Subcommands.Add(UsersCommand.Create());
 

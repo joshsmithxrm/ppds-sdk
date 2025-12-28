@@ -1,11 +1,11 @@
 using System.CommandLine;
 using Microsoft.Extensions.DependencyInjection;
-using PPDS.Migration.Cli.Infrastructure;
+using PPDS.Cli.Infrastructure;
 using PPDS.Migration.Formats;
 using PPDS.Migration.Progress;
 using PPDS.Migration.Schema;
 
-namespace PPDS.Migration.Cli.Commands;
+namespace PPDS.Cli.Commands;
 
 /// <summary>
 /// Schema generation and management commands.

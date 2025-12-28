@@ -1,4 +1,4 @@
-namespace PPDS.Migration.Cli.Commands;
+namespace PPDS.Cli.Commands;
 
 /// <summary>
 /// Standard exit codes for the CLI tool.

@@ -1,7 +1,7 @@
-using PPDS.Migration.Cli.Commands;
+using PPDS.Cli.Commands;
 using Xunit;
 
-namespace PPDS.Migration.Cli.Tests.Commands;
+namespace PPDS.Cli.Tests.Commands;
 
 public class ConsoleOutputTests
 {

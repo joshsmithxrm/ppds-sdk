@@ -15,9 +15,9 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PPDS.Dataverse", "src\PPDS.
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PPDS.Dataverse.Tests", "tests\PPDS.Dataverse.Tests\PPDS.Dataverse.Tests.csproj", "{738F9CC6-9EAC-4EA0-9B8B-DD6A5157A1F1}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PPDS.Migration.Cli", "src\PPDS.Migration.Cli\PPDS.Migration.Cli.csproj", "{10DA306C-4AB2-464D-B090-3DA7B18B1C08}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PPDS.Cli", "src\PPDS.Cli\PPDS.Cli.csproj", "{10DA306C-4AB2-464D-B090-3DA7B18B1C08}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PPDS.Migration.Cli.Tests", "tests\PPDS.Migration.Cli.Tests\PPDS.Migration.Cli.Tests.csproj", "{45DB0E17-0355-4342-8218-2FD8FA545157}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PPDS.Cli.Tests", "tests\PPDS.Cli.Tests\PPDS.Cli.Tests.csproj", "{45DB0E17-0355-4342-8218-2FD8FA545157}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PPDS.Migration", "src\PPDS.Migration\PPDS.Migration.csproj", "{1642C0BD-0B5B-476D-86EB-73BE3CD9BD67}"
 EndProject

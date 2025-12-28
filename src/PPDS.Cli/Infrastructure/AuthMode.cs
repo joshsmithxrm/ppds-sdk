@@ -1,4 +1,4 @@
-namespace PPDS.Migration.Cli.Infrastructure;
+namespace PPDS.Cli.Infrastructure;
 
 /// <summary>
 /// Authentication modes supported by the CLI.

@@ -1,7 +1,7 @@
 using Microsoft.Identity.Client;
 using Microsoft.Identity.Client.Extensions.Msal;
 
-namespace PPDS.Migration.Cli.Infrastructure;
+namespace PPDS.Cli.Infrastructure;
 
 /// <summary>
 /// Provides OAuth tokens using device code flow for CLI interactive authentication.

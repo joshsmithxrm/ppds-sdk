@@ -1,4 +1,4 @@
-namespace PPDS.Migration.Cli.Infrastructure;
+namespace PPDS.Cli.Infrastructure;
 
 /// <summary>
 /// Resolves authentication configuration based on the specified auth mode.

@@ -1,9 +1,9 @@
 using System.CommandLine;
 using System.CommandLine.Parsing;
-using PPDS.Migration.Cli.Commands;
+using PPDS.Cli.Commands.Data;
 using Xunit;
 
-namespace PPDS.Migration.Cli.Tests.Commands;
+namespace PPDS.Cli.Tests.Commands;
 
 public class AnalyzeCommandTests : IDisposable
 {

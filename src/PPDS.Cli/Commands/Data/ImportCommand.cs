@@ -1,12 +1,12 @@
 using System.CommandLine;
 using Microsoft.Extensions.DependencyInjection;
-using PPDS.Migration.Cli.Infrastructure;
+using PPDS.Cli.Infrastructure;
 using PPDS.Migration.Formats;
 using PPDS.Migration.Import;
 using PPDS.Migration.Models;
 using PPDS.Migration.Progress;
 
-namespace PPDS.Migration.Cli.Commands;
+namespace PPDS.Cli.Commands.Data;
 
 /// <summary>
 /// Import data from a ZIP file into a Dataverse environment.

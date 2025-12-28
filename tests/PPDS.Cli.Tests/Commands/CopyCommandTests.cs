@@ -1,18 +1,18 @@
 using System.CommandLine;
 using System.CommandLine.Parsing;
-using PPDS.Migration.Cli.Commands;
+using PPDS.Cli.Commands.Data;
 using Xunit;
 
-namespace PPDS.Migration.Cli.Tests.Commands;
+namespace PPDS.Cli.Tests.Commands;
 
-public class MigrateCommandTests : IDisposable
+public class CopyCommandTests : IDisposable
 {
     private readonly Command _command;
     private readonly string _tempSchemaFile;
 
-    public MigrateCommandTests()
+    public CopyCommandTests()
     {
-        _command = MigrateCommand.Create();
+        _command = CopyCommand.Create();
 
         // Create temp schema file for parsing tests
         _tempSchemaFile = Path.Combine(Path.GetTempPath(), $"test-schema-{Guid.NewGuid()}.xml");
@@ -30,13 +30,13 @@ public class MigrateCommandTests : IDisposable
     [Fact]
     public void Create_ReturnsCommandWithCorrectName()
     {
-        Assert.Equal("migrate", _command.Name);
+        Assert.Equal("copy", _command.Name);
     }
 
     [Fact]
     public void Create_ReturnsCommandWithDescription()
     {
-        Assert.StartsWith("Migrate data from source to target Dataverse environment", _command.Description);
+        Assert.StartsWith("Copy data from source to target Dataverse environment", _command.Description);
     }
 
     [Fact]
