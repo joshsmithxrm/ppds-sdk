@@ -65,7 +65,7 @@ public static class AuthCommandGroup
         // Auth method options
         var deviceCodeOption = new Option<bool>("--device-code")
         {
-            Description = "Use interactive device code authentication (default)",
+            Description = "Use device code authentication (fallback when browser unavailable)",
             DefaultValueFactory = _ => false
         };
 
@@ -203,13 +203,18 @@ public static class AuthCommandGroup
             }
 
             // Authenticate to verify credentials
-            Console.WriteLine($"Authenticating with {authMethod}...");
-            Console.WriteLine();
-
             var targetUrl = options.Environment ?? "https://globaldisco.crm.dynamics.com";
+
+            // Determine which provider to use
+            var useBrowser = authMethod == AuthMethod.DeviceCode && !options.DeviceCode && InteractiveBrowserCredentialProvider.IsAvailable();
+            var displayMethod = useBrowser ? "interactive browser" : authMethod.ToString();
+            Console.WriteLine($"Authenticating with {displayMethod}...");
+            Console.WriteLine();
 
             ICredentialProvider provider = authMethod switch
             {
+                AuthMethod.DeviceCode when useBrowser =>
+                    new InteractiveBrowserCredentialProvider(options.Cloud, options.Tenant),
                 AuthMethod.DeviceCode => new DeviceCodeCredentialProvider(options.Cloud, options.Tenant),
                 AuthMethod.ClientSecret => new ClientSecretCredentialProvider(
                     options.ApplicationId!, options.ClientSecret!, options.Tenant!, options.Cloud),
@@ -287,7 +292,11 @@ public static class AuthCommandGroup
         if (!string.IsNullOrWhiteSpace(options.ClientSecret))
             return AuthMethod.ClientSecret;
 
-        // Default to device code
+        // Explicit device code requested
+        if (options.DeviceCode)
+            return AuthMethod.DeviceCode;
+
+        // Default to device code (interactive browser is used at runtime when available)
         return AuthMethod.DeviceCode;
     }
 
@@ -640,21 +649,29 @@ public static class AuthCommandGroup
             Arity = ArgumentArity.ZeroOrOne
         };
 
+        var forceOption = new Option<bool>("--force", "-f")
+        {
+            Description = "Clear cached credentials and force re-authentication",
+            DefaultValueFactory = _ => false
+        };
+
         var command = new Command("update", "Re-authenticate an existing profile")
         {
-            profileArg
+            profileArg,
+            forceOption
         };
 
         command.SetAction(async (parseResult, cancellationToken) =>
         {
             var profile = parseResult.GetValue(profileArg);
-            return await ExecuteUpdateAsync(profile, cancellationToken);
+            var force = parseResult.GetValue(forceOption);
+            return await ExecuteUpdateAsync(profile, force, cancellationToken);
         });
 
         return command;
     }
 
-    private static async Task<int> ExecuteUpdateAsync(string? profileNameOrIndex, CancellationToken cancellationToken)
+    private static async Task<int> ExecuteUpdateAsync(string? profileNameOrIndex, bool force, CancellationToken cancellationToken)
     {
         try
         {
@@ -684,9 +701,25 @@ public static class AuthCommandGroup
                 return ExitCodes.Failure;
             }
 
+            // If force, clear the token cache to ensure fresh authentication
+            if (force)
+            {
+                var tokenCachePath = ProfilePaths.TokenCacheFile;
+                if (File.Exists(tokenCachePath))
+                {
+                    File.Delete(tokenCachePath);
+                    Console.WriteLine("Cleared cached credentials.");
+                    Console.WriteLine();
+                }
+            }
+
             var targetUrl = profile.Environment?.Url ?? "https://globaldisco.crm.dynamics.com";
 
-            var provider = new DeviceCodeCredentialProvider(profile.Cloud, profile.TenantId);
+            // Use interactive browser when available
+            ICredentialProvider provider = InteractiveBrowserCredentialProvider.IsAvailable()
+                ? new InteractiveBrowserCredentialProvider(profile.Cloud, profile.TenantId)
+                : new DeviceCodeCredentialProvider(profile.Cloud, profile.TenantId);
+
             try
             {
                 var client = await provider.CreateServiceClientAsync(targetUrl, cancellationToken);
