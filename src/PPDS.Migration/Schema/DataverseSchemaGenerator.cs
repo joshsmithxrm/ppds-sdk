@@ -203,6 +203,18 @@ namespace PPDS.Migration.Schema
                     continue;
                 }
 
+                var isValidForCreate = attr.IsValidForCreate ?? false;
+                var isValidForUpdate = attr.IsValidForUpdate ?? false;
+
+                // Always skip fields that are never writable (not valid for create AND not valid for update)
+                // These fields (like versionnumber) can never be imported, so no point exporting them
+                if (!isValidForCreate && !isValidForUpdate)
+                {
+                    _logger?.LogDebug("Skipping never-writable field {Field} on entity {Entity}",
+                        attr.LogicalName, metadata.LogicalName);
+                    continue;
+                }
+
                 var isPrimaryKey = attr.LogicalName == metadata.PrimaryIdAttribute;
 
                 // Apply attribute filtering (primary key is always included)
@@ -235,7 +247,9 @@ namespace PPDS.Migration.Schema
                     IsCustomField = attr.IsCustomAttribute ?? false,
                     IsRequired = attr.RequiredLevel?.Value == AttributeRequiredLevel.ApplicationRequired ||
                                  attr.RequiredLevel?.Value == AttributeRequiredLevel.SystemRequired,
-                    IsPrimaryKey = isPrimaryKey
+                    IsPrimaryKey = isPrimaryKey,
+                    IsValidForCreate = isValidForCreate,
+                    IsValidForUpdate = isValidForUpdate
                 };
             }
         }

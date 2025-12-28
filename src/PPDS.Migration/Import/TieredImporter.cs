@@ -3,12 +3,14 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
+using System.ServiceModel;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Microsoft.Xrm.Sdk;
 using Microsoft.Xrm.Sdk.Messages;
+using Microsoft.Xrm.Sdk.Metadata;
 using PPDS.Dataverse.BulkOperations;
 using PPDS.Dataverse.Pooling;
 using PPDS.Dataverse.Security;
@@ -119,6 +121,10 @@ namespace PPDS.Migration.Import
             _logger?.LogInformation("Starting tiered import: {Tiers} tiers, {Records} records",
                 plan.TierCount, data.TotalRecordCount);
 
+            // Load target environment field metadata for validity checking
+            var entityNames = data.Schema.Entities.Select(e => e.LogicalName).ToList();
+            var targetFieldMetadata = await LoadTargetFieldMetadataAsync(entityNames, progress, cancellationToken).ConfigureAwait(false);
+
             // Disable plugins on entities with disableplugins=true
             IReadOnlyList<Guid> disabledPluginSteps = Array.Empty<Guid>();
             if (options.RespectDisablePluginsSetting && _pluginStepManager != null)
@@ -179,11 +185,15 @@ namespace PPDS.Migration.Import
                             // Get deferred fields for this entity
                             plan.DeferredFields.TryGetValue(entityName, out var deferredFields);
 
+                            // Get field metadata for this entity
+                            targetFieldMetadata.TryGetValue(entityName, out var entityFieldMetadata);
+
                             var result = await ImportEntityAsync(
                                 entityName,
                                 records,
                                 tier.TierNumber,
                                 deferredFields,
+                                entityFieldMetadata,
                                 idMappings,
                                 options,
                                 progress,
@@ -306,6 +316,7 @@ namespace PPDS.Migration.Import
             IReadOnlyList<Entity> records,
             int tierNumber,
             IReadOnlyList<string>? deferredFields,
+            Dictionary<string, (bool IsValidForCreate, bool IsValidForUpdate)>? fieldMetadata,
             IdMappingCollection idMappings,
             ImportOptions options,
             IProgressReporter? progress,
@@ -318,11 +329,11 @@ namespace PPDS.Migration.Import
 
             _logger?.LogDebug("Importing {Count} records for {Entity}", records.Count, entityName);
 
-            // Prepare records: remap lookups and null deferred fields
+            // Prepare records: remap lookups, null deferred fields, and filter based on operation validity
             var preparedRecords = new List<Entity>();
             foreach (var record in records)
             {
-                var prepared = PrepareRecordForImport(record, deferredSet, idMappings, options);
+                var prepared = PrepareRecordForImport(record, deferredSet, fieldMetadata, idMappings, options);
                 preparedRecords.Add(prepared);
             }
 
@@ -468,6 +479,7 @@ namespace PPDS.Migration.Import
         private Entity PrepareRecordForImport(
             Entity record,
             HashSet<string> deferredFields,
+            Dictionary<string, (bool IsValidForCreate, bool IsValidForUpdate)>? fieldMetadata,
             IdMappingCollection idMappings,
             ImportOptions options)
         {
@@ -492,6 +504,12 @@ namespace PPDS.Migration.Import
 
                 // Skip owner fields if stripping is enabled
                 if (options.StripOwnerFields && IsOwnerField(attr.Key))
+                {
+                    continue;
+                }
+
+                // Skip fields that are not valid for the current operation based on target metadata
+                if (!ShouldIncludeField(attr.Key, options.Mode, fieldMetadata))
                 {
                     continue;
                 }
@@ -828,6 +846,105 @@ namespace PPDS.Migration.Import
             // We need to find it by name, but we don't have the source name here
             // For now, return null - proper solution requires exporting role names
             return null;
+        }
+
+        /// <summary>
+        /// Loads field validity metadata from the target environment for all entities.
+        /// This is used to determine which fields are valid for create/update operations.
+        /// </summary>
+        private async Task<Dictionary<string, Dictionary<string, (bool IsValidForCreate, bool IsValidForUpdate)>>> LoadTargetFieldMetadataAsync(
+            IEnumerable<string> entityNames,
+            IProgressReporter? progress,
+            CancellationToken cancellationToken)
+        {
+            var result = new Dictionary<string, Dictionary<string, (bool, bool)>>(StringComparer.OrdinalIgnoreCase);
+
+            progress?.Report(new ProgressEventArgs
+            {
+                Phase = MigrationPhase.Analyzing,
+                Message = "Loading target environment field metadata..."
+            });
+
+            await using var client = await _connectionPool.GetClientAsync(cancellationToken: cancellationToken).ConfigureAwait(false);
+
+            foreach (var entityName in entityNames)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+
+                try
+                {
+                    var request = new RetrieveEntityRequest
+                    {
+                        LogicalName = entityName,
+                        EntityFilters = EntityFilters.Attributes
+                    };
+
+                    var response = (RetrieveEntityResponse)await client.ExecuteAsync(request, cancellationToken).ConfigureAwait(false);
+
+                    var attrValidity = new Dictionary<string, (bool, bool)>(StringComparer.OrdinalIgnoreCase);
+                    if (response.EntityMetadata.Attributes != null)
+                    {
+                        foreach (var attr in response.EntityMetadata.Attributes)
+                        {
+                            attrValidity[attr.LogicalName] = (
+                                attr.IsValidForCreate ?? false,
+                                attr.IsValidForUpdate ?? false
+                            );
+                        }
+                    }
+
+                    result[entityName] = attrValidity;
+                    _logger?.LogDebug("Loaded metadata for {Entity}: {Count} attributes", entityName, attrValidity.Count);
+                }
+                catch (FaultException ex)
+                {
+                    _logger?.LogWarning(ex, "Failed to load metadata for entity {Entity}, using schema defaults", entityName);
+                    // Entity might not exist in target - use empty metadata (will use schema defaults)
+                    result[entityName] = new Dictionary<string, (bool, bool)>(StringComparer.OrdinalIgnoreCase);
+                }
+            }
+
+            _logger?.LogInformation("Loaded field metadata for {Count} entities", result.Count);
+            return result;
+        }
+
+        /// <summary>
+        /// Determines if a field should be included in the import based on operation mode and metadata.
+        /// </summary>
+        private static bool ShouldIncludeField(
+            string fieldName,
+            ImportMode mode,
+            Dictionary<string, (bool IsValidForCreate, bool IsValidForUpdate)>? fieldMetadata)
+        {
+            // If no metadata available for this entity, include all fields (backwards compatibility)
+            if (fieldMetadata == null || !fieldMetadata.TryGetValue(fieldName, out var validity))
+            {
+                return true;
+            }
+
+            var (isValidForCreate, isValidForUpdate) = validity;
+
+            // Never include fields that are not valid for any write operation
+            if (!isValidForCreate && !isValidForUpdate)
+            {
+                return false;
+            }
+
+            // For Update mode, skip fields not valid for update
+            if (mode == ImportMode.Update && !isValidForUpdate)
+            {
+                return false;
+            }
+
+            // For Create mode, skip fields not valid for create
+            if (mode == ImportMode.Create && !isValidForCreate)
+            {
+                return false;
+            }
+
+            // For Upsert mode, include fields valid for either operation
+            // (the actual operation will determine validity per-record)
+            return true;
         }
     }
 }
