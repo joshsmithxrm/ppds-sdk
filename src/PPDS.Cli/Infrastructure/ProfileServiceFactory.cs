@@ -62,7 +62,6 @@ public static class ProfileServiceFactory
         var store = new ProfileStore();
         var collection = await store.LoadAsync(cancellationToken).ConfigureAwait(false);
 
-        // Get profile (active or named)
         AuthProfile profile;
         if (string.IsNullOrWhiteSpace(profileName))
         {
@@ -77,7 +76,6 @@ public static class ProfileServiceFactory
                 ?? throw new InvalidOperationException($"Profile '{profileName}' not found.");
         }
 
-        // Determine environment URL
         var envUrl = environmentOverride ?? profile.Environment?.Url;
         if (string.IsNullOrWhiteSpace(envUrl))
         {
@@ -88,11 +86,9 @@ public static class ProfileServiceFactory
                 "  2. Specify on command: --environment <url>");
         }
 
-        // Create connection source
         var source = new ProfileConnectionSource(profile, envUrl, 52, deviceCodeCallback);
         var adapter = new ProfileConnectionSourceAdapter(source);
 
-        // Create connection info for header display
         var connectionInfo = new ResolvedConnectionInfo
         {
             Profile = profile,
@@ -125,7 +121,6 @@ public static class ProfileServiceFactory
     {
         var names = ConnectionResolver.ParseProfileString(profileNames);
 
-        // No profiles specified - use active profile
         if (names.Count == 0)
         {
             return await CreateFromProfileAsync(
@@ -133,7 +128,6 @@ public static class ProfileServiceFactory
                 .ConfigureAwait(false);
         }
 
-        // Single profile specified
         if (names.Count == 1)
         {
             return await CreateFromProfileAsync(
@@ -141,12 +135,10 @@ public static class ProfileServiceFactory
                 .ConfigureAwait(false);
         }
 
-        // Multiple profiles - use ConnectionResolver for validation
         using var resolver = new ConnectionResolver(deviceCodeCallback: deviceCodeCallback);
         var sources = await resolver.ResolveMultipleAsync(names, environmentOverride, cancellationToken: cancellationToken)
             .ConfigureAwait(false);
 
-        // Wrap in adapters
         var adapters = sources.Select(s => new ProfileConnectionSourceAdapter(s)).ToArray();
 
         // For multi-profile, use the first profile's info for header display
@@ -185,11 +177,9 @@ public static class ProfileServiceFactory
         Action<DeviceCodeInfo>? deviceCodeCallback = null,
         CancellationToken cancellationToken = default)
     {
-        // Determine which profile to use for source and target
         var sourceProfileName = sourceProfile ?? profileName;
         var targetProfileName = targetProfile ?? profileName;
 
-        // Create providers for each environment
         var sourceProvider = await CreateFromProfileAsync(
             sourceProfileName, sourceEnv, verbose, debug, deviceCodeCallback,
             cancellationToken: cancellationToken)
@@ -224,17 +214,14 @@ public static class ProfileServiceFactory
         var services = new ServiceCollection();
         ConfigureLogging(services, verbose, debug);
 
-        // Register connection info for header display
         services.AddSingleton(connectionInfo);
 
-        // Configure DataverseOptions with the rate preset
         var dataverseOptions = new DataverseOptions
         {
             AdaptiveRate = { Preset = ratePreset }
         };
         services.AddSingleton<IOptions<DataverseOptions>>(new OptionsWrapper<DataverseOptions>(dataverseOptions));
 
-        // Pool options
         var poolOptions = new ConnectionPoolOptions
         {
             Enabled = true,
@@ -243,11 +230,9 @@ public static class ProfileServiceFactory
             DisableAffinityCookie = true
         };
 
-        // Register resilience services
         services.AddSingleton<IThrottleTracker, ThrottleTracker>();
         services.AddSingleton<IAdaptiveRateController, AdaptiveRateController>();
 
-        // Register the connection pool
         services.AddSingleton<IDataverseConnectionPool>(sp =>
             new DataverseConnectionPool(
                 sources,

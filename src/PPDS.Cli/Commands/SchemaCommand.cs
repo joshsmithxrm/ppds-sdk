@@ -36,7 +36,7 @@ public static class SchemaCommand
         {
             Description = "Output schema file path",
             Required = true
-        }.AcceptLegalFileNamesOnly();
+        };
         outputOption.Validators.Add(result =>
         {
             var file = result.GetValue(outputOption);
@@ -131,7 +131,6 @@ public static class SchemaCommand
             var verbose = parseResult.GetValue(verboseOption);
             var debug = parseResult.GetValue(debugOption);
 
-            // Parse entities (handle comma-separated and multiple flags)
             var entityList = entities
                 .SelectMany(e => e.Split(',', StringSplitOptions.RemoveEmptyEntries))
                 .Select(e => e.Trim())
@@ -144,7 +143,6 @@ public static class SchemaCommand
                 return ExitCodes.InvalidArguments;
             }
 
-            // Parse attribute lists (handle comma-separated)
             var includeAttrList = ParseAttributeList(includeAttributes);
             var excludeAttrList = ParseAttributeList(excludeAttributes);
             var excludePatternList = ParseAttributeList(excludePatterns);
@@ -233,13 +231,11 @@ public static class SchemaCommand
 
         try
         {
-            // Report what we're doing
             var optionsMsg = new List<string>();
             if (includeAttributes != null) optionsMsg.Add($"include: {string.Join(",", includeAttributes)}");
             if (excludeAttributes != null) optionsMsg.Add($"exclude: {string.Join(",", excludeAttributes)}");
             if (excludePatterns != null) optionsMsg.Add($"patterns: {string.Join(",", excludePatterns)}");
 
-            // Create service provider from profile
             await using var serviceProvider = await ProfileServiceFactory.CreateFromProfileAsync(
                 profile,
                 environment,
@@ -248,7 +244,6 @@ public static class SchemaCommand
                 ProfileServiceFactory.DefaultDeviceCodeCallback,
                 cancellationToken: cancellationToken);
 
-            // Write connection header (non-JSON mode only)
             if (!json)
             {
                 var connectionInfo = serviceProvider.GetRequiredService<ResolvedConnectionInfo>();
@@ -327,7 +322,6 @@ public static class SchemaCommand
     {
         try
         {
-            // Create service provider from profile
             await using var serviceProvider = await ProfileServiceFactory.CreateFromProfileAsync(
                 profile,
                 environment,
@@ -346,7 +340,6 @@ public static class SchemaCommand
 
             var entities = await generator.GetAvailableEntitiesAsync(cancellationToken);
 
-            // Apply filters
             var filtered = entities.AsEnumerable();
 
             if (customOnly)

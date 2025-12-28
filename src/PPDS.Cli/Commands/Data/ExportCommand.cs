@@ -139,7 +139,6 @@ public static class ExportCommand
 
         try
         {
-            // Create service provider from profile(s) - null uses active profile
             await using var serviceProvider = await ProfileServiceFactory.CreateFromProfilesAsync(
                 profile,
                 environment,
@@ -149,7 +148,6 @@ public static class ExportCommand
                 ratePreset,
                 cancellationToken);
 
-            // Write connection header (non-JSON mode only)
             if (!json)
             {
                 var connectionInfo = serviceProvider.GetRequiredService<ResolvedConnectionInfo>();
@@ -159,7 +157,6 @@ public static class ExportCommand
 
             var exporter = serviceProvider.GetRequiredService<IExporter>();
 
-            // Configure export options
             var exportOptions = new ExportOptions
             {
                 DegreeOfParallelism = parallel,
@@ -167,7 +164,6 @@ public static class ExportCommand
                 ExportFiles = includeFiles
             };
 
-            // Execute export
             var result = await exporter.ExportAsync(
                 schema.FullName,
                 output.FullName,

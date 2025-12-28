@@ -182,7 +182,6 @@ public static class CopyCommand
 
         try
         {
-            // Determine temp directory
             var tempDirectory = tempDir?.FullName ?? Path.GetTempPath();
             if (!Directory.Exists(tempDirectory))
             {
@@ -190,14 +189,11 @@ public static class CopyCommand
                 return ExitCodes.InvalidArguments;
             }
 
-            // Create temp file path for intermediate data
             tempDataFile = Path.Combine(tempDirectory, $"ppds-copy-{Guid.NewGuid():N}.zip");
 
-            // Determine which profiles to use
             var effectiveSourceProfile = sourceProfile ?? profile;
             var effectiveTargetProfile = targetProfile ?? profile;
 
-            // Phase 1: Export from source
             await using var sourceProvider = await ProfileServiceFactory.CreateFromProfileAsync(
                 effectiveSourceProfile,
                 sourceEnv,
@@ -207,7 +203,6 @@ public static class CopyCommand
                 ratePreset,
                 cancellationToken);
 
-            // Write source connection header (non-JSON mode only)
             if (!json)
             {
                 var sourceConnectionInfo = sourceProvider.GetRequiredService<ResolvedConnectionInfo>();
@@ -234,7 +229,6 @@ public static class CopyCommand
                 return ExitCodes.Failure;
             }
 
-            // Phase 2: Import to target
             await using var targetProvider = await ProfileServiceFactory.CreateFromProfileAsync(
                 effectiveTargetProfile,
                 targetEnv,
@@ -244,7 +238,6 @@ public static class CopyCommand
                 ratePreset,
                 cancellationToken);
 
-            // Write target connection header (non-JSON mode only)
             if (!json)
             {
                 var targetConnectionInfo = targetProvider.GetRequiredService<ResolvedConnectionInfo>();

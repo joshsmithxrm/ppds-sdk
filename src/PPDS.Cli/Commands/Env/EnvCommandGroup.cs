@@ -71,7 +71,6 @@ public static class EnvCommandGroup
     {
         try
         {
-            // Load profiles to get cloud setting
             using var store = new ProfileStore();
             var collection = await store.LoadAsync(cancellationToken);
 
@@ -82,12 +81,10 @@ public static class EnvCommandGroup
                 return ExitCodes.Failure;
             }
 
-            // Show connection header
             ConsoleHeader.WriteConnectedAs(profile);
             Console.WriteLine("Discovering environments...");
             Console.WriteLine();
 
-            // Use the GlobalDiscoveryService to get environments
             using var gds = GlobalDiscoveryService.FromProfile(profile);
             var environments = await gds.DiscoverEnvironmentsAsync(cancellationToken);
 
@@ -124,7 +121,6 @@ public static class EnvCommandGroup
         Console.WriteLine("[Environments]");
         Console.WriteLine();
 
-        // Get the currently selected environment URL if any
         var selectedUrl = profile.Environment?.Url?.TrimEnd('/').ToLowerInvariant();
 
         foreach (var env in environments)
@@ -231,11 +227,9 @@ public static class EnvCommandGroup
             ConsoleHeader.WriteConnectedAs(profile);
             Console.WriteLine($"Looking for environment '{environmentIdentifier}'");
 
-            // Use the GlobalDiscoveryService to get environments
             using var gds = GlobalDiscoveryService.FromProfile(profile);
             var environments = await gds.DiscoverEnvironmentsAsync(cancellationToken);
 
-            // Resolve the environment
             DiscoveredEnvironment? resolved;
             try
             {
@@ -257,7 +251,6 @@ public static class EnvCommandGroup
 
             Console.WriteLine("Validating connection...");
 
-            // Update the profile with the selected environment
             profile.Environment = new EnvironmentInfo
             {
                 Url = resolved.ApiUrl,
@@ -358,7 +351,6 @@ public static class EnvCommandGroup
                 ConsoleHeader.WriteConnectedAs(profile, env.DisplayName);
             }
 
-            // Create connection and execute WhoAmI
             await using var serviceProvider = await ProfileServiceFactory.CreateFromProfileAsync(
                 null, // Use active profile
                 null, // Use profile's environment

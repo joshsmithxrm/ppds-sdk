@@ -140,11 +140,9 @@ public static class UsersCommand
     {
         try
         {
-            // Determine which profiles to use
             var effectiveSourceProfile = sourceProfile ?? profile;
             var effectiveTargetProfile = targetProfile ?? profile;
 
-            // Create providers for both environments
             await using var sourceProvider = await ProfileServiceFactory.CreateFromProfileAsync(
                 effectiveSourceProfile,
                 sourceEnv,
@@ -161,7 +159,6 @@ public static class UsersCommand
                 ProfileServiceFactory.DefaultDeviceCodeCallback,
                 cancellationToken: cancellationToken);
 
-            // Write connection headers (non-JSON mode only)
             if (!json)
             {
                 var sourceConnectionInfo = sourceProvider.GetRequiredService<ResolvedConnectionInfo>();
@@ -175,7 +172,6 @@ public static class UsersCommand
             var sourcePool = sourceProvider.GetRequiredService<IDataverseConnectionPool>();
             var targetPool = targetProvider.GetRequiredService<IDataverseConnectionPool>();
 
-            // Create generator
             var logger = debug ? sourceProvider.GetService<ILogger<UserMappingGenerator>>() : null;
             var generator = logger != null
                 ? new UserMappingGenerator(logger)
@@ -186,7 +182,6 @@ public static class UsersCommand
                 Console.WriteLine("  Querying users from both environments...");
             }
 
-            // Generate mappings
             var result = await generator.GenerateAsync(sourcePool, targetPool, cancellationToken: cancellationToken);
 
             if (json)

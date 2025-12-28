@@ -143,7 +143,6 @@ public static class ImportCommand
 
         try
         {
-            // Create service provider from profile(s) - null uses active profile
             await using var serviceProvider = await ProfileServiceFactory.CreateFromProfilesAsync(
                 profile,
                 environment,
@@ -153,7 +152,6 @@ public static class ImportCommand
                 ratePreset,
                 cancellationToken);
 
-            // Write connection header (non-JSON mode only)
             if (!json)
             {
                 var connectionInfo = serviceProvider.GetRequiredService<ResolvedConnectionInfo>();
@@ -163,7 +161,6 @@ public static class ImportCommand
 
             var importer = serviceProvider.GetRequiredService<IImporter>();
 
-            // Load user mappings if provided
             UserMappingCollection? userMappings = null;
             if (userMappingFile != null)
             {
@@ -192,7 +189,6 @@ public static class ImportCommand
                 });
             }
 
-            // Configure import options
             var importOptions = new ImportOptions
             {
                 BypassCustomPluginExecution = bypassPlugins,
@@ -203,7 +199,6 @@ public static class ImportCommand
                 StripOwnerFields = stripOwnerFields
             };
 
-            // Execute import
             var result = await importer.ImportAsync(
                 data.FullName,
                 importOptions,

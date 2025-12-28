@@ -35,7 +35,6 @@ public static class AuthCommandGroup
 
     private static Command CreateCreateCommand()
     {
-        // Profile options
         var nameOption = new Option<string?>("--name", "-n")
         {
             Description = "The name you want to give to this authentication profile (maximum 30 characters)"
@@ -63,7 +62,6 @@ public static class AuthCommandGroup
             Description = "Tenant ID if using application ID/client secret or application ID/client certificate"
         };
 
-        // Auth method options
         var deviceCodeOption = new Option<bool>("--deviceCode", "-dc")
         {
             Description = "Use the Microsoft Entra ID Device Code flow for interactive sign-in",
@@ -192,10 +190,7 @@ public static class AuthCommandGroup
     {
         try
         {
-            // Determine auth method from options
             var authMethod = DetermineAuthMethod(options);
-
-            // Validate required fields for auth method
             var validationError = ValidateAuthOptions(options, authMethod);
             if (validationError != null)
             {
@@ -206,14 +201,12 @@ public static class AuthCommandGroup
             using var store = new ProfileStore();
             var collection = await store.LoadAsync(cancellationToken);
 
-            // Check for duplicate name
             if (!string.IsNullOrWhiteSpace(options.Name) && collection.IsNameInUse(options.Name))
             {
                 Console.Error.WriteLine($"Error: Profile name '{options.Name}' is already in use.");
                 return ExitCodes.Failure;
             }
 
-            // Create profile
             var profile = new AuthProfile
             {
                 Name = options.Name,
@@ -300,7 +293,6 @@ public static class AuthCommandGroup
                     profile.TenantId = provider.TenantId;
                 }
 
-                // Extract PUID from JWT claims
                 var claims = JwtClaimsParser.Parse(provider.IdTokenClaims, provider.AccessToken);
                 if (claims != null)
                 {
@@ -419,7 +411,6 @@ public static class AuthCommandGroup
 
     private static AuthMethod DetermineAuthMethod(CreateOptions options)
     {
-        // Check for explicit auth method options
         if (options.GitHubFederated)
             return AuthMethod.GitHubFederated;
 
@@ -438,15 +429,12 @@ public static class AuthCommandGroup
         if (!string.IsNullOrWhiteSpace(options.ClientSecret))
             return AuthMethod.ClientSecret;
 
-        // Username/password auth
         if (!string.IsNullOrWhiteSpace(options.Password))
             return AuthMethod.UsernamePassword;
 
-        // Explicit device code requested
         if (options.DeviceCode)
             return AuthMethod.DeviceCode;
 
-        // Default: interactive browser if available, otherwise device code
         return InteractiveBrowserCredentialProvider.IsAvailable()
             ? AuthMethod.InteractiveBrowser
             : AuthMethod.DeviceCode;
@@ -593,7 +581,6 @@ public static class AuthCommandGroup
             return;
         }
 
-        // Build table data
         var rows = collection.All.Select(p => new
         {
             Index = $"[{p.Index}]",
@@ -606,7 +593,6 @@ public static class AuthCommandGroup
             EnvironmentUrl = p.Environment?.Url ?? ""
         }).ToList();
 
-        // Calculate column widths
         var colIndex = Math.Max(5, rows.Max(r => r.Index.Length));
         var colActive = 6;
         var colMethod = Math.Max(6, rows.Max(r => r.Method.Length));
@@ -615,7 +601,6 @@ public static class AuthCommandGroup
         var colCloud = Math.Max(5, rows.Max(r => r.Cloud.Length));
         var colEnv = Math.Max(11, rows.Max(r => r.Environment.Length));
 
-        // Print header
         Console.WriteLine(
             $"{"Index".PadRight(colIndex)} " +
             $"{"Active".PadRight(colActive)} " +
@@ -626,7 +611,6 @@ public static class AuthCommandGroup
             $"{"Environment".PadRight(colEnv)} " +
             "Environment Url");
 
-        // Print rows
         foreach (var row in rows)
         {
             var isActive = row.Active == "*";
@@ -713,7 +697,6 @@ public static class AuthCommandGroup
     {
         try
         {
-            // Validate: must provide exactly one of --index or --name
             if (index == null && string.IsNullOrWhiteSpace(name))
             {
                 Console.Error.WriteLine("Error: Must provide either --index or --name.");
@@ -810,7 +793,6 @@ public static class AuthCommandGroup
     {
         try
         {
-            // Validate: must provide exactly one of --index or --name
             if (index == null && string.IsNullOrWhiteSpace(name))
             {
                 Console.Error.WriteLine("Error: Must provide either --index or --name.");
@@ -937,7 +919,6 @@ public static class AuthCommandGroup
                 return ExitCodes.Failure;
             }
 
-            // Update name if provided
             if (!string.IsNullOrWhiteSpace(newName))
             {
                 if (collection.IsNameInUse(newName, profile.Index))
@@ -950,7 +931,6 @@ public static class AuthCommandGroup
                 Console.WriteLine($"Name updated: {oldName} -> {profile.DisplayIdentifier}");
             }
 
-            // Update environment if provided
             if (!string.IsNullOrWhiteSpace(newEnvironment))
             {
                 var envUrl = newEnvironment.TrimEnd('/');
