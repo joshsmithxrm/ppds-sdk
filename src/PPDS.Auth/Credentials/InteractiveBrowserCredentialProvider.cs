@@ -35,7 +35,7 @@ public sealed class InteractiveBrowserCredentialProvider : ICredentialProvider
     private bool _disposed;
 
     /// <inheritdoc />
-    public AuthMethod AuthMethod => AuthMethod.DeviceCode; // Same enum value, different flow
+    public AuthMethod AuthMethod => AuthMethod.InteractiveBrowser;
 
     /// <inheritdoc />
     public string? Identity => _cachedResult?.Account?.Username;

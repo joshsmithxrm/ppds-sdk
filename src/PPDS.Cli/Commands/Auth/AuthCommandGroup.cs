@@ -205,16 +205,12 @@ public static class AuthCommandGroup
             // Authenticate to verify credentials
             var targetUrl = options.Environment ?? "https://globaldisco.crm.dynamics.com";
 
-            // Determine which provider to use
-            var useBrowser = authMethod == AuthMethod.DeviceCode && !options.DeviceCode && InteractiveBrowserCredentialProvider.IsAvailable();
-            var displayMethod = useBrowser ? "interactive browser" : authMethod.ToString();
-            Console.WriteLine($"Authenticating with {displayMethod}...");
+            Console.WriteLine($"Authenticating with {authMethod}...");
             Console.WriteLine();
 
             ICredentialProvider provider = authMethod switch
             {
-                AuthMethod.DeviceCode when useBrowser =>
-                    new InteractiveBrowserCredentialProvider(options.Cloud, options.Tenant),
+                AuthMethod.InteractiveBrowser => new InteractiveBrowserCredentialProvider(options.Cloud, options.Tenant),
                 AuthMethod.DeviceCode => new DeviceCodeCredentialProvider(options.Cloud, options.Tenant),
                 AuthMethod.ClientSecret => new ClientSecretCredentialProvider(
                     options.ApplicationId!, options.ClientSecret!, options.Tenant!, options.Cloud),
@@ -302,14 +298,17 @@ public static class AuthCommandGroup
         if (options.DeviceCode)
             return AuthMethod.DeviceCode;
 
-        // Default to device code (interactive browser is used at runtime when available)
-        return AuthMethod.DeviceCode;
+        // Default: interactive browser if available, otherwise device code
+        return InteractiveBrowserCredentialProvider.IsAvailable()
+            ? AuthMethod.InteractiveBrowser
+            : AuthMethod.DeviceCode;
     }
 
     private static string? ValidateAuthOptions(CreateOptions options, AuthMethod authMethod)
     {
         return authMethod switch
         {
+            AuthMethod.InteractiveBrowser => null, // No required options
             AuthMethod.DeviceCode => null, // No required options
 
             AuthMethod.ClientSecret => ValidateClientSecret(options),
@@ -810,27 +809,17 @@ public static class AuthCommandGroup
 
     private static Command CreateClearCommand()
     {
-        var forceOption = new Option<bool>("--force", "-f")
-        {
-            Description = "Skip confirmation prompt",
-            DefaultValueFactory = _ => false
-        };
-
-        var command = new Command("clear", "Delete all profiles and cached credentials")
-        {
-            forceOption
-        };
+        var command = new Command("clear", "Delete all profiles and cached credentials");
 
         command.SetAction(async (parseResult, cancellationToken) =>
         {
-            var force = parseResult.GetValue(forceOption);
-            return await ExecuteClearAsync(force, cancellationToken);
+            return await ExecuteClearAsync(cancellationToken);
         });
 
         return command;
     }
 
-    private static async Task<int> ExecuteClearAsync(bool force, CancellationToken cancellationToken)
+    private static async Task<int> ExecuteClearAsync(CancellationToken cancellationToken)
     {
         try
         {
@@ -843,18 +832,7 @@ public static class AuthCommandGroup
                 return ExitCodes.Success;
             }
 
-            if (!force)
-            {
-                Console.WriteLine($"This will delete {collection.Count} profile(s) and all cached credentials.");
-                Console.Write("Type 'yes' to confirm: ");
-                var confirmation = Console.ReadLine();
-                if (!string.Equals(confirmation, "yes", StringComparison.OrdinalIgnoreCase))
-                {
-                    Console.WriteLine("Cancelled.");
-                    return ExitCodes.Success;
-                }
-            }
-
+            var count = collection.Count;
             store.Delete();
 
             // Also clear the token cache
@@ -865,7 +843,7 @@ public static class AuthCommandGroup
             }
 
             Console.ForegroundColor = ConsoleColor.Green;
-            Console.WriteLine("All profiles and cached credentials deleted.");
+            Console.WriteLine($"Deleted {count} profile(s) and cached credentials.");
             Console.ResetColor();
 
             return ExitCodes.Success;

@@ -8,8 +8,14 @@ namespace PPDS.Auth.Profiles;
 public enum AuthMethod
 {
     /// <summary>
-    /// Interactive device code flow.
-    /// Opens browser for authentication.
+    /// Interactive browser flow (default for desktop).
+    /// Opens system browser for authentication.
+    /// </summary>
+    InteractiveBrowser,
+
+    /// <summary>
+    /// Device code flow (fallback for headless environments).
+    /// User visits URL and enters code to authenticate.
     /// </summary>
     DeviceCode,
 

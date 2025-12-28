@@ -194,6 +194,7 @@ public sealed class AuthProfile
     {
         switch (AuthMethod)
         {
+            case AuthMethod.InteractiveBrowser:
             case AuthMethod.DeviceCode:
                 // No required fields - will authenticate interactively
                 break;
