@@ -47,7 +47,7 @@ public static class EnvCommandGroup
 
     private static Command CreateListCommand()
     {
-        var jsonOption = new Option<bool>("--json")
+        var jsonOption = new Option<bool>("--json", "-j")
         {
             Description = "Output as JSON",
             DefaultValueFactory = _ => false
@@ -283,7 +283,7 @@ public static class EnvCommandGroup
 
     private static Command CreateWhoCommand()
     {
-        var jsonOption = new Option<bool>("--json")
+        var jsonOption = new Option<bool>("--json", "-j")
         {
             Description = "Output as JSON",
             DefaultValueFactory = _ => false

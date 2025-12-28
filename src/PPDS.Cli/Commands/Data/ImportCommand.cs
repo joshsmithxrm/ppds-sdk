@@ -40,7 +40,7 @@ public static class ImportCommand
             DefaultValueFactory = _ => false
         };
 
-        var modeOption = new Option<ImportMode>("--mode")
+        var modeOption = new Option<ImportMode>("--mode", "-m")
         {
             Description = "Import mode: Create, Update, or Upsert",
             DefaultValueFactory = _ => ImportMode.Upsert
@@ -63,7 +63,7 @@ public static class ImportCommand
             DefaultValueFactory = _ => false
         };
 
-        var jsonOption = new Option<bool>("--json")
+        var jsonOption = new Option<bool>("--json", "-j")
         {
             Description = "Output progress as JSON (for tool integration)",
             DefaultValueFactory = _ => false

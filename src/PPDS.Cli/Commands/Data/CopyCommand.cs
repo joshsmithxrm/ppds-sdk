@@ -87,7 +87,7 @@ public static class CopyCommand
             DefaultValueFactory = _ => false
         };
 
-        var jsonOption = new Option<bool>("--json")
+        var jsonOption = new Option<bool>("--json", "-j")
         {
             Description = "Output progress as JSON (for tool integration)",
             DefaultValueFactory = _ => false

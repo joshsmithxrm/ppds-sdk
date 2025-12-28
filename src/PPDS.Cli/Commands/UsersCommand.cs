@@ -65,7 +65,7 @@ public static class UsersCommand
             DefaultValueFactory = _ => false
         };
 
-        var jsonOption = new Option<bool>("--json")
+        var jsonOption = new Option<bool>("--json", "-j")
         {
             Description = "Output as JSON",
             DefaultValueFactory = _ => false
