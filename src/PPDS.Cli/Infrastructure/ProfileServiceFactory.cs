@@ -48,6 +48,7 @@ public static class ProfileServiceFactory
     /// <param name="debug">Enable debug logging.</param>
     /// <param name="deviceCodeCallback">Callback for device code display.</param>
     /// <param name="ratePreset">Rate control preset for throttle management.</param>
+    /// <param name="environmentDisplayName">Display name for the environment (if known from resolution).</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>A configured service provider.</returns>
     public static async Task<ServiceProvider> CreateFromProfileAsync(
@@ -57,6 +58,7 @@ public static class ProfileServiceFactory
         bool debug = false,
         Action<DeviceCodeInfo>? deviceCodeCallback = null,
         RateControlPreset ratePreset = RateControlPreset.Balanced,
+        string? environmentDisplayName = null,
         CancellationToken cancellationToken = default)
     {
         var store = new ProfileStore();
@@ -93,7 +95,7 @@ public static class ProfileServiceFactory
         {
             Profile = profile,
             EnvironmentUrl = envUrl,
-            EnvironmentDisplayName = profile.Environment?.DisplayName
+            EnvironmentDisplayName = environmentDisplayName ?? profile.Environment?.DisplayName
         };
 
         return CreateProviderFromSources(new[] { adapter }, connectionInfo, verbose, debug, ratePreset);
@@ -124,14 +126,16 @@ public static class ProfileServiceFactory
         if (names.Count == 0)
         {
             return await CreateFromProfileAsync(
-                null, environmentOverride, verbose, debug, deviceCodeCallback, ratePreset, cancellationToken)
+                null, environmentOverride, verbose, debug, deviceCodeCallback, ratePreset,
+                cancellationToken: cancellationToken)
                 .ConfigureAwait(false);
         }
 
         if (names.Count == 1)
         {
             return await CreateFromProfileAsync(
-                names[0], environmentOverride, verbose, debug, deviceCodeCallback, ratePreset, cancellationToken)
+                names[0], environmentOverride, verbose, debug, deviceCodeCallback, ratePreset,
+                cancellationToken: cancellationToken)
                 .ConfigureAwait(false);
         }
 

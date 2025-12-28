@@ -1,6 +1,7 @@
 using System.CommandLine;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using PPDS.Auth.Profiles;
 using PPDS.Cli.Commands.Data;
 using PPDS.Cli.Infrastructure;
 using PPDS.Dataverse.Pooling;
@@ -24,32 +25,25 @@ public static class UsersCommand
 
     private static Command CreateGenerateCommand()
     {
-        // Profile options
-        var profileOption = new Option<string?>("--profile", "-p")
+        var sourceProfileOption = new Option<string?>("--source-profile", "-sp")
         {
-            Description = "Profile for both source and target environments"
+            Description = "Authentication profile for source environment (defaults to active profile)"
         };
 
-        var sourceProfileOption = new Option<string?>("--source-profile")
+        var targetProfileOption = new Option<string?>("--target-profile", "-tp")
         {
-            Description = "Profile for source environment (overrides --profile for source)"
+            Description = "Authentication profile for target environment (defaults to active profile)"
         };
 
-        var targetProfileOption = new Option<string?>("--target-profile")
+        var sourceEnvOption = new Option<string>("--source-env", "-se")
         {
-            Description = "Profile for target environment (overrides --profile for target)"
-        };
-
-        // Environment options
-        var sourceEnvOption = new Option<string>("--source-env")
-        {
-            Description = "Source environment (URL, name, or ID)",
+            Description = "Source environment - accepts URL, friendly name, unique name, or ID",
             Required = true
         };
 
-        var targetEnvOption = new Option<string>("--target-env")
+        var targetEnvOption = new Option<string>("--target-env", "-te")
         {
-            Description = "Target environment (URL, name, or ID)",
+            Description = "Target environment - accepts URL, friendly name, unique name, or ID",
             Required = true
         };
 
@@ -91,7 +85,6 @@ public static class UsersCommand
 
         var command = new Command("generate", "Generate user mapping file from source to target environment")
         {
-            profileOption,
             sourceProfileOption,
             targetProfileOption,
             sourceEnvOption,
@@ -105,7 +98,6 @@ public static class UsersCommand
 
         command.SetAction(async (parseResult, cancellationToken) =>
         {
-            var profile = parseResult.GetValue(profileOption);
             var sourceProfile = parseResult.GetValue(sourceProfileOption);
             var targetProfile = parseResult.GetValue(targetProfileOption);
             var sourceEnv = parseResult.GetValue(sourceEnvOption)!;
@@ -117,7 +109,7 @@ public static class UsersCommand
             var debug = parseResult.GetValue(debugOption);
 
             return await ExecuteGenerateAsync(
-                profile, sourceProfile, targetProfile,
+                sourceProfile, targetProfile,
                 sourceEnv, targetEnv, output, analyze,
                 json, verbose, debug, cancellationToken);
         });
@@ -126,9 +118,8 @@ public static class UsersCommand
     }
 
     private static async Task<int> ExecuteGenerateAsync(
-        string? profile,
-        string? sourceProfile,
-        string? targetProfile,
+        string? sourceProfileName,
+        string? targetProfileName,
         string sourceEnv,
         string targetEnv,
         FileInfo output,
@@ -140,23 +131,52 @@ public static class UsersCommand
     {
         try
         {
-            var effectiveSourceProfile = sourceProfile ?? profile;
-            var effectiveTargetProfile = targetProfile ?? profile;
+            // Load profiles
+            using var store = new ProfileStore();
+            var collection = await store.LoadAsync(cancellationToken);
 
+            var sourceProfile = string.IsNullOrWhiteSpace(sourceProfileName)
+                ? collection.ActiveProfile
+                    ?? throw new InvalidOperationException(
+                        "No active profile. Use 'ppds auth create' to create a profile, " +
+                        "or specify --source-profile.")
+                : collection.GetByName(sourceProfileName)
+                    ?? throw new InvalidOperationException($"Source profile '{sourceProfileName}' not found.");
+
+            var targetProfile = string.IsNullOrWhiteSpace(targetProfileName)
+                ? collection.ActiveProfile
+                    ?? throw new InvalidOperationException(
+                        "No active profile. Use 'ppds auth create' to create a profile, " +
+                        "or specify --target-profile.")
+                : collection.GetByName(targetProfileName)
+                    ?? throw new InvalidOperationException($"Target profile '{targetProfileName}' not found.");
+
+            // Resolve environments (with caching if same profile)
+            if (!json)
+            {
+                Console.WriteLine("Resolving environments...");
+            }
+
+            var (resolvedSource, resolvedTarget) = await EnvironmentResolverHelper.ResolveSourceTargetAsync(
+                sourceProfile, targetProfile, sourceEnv, targetEnv, cancellationToken);
+
+            // Create service providers with resolved URLs and display names
             await using var sourceProvider = await ProfileServiceFactory.CreateFromProfileAsync(
-                effectiveSourceProfile,
-                sourceEnv,
+                sourceProfileName,
+                resolvedSource.Url,
                 verbose,
                 debug,
                 ProfileServiceFactory.DefaultDeviceCodeCallback,
+                environmentDisplayName: resolvedSource.DisplayName,
                 cancellationToken: cancellationToken);
 
             await using var targetProvider = await ProfileServiceFactory.CreateFromProfileAsync(
-                effectiveTargetProfile,
-                targetEnv,
+                targetProfileName,
+                resolvedTarget.Url,
                 verbose,
                 debug,
                 ProfileServiceFactory.DefaultDeviceCodeCallback,
+                environmentDisplayName: resolvedTarget.DisplayName,
                 cancellationToken: cancellationToken);
 
             if (!json)
