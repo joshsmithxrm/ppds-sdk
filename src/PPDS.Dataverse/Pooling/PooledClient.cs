@@ -66,9 +66,16 @@ namespace PPDS.Dataverse.Pooling
                 try
                 {
                     var orgName = ConnectedOrgFriendlyName;
-                    return string.IsNullOrEmpty(orgName)
-                        ? ConnectionName
-                        : $"{ConnectionName}@{orgName}";
+
+                    // If org name is empty or already included in ConnectionName, use as-is.
+                    // ProfileConnectionSource includes environment name in the connection name,
+                    // so we avoid double-appending.
+                    if (string.IsNullOrEmpty(orgName) || ConnectionName.Contains(orgName, StringComparison.OrdinalIgnoreCase))
+                    {
+                        return ConnectionName;
+                    }
+
+                    return $"{ConnectionName}@{orgName}";
                 }
                 catch
                 {

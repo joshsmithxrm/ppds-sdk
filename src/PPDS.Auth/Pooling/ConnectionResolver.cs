@@ -80,12 +80,14 @@ public sealed class ConnectionResolver : IDisposable
     /// <param name="profileNames">The profile names (comma-separated or array).</param>
     /// <param name="environmentOverride">Optional environment URL override.</param>
     /// <param name="maxPoolSizePerProfile">Maximum pool size per profile.</param>
+    /// <param name="environmentDisplayName">Optional environment display name for connection naming.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>List of connection sources. Caller takes ownership and is responsible for disposal.</returns>
     public async Task<IReadOnlyList<ProfileConnectionSource>> ResolveMultipleAsync(
         IEnumerable<string> profileNames,
         string? environmentOverride = null,
         int maxPoolSizePerProfile = 52,
+        string? environmentDisplayName = null,
         CancellationToken cancellationToken = default)
     {
         var names = profileNames.ToList();
@@ -129,11 +131,15 @@ public sealed class ConnectionResolver : IDisposable
                 }
             }
 
+            // Use provided display name, or fall back to profile's environment display name
+            var envDisplayName = environmentDisplayName ?? profile.Environment?.DisplayName;
+
             var source = new ProfileConnectionSource(
                 profile,
                 envUrl,
                 maxPoolSizePerProfile,
-                _deviceCodeCallback);
+                _deviceCodeCallback,
+                envDisplayName);
 
             sources.Add(source);
             // Note: NOT tracking for disposal - caller takes ownership of returned sources

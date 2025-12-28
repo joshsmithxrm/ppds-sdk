@@ -80,7 +80,7 @@ public static class ProfileServiceFactory
         var (envUrl, envDisplayName) = await ResolveEnvironmentAsync(
             profile, environmentOverride, cancellationToken).ConfigureAwait(false);
 
-        var source = new ProfileConnectionSource(profile, envUrl, 52, deviceCodeCallback);
+        var source = new ProfileConnectionSource(profile, envUrl, 52, deviceCodeCallback, envDisplayName);
         var adapter = new ProfileConnectionSourceAdapter(source);
 
         var connectionInfo = new ResolvedConnectionInfo
@@ -173,7 +173,8 @@ public static class ProfileServiceFactory
 
         // Now resolve all profiles with the resolved URL
         using var resolver = new ConnectionResolver(deviceCodeCallback: deviceCodeCallback);
-        var sources = await resolver.ResolveMultipleAsync(names, envUrl, cancellationToken: cancellationToken)
+        var sources = await resolver.ResolveMultipleAsync(
+                names, envUrl, environmentDisplayName: envDisplayName, cancellationToken: cancellationToken)
             .ConfigureAwait(false);
 
         var adapters = sources.Select(s => new ProfileConnectionSourceAdapter(s)).ToArray();

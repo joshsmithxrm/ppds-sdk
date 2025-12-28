@@ -14,6 +14,7 @@ public sealed class ProfileConnectionSource : IDisposable
 {
     private readonly AuthProfile _profile;
     private readonly string _environmentUrl;
+    private readonly string? _environmentDisplayName;
     private readonly Action<DeviceCodeInfo>? _deviceCodeCallback;
     private readonly int _maxPoolSize;
 
@@ -24,6 +25,7 @@ public sealed class ProfileConnectionSource : IDisposable
 
     /// <summary>
     /// Gets the unique name for this connection source.
+    /// Includes identity and environment display name when available.
     /// </summary>
     public string Name { get; }
 
@@ -49,11 +51,13 @@ public sealed class ProfileConnectionSource : IDisposable
     /// <param name="environmentUrl">The Dataverse environment URL.</param>
     /// <param name="maxPoolSize">Maximum pool size (default: 52 per Microsoft recommendations).</param>
     /// <param name="deviceCodeCallback">Optional callback for device code display.</param>
+    /// <param name="environmentDisplayName">Optional environment display name for connection naming.</param>
     public ProfileConnectionSource(
         AuthProfile profile,
         string environmentUrl,
         int maxPoolSize = 52,
-        Action<DeviceCodeInfo>? deviceCodeCallback = null)
+        Action<DeviceCodeInfo>? deviceCodeCallback = null,
+        string? environmentDisplayName = null)
     {
         _profile = profile ?? throw new ArgumentNullException(nameof(profile));
 
@@ -63,10 +67,14 @@ public sealed class ProfileConnectionSource : IDisposable
         _environmentUrl = environmentUrl.TrimEnd('/');
         _maxPoolSize = maxPoolSize;
         _deviceCodeCallback = deviceCodeCallback;
+        _environmentDisplayName = environmentDisplayName;
 
-        // Use identity display (username or app:id) as the connection name
-        // The full display name with org friendly name is constructed by PooledClient
-        Name = profile.IdentityDisplay;
+        // Format: "identity@environment" when environment name is available
+        // Token-provider-based auth doesn't populate ConnectedOrgFriendlyName,
+        // so we include the environment name here rather than relying on the SDK.
+        Name = string.IsNullOrEmpty(environmentDisplayName)
+            ? profile.IdentityDisplay
+            : $"{profile.IdentityDisplay}@{environmentDisplayName}";
     }
 
     /// <summary>
@@ -96,7 +104,8 @@ public sealed class ProfileConnectionSource : IDisposable
             profile,
             profile.Environment!.Url,
             maxPoolSize,
-            deviceCodeCallback);
+            deviceCodeCallback,
+            profile.Environment.DisplayName);
     }
 
     /// <summary>
