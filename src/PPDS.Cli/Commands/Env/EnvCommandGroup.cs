@@ -121,8 +121,7 @@ public static class EnvCommandGroup
             return;
         }
 
-        Console.WriteLine("Available Environments");
-        Console.WriteLine(new string('=', 70));
+        Console.WriteLine("[Environments]");
         Console.WriteLine();
 
         // Get the currently selected environment URL if any

@@ -169,8 +169,8 @@ public static class AnalyzeCommand
 
     private static void WriteTextOutput(SchemaAnalysis analysis, string schemaPath)
     {
-        Console.WriteLine("Schema Analysis");
-        Console.WriteLine("===============");
+        Console.WriteLine("[Schema Analysis]");
+        Console.WriteLine();
         Console.WriteLine($"Schema: {schemaPath}");
         Console.WriteLine();
 

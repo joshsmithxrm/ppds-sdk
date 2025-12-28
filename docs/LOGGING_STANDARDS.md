@@ -4,6 +4,89 @@ Console output standards for PPDS CLI commands.
 
 ---
 
+## Section Headers
+
+Use `[brackets]` for section headers in normal output. This provides clear visual separation without dated decoration.
+
+```
+[Environments]
+
+  PPDS Demo - Dev *
+      Type: Developer
+      URL: https://orgcabef92d.crm.dynamics.com
+
+[Schema Analysis]
+
+  Entities: 5
+  Dependencies: 12
+```
+
+**Do NOT use:**
+- `======` (dated, DOS-era style)
+- `******` (too decorative)
+- Box-drawing characters for headers
+
+**For error messages:** Use plain headers without brackets:
+```
+Dataverse Configuration Error
+
+Missing required property: Url
+```
+
+---
+
+## Display Patterns
+
+### Card Format
+
+Use cards when displaying detailed information with multiple fields per item:
+
+```
+[Environments]
+
+  PPDS Demo - Dev *
+      Type: Developer
+      URL: https://orgcabef92d.crm.dynamics.com
+      Unique Name: unq3a504f4385d7f01195c7000d3a5cc
+      Region: NA
+
+  PPDS Demo - Prod
+      Type: Developer
+      URL: https://org45808e40.crm.dynamics.com
+
+3 environment(s) found. * = active
+```
+
+**When to use cards:**
+- Items have many fields (4+)
+- Items have variable/optional fields
+- Readability matters more than density
+- Examples: `env list`, `auth list`
+
+### Table Format
+
+Use tables for homogeneous data with fixed columns:
+
+```
+Logical Name                             Display Name                             Custom
+------------------------------------------------------------------------------------------
+account                                  Account
+contact                                  Contact
+new_customentity                         Custom Entity                            Yes
+
+Total: 3 entities
+```
+
+**When to use tables:**
+- Fixed columns across all items
+- Scanning/comparing items matters
+- Grep-parseability is important
+- Examples: `schema list`, user mapping results
+
+**Table underlines:** Use `-----` (dashes) for column header underlines. This is standard (az, Heroku style).
+
+---
+
 ## Elapsed Timestamp Format
 
 All progress messages are prefixed with an elapsed timestamp:
