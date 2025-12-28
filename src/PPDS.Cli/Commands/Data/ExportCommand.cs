@@ -24,7 +24,7 @@ public static class ExportCommand
         {
             Description = "Output ZIP file path",
             Required = true
-        }.AcceptLegalFileNamesOnly();
+        };
 
         // Validate output directory exists
         outputOption.Validators.Add(result =>
