@@ -421,46 +421,57 @@ public static class AuthCommandGroup
             return;
         }
 
-        Console.WriteLine("Authentication Profiles");
-        Console.WriteLine(new string('=', 60));
-        Console.WriteLine();
-
-        foreach (var profile in collection.All)
+        // Build table data
+        var rows = collection.All.Select(p => new
         {
-            var isActive = collection.ActiveIndex == profile.Index;
-            var activeMarker = isActive ? " *" : "";
+            Index = $"[{p.Index}]",
+            Active = collection.ActiveIndex == p.Index ? "*" : "",
+            Method = p.AuthMethod.ToString(),
+            Name = p.Name ?? "",
+            User = p.IdentityDisplay,
+            Cloud = p.Cloud.ToString(),
+            Environment = p.Environment?.DisplayName ?? "",
+            EnvironmentUrl = p.Environment?.Url ?? ""
+        }).ToList();
 
-            Console.ForegroundColor = isActive ? ConsoleColor.Green : ConsoleColor.Gray;
-            Console.Write($"  [{profile.Index}]");
-            Console.ResetColor();
+        // Calculate column widths
+        var colIndex = Math.Max(5, rows.Max(r => r.Index.Length));
+        var colActive = 6;
+        var colMethod = Math.Max(6, rows.Max(r => r.Method.Length));
+        var colName = Math.Max(4, rows.Max(r => r.Name.Length));
+        var colUser = Math.Max(4, rows.Max(r => r.User.Length));
+        var colCloud = Math.Max(5, rows.Max(r => r.Cloud.Length));
+        var colEnv = Math.Max(11, rows.Max(r => r.Environment.Length));
 
-            if (profile.HasName)
-            {
-                Console.Write($" {profile.Name}");
-            }
+        // Print header
+        Console.WriteLine(
+            $"{"Index".PadRight(colIndex)} " +
+            $"{"Active".PadRight(colActive)} " +
+            $"{"Method".PadRight(colMethod)} " +
+            $"{"Name".PadRight(colName)} " +
+            $"{"User".PadRight(colUser)} " +
+            $"{"Cloud".PadRight(colCloud)} " +
+            $"{"Environment".PadRight(colEnv)} " +
+            "Environment Url");
 
-            Console.WriteLine(activeMarker);
+        // Print rows
+        foreach (var row in rows)
+        {
+            var isActive = row.Active == "*";
+            if (isActive) Console.ForegroundColor = ConsoleColor.Green;
 
-            Console.WriteLine($"      Identity: {profile.IdentityDisplay}");
-            Console.WriteLine($"      Method: {profile.AuthMethod}");
-            Console.WriteLine($"      Cloud: {profile.Cloud}");
+            Console.WriteLine(
+                $"{row.Index.PadRight(colIndex)} " +
+                $"{row.Active.PadRight(colActive)} " +
+                $"{row.Method.PadRight(colMethod)} " +
+                $"{row.Name.PadRight(colName)} " +
+                $"{row.User.PadRight(colUser)} " +
+                $"{row.Cloud.PadRight(colCloud)} " +
+                $"{row.Environment.PadRight(colEnv)} " +
+                row.EnvironmentUrl);
 
-            if (profile.HasEnvironment)
-            {
-                Console.WriteLine($"      Environment: {profile.Environment!.DisplayName}");
-            }
-            else
-            {
-                Console.ForegroundColor = ConsoleColor.Yellow;
-                Console.WriteLine($"      Environment: (none)");
-                Console.ResetColor();
-            }
-
-            Console.WriteLine();
+            if (isActive) Console.ResetColor();
         }
-
-        Console.WriteLine($"Total: {collection.Count} profile(s)");
-        Console.WriteLine("* = active profile");
     }
 
     private static void WriteProfilesAsJson(ProfileCollection collection)
