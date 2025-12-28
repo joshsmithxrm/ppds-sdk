@@ -8,6 +8,14 @@ namespace PPDS.Cli.Commands;
 public static class ErrorOutput
 {
     /// <summary>
+    /// Whether color output should be used.
+    /// Respects NO_COLOR standard (https://no-color.org/) and detects redirected output.
+    /// </summary>
+    private static bool UseColor =>
+        string.IsNullOrEmpty(Environment.GetEnvironmentVariable("NO_COLOR")) &&
+        !Console.IsErrorRedirected;
+
+    /// <summary>
     /// Gets the CLI version from assembly information.
     /// </summary>
     public static string Version
@@ -41,7 +49,39 @@ public static class ErrorOutput
         Console.Error.WriteLine($"Documentation: {DocumentationUrl}");
         Console.Error.WriteLine($"Issues: {IssuesUrl}");
         Console.Error.WriteLine();
+        WriteErrorLine(message);
+    }
+
+    /// <summary>
+    /// Writes a simple error line in red to stderr.
+    /// Respects NO_COLOR and detects redirected output.
+    /// </summary>
+    /// <param name="message">The error message (without "Error:" prefix).</param>
+    public static void WriteLine(string message)
+    {
+        if (UseColor)
+            Console.ForegroundColor = ConsoleColor.Red;
+
+        Console.Error.WriteLine(message);
+
+        if (UseColor)
+            Console.ResetColor();
+    }
+
+    /// <summary>
+    /// Writes "Error: {message}" in red to stderr.
+    /// Respects NO_COLOR and detects redirected output.
+    /// </summary>
+    /// <param name="message">The error message.</param>
+    public static void WriteErrorLine(string message)
+    {
+        if (UseColor)
+            Console.ForegroundColor = ConsoleColor.Red;
+
         Console.Error.WriteLine($"Error: {message}");
+
+        if (UseColor)
+            Console.ResetColor();
     }
 
     /// <summary>

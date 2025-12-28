@@ -227,8 +227,41 @@ public static class AuthCommandGroup
                 CertificateThumbprint = options.CertificateThumbprint
             };
 
-            // Authenticate to verify credentials - use discovery URL first
-            var targetUrl = "https://globaldisco.crm.dynamics.com";
+            // For service principals, we must authenticate directly to the environment URL
+            // Global discovery doesn't work with client credentials flow
+            var isServicePrincipal = authMethod is AuthMethod.ClientSecret or AuthMethod.CertificateFile
+                or AuthMethod.CertificateStore or AuthMethod.GitHubFederated or AuthMethod.AzureDevOpsFederated;
+
+            string targetUrl;
+            if (isServicePrincipal)
+            {
+                if (string.IsNullOrWhiteSpace(options.Environment))
+                {
+                    ErrorOutput.WriteErrorLine($"--environment is required for {authMethod} authentication.");
+                    ErrorOutput.WriteLine("Service principals must specify the full environment URL (e.g., https://org.crm.dynamics.com).");
+                    return ExitCodes.Failure;
+                }
+
+                // Service principals must provide a full URL - they can't use global discovery
+                // to resolve partial names like "Dev" or "Production"
+                if (!options.Environment.Contains("://"))
+                {
+                    ErrorOutput.WriteErrorLine("Service principals require a full environment URL.");
+                    ErrorOutput.WriteLine($"  Provided: {options.Environment}");
+                    ErrorOutput.WriteLine($"  Expected: https://org.crm.dynamics.com");
+                    Console.Error.WriteLine();
+                    ErrorOutput.WriteLine("Service principals cannot access Global Discovery to resolve environment names.");
+                    ErrorOutput.WriteLine("Use the full Dataverse URL for the environment.");
+                    return ExitCodes.Failure;
+                }
+
+                targetUrl = options.Environment;
+            }
+            else
+            {
+                // Interactive/device code can use global discovery
+                targetUrl = "https://globaldisco.crm.dynamics.com";
+            }
 
             Console.WriteLine($"Authenticating with {authMethod}...");
             Console.WriteLine();
@@ -274,53 +307,69 @@ public static class AuthCommandGroup
                     profile.Puid = claims.Puid;
                 }
 
-                client.Dispose();
-
-                // Resolve environment if specified (must happen before provider disposal)
+                // Resolve environment if specified (must happen before client disposal)
                 if (!string.IsNullOrWhiteSpace(options.Environment))
                 {
-                    Console.WriteLine("Resolving environment...");
-                    try
+                    if (isServicePrincipal)
                     {
-                        using var gds = new GlobalDiscoveryService(options.Cloud, options.Tenant);
-                        var environments = await gds.DiscoverEnvironmentsAsync(cancellationToken);
-
-                        DiscoveredEnvironment? resolved;
-                        try
-                        {
-                            resolved = EnvironmentResolver.Resolve(environments, options.Environment);
-                        }
-                        catch (AmbiguousMatchException ex)
-                        {
-                            Console.Error.WriteLine($"Error: {ex.Message}");
-                            return ExitCodes.Failure;
-                        }
-
-                        if (resolved == null)
-                        {
-                            Console.Error.WriteLine($"Error: Environment '{options.Environment}' not found.");
-                            Console.Error.WriteLine();
-                            Console.Error.WriteLine("Use 'ppds env list' to see available environments.");
-                            return ExitCodes.Failure;
-                        }
-
+                        // For service principals, get org info directly from the authenticated client
+                        // Global discovery doesn't work with client credentials
                         profile.Environment = new EnvironmentInfo
                         {
-                            Url = resolved.ApiUrl,
-                            DisplayName = resolved.FriendlyName,
-                            UniqueName = resolved.UniqueName,
-                            EnvironmentId = resolved.EnvironmentId,
-                            OrganizationId = resolved.Id.ToString(),
-                            Type = resolved.EnvironmentType,
-                            Region = resolved.Region
+                            Url = targetUrl.TrimEnd('/'),
+                            DisplayName = client.ConnectedOrgFriendlyName ?? ExtractEnvironmentName(targetUrl),
+                            UniqueName = client.ConnectedOrgUniqueName,
+                            OrganizationId = client.ConnectedOrgId.ToString()
                         };
                     }
-                    catch (Exception ex)
+                    else
                     {
-                        Console.Error.WriteLine($"Warning: Could not resolve environment: {ex.Message}");
-                        Console.Error.WriteLine("Use 'ppds env select' after profile creation to set the environment.");
+                        // For interactive auth, use global discovery for richer environment info
+                        Console.WriteLine("Resolving environment...");
+                        try
+                        {
+                            using var gds = new GlobalDiscoveryService(options.Cloud, options.Tenant);
+                            var environments = await gds.DiscoverEnvironmentsAsync(cancellationToken);
+
+                            DiscoveredEnvironment? resolved;
+                            try
+                            {
+                                resolved = EnvironmentResolver.Resolve(environments, options.Environment);
+                            }
+                            catch (AmbiguousMatchException ex)
+                            {
+                                Console.Error.WriteLine($"Error: {ex.Message}");
+                                return ExitCodes.Failure;
+                            }
+
+                            if (resolved == null)
+                            {
+                                Console.Error.WriteLine($"Error: Environment '{options.Environment}' not found.");
+                                Console.Error.WriteLine();
+                                Console.Error.WriteLine("Use 'ppds env list' to see available environments.");
+                                return ExitCodes.Failure;
+                            }
+
+                            profile.Environment = new EnvironmentInfo
+                            {
+                                Url = resolved.ApiUrl,
+                                DisplayName = resolved.FriendlyName,
+                                UniqueName = resolved.UniqueName,
+                                EnvironmentId = resolved.EnvironmentId,
+                                OrganizationId = resolved.Id.ToString(),
+                                Type = resolved.EnvironmentType,
+                                Region = resolved.Region
+                            };
+                        }
+                        catch (Exception ex)
+                        {
+                            Console.Error.WriteLine($"Warning: Could not resolve environment: {ex.Message}");
+                            Console.Error.WriteLine("Use 'ppds env select' after profile creation to set the environment.");
+                        }
                     }
                 }
+
+                client.Dispose();
             }
             catch (AuthenticationException ex)
             {
