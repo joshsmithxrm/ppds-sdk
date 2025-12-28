@@ -20,7 +20,7 @@
     <PackageId>PPDS.Cli</PackageId>
     <Authors>Josh Smith</Authors>
     <Company>Power Platform Developer Suite</Company>
-    <Description>Unified CLI for Power Platform development. Manage authentication profiles,
+    <Description>CLI for Power Platform development. Manage authentication profiles,
       export/import data between Dataverse environments, and perform high-throughput migrations
       with connection pooling.</Description>
     <PackageTags>dataverse;dynamics365;powerplatform;migration;cmt;cli;data-migration;ppds</PackageTags>

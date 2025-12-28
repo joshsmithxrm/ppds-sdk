@@ -13,7 +13,7 @@ public static class Program
 {
     public static async Task<int> Main(string[] args)
     {
-        var rootCommand = new RootCommand("PPDS CLI - Unified Power Platform Developer Suite command-line tool");
+        var rootCommand = new RootCommand("PPDS CLI - Power Platform Developer Suite command-line tool");
 
         // Add command groups
         rootCommand.Subcommands.Add(AuthCommandGroup.Create());
