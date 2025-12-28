@@ -171,6 +171,29 @@ public sealed class ProfileConnectionSource : IDisposable
         }
     }
 
+    /// <summary>
+    /// Invalidates the cached seed client, forcing fresh authentication on next use.
+    /// </summary>
+    /// <remarks>
+    /// Call this when a token failure is detected. The next call to GetSeedClient
+    /// will create a new client with fresh authentication instead of returning the cached one.
+    /// </remarks>
+    public void InvalidateSeed()
+    {
+        lock (_lock)
+        {
+            if (_seedClient == null)
+                return;
+
+            _seedClient.Dispose();
+            _seedClient = null;
+
+            // Also dispose the credential provider so a fresh one is created
+            _provider?.Dispose();
+            _provider = null;
+        }
+    }
+
     /// <inheritdoc />
     public void Dispose()
     {

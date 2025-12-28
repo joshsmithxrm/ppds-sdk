@@ -56,6 +56,25 @@ namespace PPDS.Dataverse.Pooling
         void RecordConnectionFailure();
 
         /// <summary>
+        /// Invalidates the seed client for a connection, forcing fresh authentication on next use.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// Call this when a token failure is detected (e.g., <c>MessageSecurityException</c> with "Anonymous").
+        /// This removes the cached seed client so the next connection request will create a fresh seed
+        /// with a new authentication token.
+        /// </para>
+        /// <para>
+        /// This is different from marking individual pooled connections as invalid. When a token expires,
+        /// all clones of the seed share the same broken authentication context. Simply disposing
+        /// pool members doesn't help - new clones from the same seed will also fail.
+        /// Invalidating the seed forces a complete re-authentication.
+        /// </para>
+        /// </remarks>
+        /// <param name="connectionName">The name of the connection source to invalidate.</param>
+        void InvalidateSeed(string connectionName);
+
+        /// <summary>
         /// Executes a request with automatic retry on service protection errors.
         /// This is a convenience method that handles connection management and throttle retry internally.
         /// The caller doesn't need to handle service protection exceptions - they are handled transparently.

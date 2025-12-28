@@ -6,6 +6,7 @@ using System.Linq;
 using System.Net.Http;
 using System.Net.Sockets;
 using System.ServiceModel;
+using System.ServiceModel.Security;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
@@ -492,11 +493,20 @@ namespace PPDS.Dataverse.BulkOperations
 
         /// <summary>
         /// Checks if an exception indicates an authentication/authorization failure.
+        /// This includes both token failures (expired/invalid token) and permission failures
+        /// (user lacks privilege). Use <see cref="IsTokenFailure"/> to distinguish between them.
         /// </summary>
         /// <param name="exception">The exception to check.</param>
-        /// <returns>True if this is an authentication failure.</returns>
+        /// <returns>True if this is an authentication or authorization failure.</returns>
         private static bool IsAuthFailure(Exception exception)
         {
+            // MessageSecurityException indicates the token wasn't sent or was rejected.
+            // This happens when OAuth token expires and MSAL refresh fails silently.
+            if (exception is MessageSecurityException)
+            {
+                return true;
+            }
+
             // Check for common auth failure patterns in FaultException
             if (exception is FaultException<OrganizationServiceFault> faultEx)
             {
@@ -536,6 +546,60 @@ namespace PPDS.Dataverse.BulkOperations
                 var message = httpEx.Message?.ToLowerInvariant() ?? "";
                 if (message.Contains("401") || message.Contains("403") ||
                     message.Contains("unauthorized") || message.Contains("forbidden"))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        /// <summary>
+        /// Checks if an exception indicates a token/credential failure that requires seed invalidation.
+        /// This is a subset of auth failures - specifically those where the authentication context
+        /// itself is broken (token expired, credential invalid) rather than permission issues.
+        /// </summary>
+        /// <remarks>
+        /// Token failures require invalidating the seed client so a fresh authentication can occur.
+        /// Permission failures (user lacks privilege, user disabled) don't require seed invalidation
+        /// because the authentication is valid - the user just doesn't have access.
+        /// </remarks>
+        /// <param name="exception">The exception to check.</param>
+        /// <returns>True if this is a token failure requiring seed invalidation.</returns>
+        private static bool IsTokenFailure(Exception exception)
+        {
+            // MessageSecurityException with "Anonymous" means the token wasn't sent at all.
+            // This is the clearest indicator that the token expired and MSAL refresh failed.
+            if (exception is MessageSecurityException)
+            {
+                return true;
+            }
+
+            // HTTP 401 Unauthorized means the token was rejected by the server.
+            // This is different from 403 Forbidden which is a permission issue.
+            if (exception.InnerException is HttpRequestException httpEx)
+            {
+                var message = httpEx.Message?.ToLowerInvariant() ?? "";
+                if (message.Contains("401") || message.Contains("unauthorized"))
+                {
+                    return true;
+                }
+            }
+
+            // Check for explicit token expiration in FaultException messages
+            if (exception is FaultException<OrganizationServiceFault> faultEx)
+            {
+                var message = faultEx.Detail.Message?.ToLowerInvariant() ?? "";
+
+                // Token expiration messages
+                if (message.Contains("token") && message.Contains("expired"))
+                {
+                    return true;
+                }
+
+                // Credential issues
+                if (message.Contains("credential") &&
+                    (message.Contains("invalid") || message.Contains("expired")))
                 {
                     return true;
                 }
@@ -742,6 +806,13 @@ namespace PPDS.Dataverse.BulkOperations
 
                     // Record the failure for statistics
                     _connectionPool.RecordAuthFailure();
+
+                    // If this is a token failure (not just a permission issue), invalidate the seed.
+                    // This ensures the next connection gets a fresh authentication context.
+                    if (IsTokenFailure(ex))
+                    {
+                        _connectionPool.InvalidateSeed(failedConnection);
+                    }
 
                     if (attempt >= maxRetries)
                     {

@@ -817,6 +817,61 @@ namespace PPDS.Dataverse.Pooling
             Interlocked.Increment(ref _connectionFailureCount);
         }
 
+        /// <inheritdoc />
+        public void InvalidateSeed(string connectionName)
+        {
+            if (string.IsNullOrEmpty(connectionName))
+            {
+                return;
+            }
+
+            // Remove from our seed cache
+            if (_seedClients.TryRemove(connectionName, out var oldSeed))
+            {
+                _logger.LogWarning(
+                    "Invalidating seed client for connection {ConnectionName} due to token failure. " +
+                    "Next connection request will create fresh authentication.",
+                    connectionName);
+
+                // Dispose the old seed
+                try
+                {
+                    oldSeed.Dispose();
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogDebug(ex, "Error disposing old seed client for {ConnectionName}", connectionName);
+                }
+            }
+
+            // Invalidate the source's cached seed so GetSeedClient() creates a fresh one
+            var source = _sources.FirstOrDefault(s =>
+                string.Equals(s.Name, connectionName, StringComparison.OrdinalIgnoreCase));
+
+            if (source != null)
+            {
+                source.InvalidateSeed();
+            }
+
+            // Drain all pool members for this connection - they're clones of the broken seed
+            if (_pools.TryGetValue(connectionName, out var pool))
+            {
+                var drained = 0;
+                while (pool.TryDequeue(out var client))
+                {
+                    client.ForceDispose();
+                    drained++;
+                }
+
+                if (drained > 0)
+                {
+                    _logger.LogInformation(
+                        "Drained {Count} pooled connections for {ConnectionName} after seed invalidation",
+                        drained, connectionName);
+                }
+            }
+        }
+
         private void ThrowIfDisposed()
         {
             if (Volatile.Read(ref _disposed) != 0)

@@ -36,5 +36,8 @@ internal sealed class ProfileConnectionSourceAdapter : IConnectionSource
     public ServiceClient GetSeedClient() => _source.GetSeedClient();
 
     /// <inheritdoc />
+    public void InvalidateSeed() => _source.InvalidateSeed();
+
+    /// <inheritdoc />
     public void Dispose() => _source.Dispose();
 }
