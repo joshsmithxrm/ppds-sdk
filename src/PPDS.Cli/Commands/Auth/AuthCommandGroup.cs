@@ -658,14 +658,15 @@ public static class AuthCommandGroup
 
     private static Command CreateUpdateCommand()
     {
-        var profileArg = new Argument<string>("profile")
+        var indexOption = new Option<int>("--index", "-i")
         {
-            Description = "Profile name or index to update"
+            Description = "The index of the profile to update",
+            Required = true
         };
 
         var nameOption = new Option<string?>("--name", "-n")
         {
-            Description = "New name for the profile (max 30 characters)"
+            Description = "The name to give this profile (max 30 characters)"
         };
         nameOption.Validators.Add(result =>
         {
@@ -674,39 +675,46 @@ public static class AuthCommandGroup
                 result.AddError("Profile name cannot exceed 30 characters");
         });
 
-        var command = new Command("update", "Update profile metadata (name)")
+        var envOption = new Option<string?>("--environment", "-env")
         {
-            profileArg,
-            nameOption
+            Description = "Default environment (URL)"
+        };
+
+        var command = new Command("update", "Update profile name or default environment")
+        {
+            indexOption,
+            nameOption,
+            envOption
         };
 
         command.SetAction(async (parseResult, cancellationToken) =>
         {
-            var profile = parseResult.GetValue(profileArg)!;
+            var index = parseResult.GetValue(indexOption);
             var name = parseResult.GetValue(nameOption);
-            return await ExecuteUpdateAsync(profile, name, cancellationToken);
+            var env = parseResult.GetValue(envOption);
+            return await ExecuteUpdateAsync(index, name, env, cancellationToken);
         });
 
         return command;
     }
 
-    private static async Task<int> ExecuteUpdateAsync(string profileNameOrIndex, string? newName, CancellationToken cancellationToken)
+    private static async Task<int> ExecuteUpdateAsync(int index, string? newName, string? newEnvironment, CancellationToken cancellationToken)
     {
         try
         {
-            if (string.IsNullOrWhiteSpace(newName))
+            if (string.IsNullOrWhiteSpace(newName) && string.IsNullOrWhiteSpace(newEnvironment))
             {
-                Console.Error.WriteLine("Error: At least one update option (--name) must be specified.");
+                Console.Error.WriteLine("Error: At least one update option (--name or --environment) must be specified.");
                 return ExitCodes.Failure;
             }
 
             using var store = new ProfileStore();
             var collection = await store.LoadAsync(cancellationToken);
 
-            var profile = collection.GetByNameOrIndex(profileNameOrIndex);
+            var profile = collection.GetByIndex(index);
             if (profile == null)
             {
-                Console.Error.WriteLine($"Error: Profile '{profileNameOrIndex}' not found.");
+                Console.Error.WriteLine($"Error: Profile with index {index} not found.");
                 return ExitCodes.Failure;
             }
 
@@ -721,6 +729,18 @@ public static class AuthCommandGroup
                 var oldName = profile.DisplayIdentifier;
                 profile.Name = newName;
                 Console.WriteLine($"Name updated: {oldName} -> {profile.DisplayIdentifier}");
+            }
+
+            // Update environment if provided
+            if (!string.IsNullOrWhiteSpace(newEnvironment))
+            {
+                var envUrl = newEnvironment.TrimEnd('/');
+                profile.Environment = new EnvironmentInfo
+                {
+                    Url = envUrl,
+                    DisplayName = ExtractEnvironmentName(envUrl)
+                };
+                Console.WriteLine($"Default environment set: {profile.Environment.DisplayName}");
             }
 
             await store.SaveAsync(collection, cancellationToken);
