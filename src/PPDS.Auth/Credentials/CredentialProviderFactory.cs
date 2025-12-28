@@ -12,7 +12,7 @@ public static class CredentialProviderFactory
     /// Creates a credential provider for the specified auth profile.
     /// </summary>
     /// <param name="profile">The auth profile.</param>
-    /// <param name="deviceCodeCallback">Optional callback for device code display (for DeviceCode auth).</param>
+    /// <param name="deviceCodeCallback">Optional callback for device code display (for DeviceCode auth in headless mode).</param>
     /// <returns>A credential provider for the profile's auth method.</returns>
     /// <exception cref="NotSupportedException">If the auth method is not supported.</exception>
     public static ICredentialProvider Create(
@@ -24,7 +24,7 @@ public static class CredentialProviderFactory
 
         return profile.AuthMethod switch
         {
-            AuthMethod.DeviceCode => DeviceCodeCredentialProvider.FromProfile(profile, deviceCodeCallback),
+            AuthMethod.DeviceCode => CreateInteractiveProvider(profile, deviceCodeCallback),
             AuthMethod.ClientSecret => ClientSecretCredentialProvider.FromProfile(profile),
             AuthMethod.CertificateFile => CertificateFileCredentialProvider.FromProfile(profile),
             AuthMethod.CertificateStore => CertificateStoreCredentialProvider.FromProfile(profile),
@@ -32,10 +32,30 @@ public static class CredentialProviderFactory
             AuthMethod.GitHubFederated => throw new NotSupportedException("GitHubFederated auth is not yet implemented."),
             AuthMethod.AzureDevOpsFederated => throw new NotSupportedException("AzureDevOpsFederated auth is not yet implemented."),
 #pragma warning disable CS0618 // Type or member is obsolete
-            AuthMethod.UsernamePassword => throw new NotSupportedException("UsernamePassword auth is deprecated and not supported."),
+            AuthMethod.UsernamePassword => throw new NotSupportedException("UsernamePassword auth is not supported. Use interactive browser or service principal instead."),
 #pragma warning restore CS0618
             _ => throw new NotSupportedException($"Unknown auth method: {profile.AuthMethod}")
         };
+    }
+
+    /// <summary>
+    /// Creates the appropriate interactive provider based on environment.
+    /// Uses browser authentication by default (like PAC CLI), falls back to device code for headless environments.
+    /// </summary>
+    private static ICredentialProvider CreateInteractiveProvider(
+        AuthProfile profile,
+        Action<DeviceCodeInfo>? deviceCodeCallback)
+    {
+        // Use browser auth when available (default, like PAC CLI)
+        // Fall back to device code for headless environments (SSH, CI, containers)
+        if (InteractiveBrowserCredentialProvider.IsAvailable())
+        {
+            return InteractiveBrowserCredentialProvider.FromProfile(profile);
+        }
+        else
+        {
+            return DeviceCodeCredentialProvider.FromProfile(profile, deviceCodeCallback);
+        }
     }
 
     /// <summary>

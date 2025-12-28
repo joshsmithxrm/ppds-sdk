@@ -256,6 +256,18 @@
 - src/PPDS.Cli/Infrastructure/AuthResolver.cs
 - src/PPDS.Cli/Infrastructure/DeviceCodeTokenProvider.cs
 
+### 5.8 Interactive Browser Auth - COMPLETE
+- [x] Create `InteractiveBrowserCredentialProvider` using MSAL's `AcquireTokenInteractive`
+- [x] Auto-detect headless environments (SSH, CI, containers, no display)
+- [x] Browser auth by default (like PAC CLI), device code fallback for headless
+- [x] Update `CredentialProviderFactory` to select appropriate provider
+
+**Files Created:**
+- src/PPDS.Auth/Credentials/InteractiveBrowserCredentialProvider.cs
+
+**Files Modified:**
+- src/PPDS.Auth/Credentials/CredentialProviderFactory.cs
+
 ---
 
 ## Phase 6: Pooling Support - NOT STARTED
@@ -297,6 +309,7 @@
 | 2025-12-27 | Adapter pattern for ProfileConnectionSource | Avoids circular dep between Auth and Dataverse |
 | 2025-12-27 | No legacy --url/--auth options | Pre-v1, no backwards compat needed |
 | 2025-12-27 | Active profile used when no --profile specified | Seamless UX after `ppds auth create` |
+| 2025-12-27 | Browser auth default, device code fallback | PAC CLI parity; better UX for desktop users |
 
 ---
 
