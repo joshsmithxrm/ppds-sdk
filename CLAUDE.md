@@ -140,6 +140,29 @@ public class PluginStepAttribute : Attribute { }
 public class PluginStepAttribute : Attribute { }
 ```
 
+### Code Comments
+
+Comments explain WHY, not WHAT. The code documents what it does.
+
+```csharp
+// ❌ Bad - explains what (the code already shows this)
+// Loop through all options and check if required
+foreach (var option in command.Options)
+
+// ❌ Bad - references external tool as justification
+// Use [Required] prefix like Azure CLI does
+option.Description = $"[Required] {desc}";
+
+// ✅ Good - explains why (non-obvious side effect)
+// Required=false hides the default suffix; we show [Required] in description instead
+option.Required = false;
+
+// ✅ Good - explains why (workaround for framework limitation)
+// Option validators only run when the option is present on command line,
+// so we need command-level validation to catch missing required options
+command.Validators.Add(result => { ... });
+```
+
 ### Namespaces
 
 ```csharp

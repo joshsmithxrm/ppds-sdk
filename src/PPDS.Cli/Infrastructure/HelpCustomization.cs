@@ -29,7 +29,7 @@ public static class HelpCustomization
                     option.Description = $"[Required] {originalDescription}".Trim();
                 }
 
-                // Setting Required=false removes the (REQUIRED) suffix from help output
+                // Required=false hides the default suffix; we show [Required] in description instead
                 option.Required = false;
             }
         }
