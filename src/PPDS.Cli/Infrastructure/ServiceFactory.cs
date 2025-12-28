@@ -1,5 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
-using PPDS.Migration.DependencyInjection;
+using PPDS.Migration.Analysis;
+using PPDS.Migration.Formats;
 using PPDS.Migration.Progress;
 
 namespace PPDS.Cli.Infrastructure;
@@ -27,12 +28,17 @@ public static class ServiceFactory
 
     /// <summary>
     /// Creates a service provider for offline analysis (no Dataverse connection needed).
+    /// Only registers schema reading and dependency analysis services.
     /// </summary>
     /// <returns>A service provider with analysis services registered.</returns>
     public static ServiceProvider CreateAnalysisProvider()
     {
         var services = new ServiceCollection();
-        services.AddDataverseMigration();
+
+        // Only register services needed for offline analysis - no connection pool required
+        services.AddTransient<ICmtSchemaReader, CmtSchemaReader>();
+        services.AddTransient<IDependencyGraphBuilder, DependencyGraphBuilder>();
+
         return services.BuildServiceProvider();
     }
 }
