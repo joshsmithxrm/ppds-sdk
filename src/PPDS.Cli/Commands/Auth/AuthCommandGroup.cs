@@ -692,31 +692,23 @@ public static class AuthCommandGroup
             Description = "The name of the profile to be deleted"
         };
 
-        var forceOption = new Option<bool>("--force", "-f")
-        {
-            Description = "Skip confirmation prompt",
-            DefaultValueFactory = _ => false
-        };
-
         var command = new Command("delete", "Delete a particular authentication profile")
         {
             indexOption,
-            nameOption,
-            forceOption
+            nameOption
         };
 
         command.SetAction(async (parseResult, cancellationToken) =>
         {
             var index = parseResult.GetValue(indexOption);
             var name = parseResult.GetValue(nameOption);
-            var force = parseResult.GetValue(forceOption);
-            return await ExecuteDeleteAsync(index, name, force, cancellationToken);
+            return await ExecuteDeleteAsync(index, name, cancellationToken);
         });
 
         return command;
     }
 
-    private static async Task<int> ExecuteDeleteAsync(int? index, string? name, bool force, CancellationToken cancellationToken)
+    private static async Task<int> ExecuteDeleteAsync(int? index, string? name, CancellationToken cancellationToken)
     {
         try
         {
@@ -753,19 +745,6 @@ public static class AuthCommandGroup
                 {
                     Console.Error.WriteLine($"Error: Profile '{name}' not found.");
                     return ExitCodes.Failure;
-                }
-            }
-
-            if (!force)
-            {
-                Console.WriteLine($"Delete profile '{profile.DisplayIdentifier}'?");
-                Console.WriteLine($"  Identity: {profile.IdentityDisplay}");
-                Console.Write("Type 'yes' to confirm: ");
-                var confirmation = Console.ReadLine();
-                if (!string.Equals(confirmation, "yes", StringComparison.OrdinalIgnoreCase))
-                {
-                    Console.WriteLine("Cancelled.");
-                    return ExitCodes.Success;
                 }
             }
 
