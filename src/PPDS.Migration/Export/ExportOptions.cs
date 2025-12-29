@@ -20,12 +20,6 @@ namespace PPDS.Migration.Export
         public int PageSize { get; set; } = 5000;
 
         /// <summary>
-        /// Gets or sets whether to export file attachments (notes, annotations).
-        /// Default: false
-        /// </summary>
-        public bool ExportFiles { get; set; } = false;
-
-        /// <summary>
         /// Gets or sets the progress reporting interval in records.
         /// Default: 100
         /// </summary>

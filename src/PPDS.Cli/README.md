@@ -108,7 +108,6 @@ Options:
 - `--output`, `-o` (required) - Output ZIP file path
 - `--parallel` - Degree of parallelism (default: 16)
 - `--page-size` - FetchXML page size (default: 5000)
-- `--include-files` - Export file attachments
 - `--json` - Output progress as JSON
 - `--verbose`, `-v` - Verbose output
 - `--debug` - Diagnostic logging output
@@ -151,12 +150,11 @@ Options:
 - `--url` (required) - Dataverse environment URL
 - `--entities`, `-e` (required) - Entity logical names (comma-separated or multiple flags)
 - `--output`, `-o` (required) - Output schema file path
-- `--include-system-fields` - Include system fields (createdon, modifiedon, etc.)
+- `--include-audit-fields` - Include audit fields (createdon, createdby, modifiedon, modifiedby, overriddencreatedon)
 - `--include-relationships` - Include relationship definitions (default: true)
 - `--disable-plugins` - Set disableplugins=true on all entities
 - `--include-attributes`, `-a` - Only include these attributes (whitelist)
 - `--exclude-attributes` - Exclude these attributes (blacklist)
-- `--exclude-patterns` - Exclude attributes matching patterns (e.g., 'new_*')
 - `--json` - Output progress as JSON
 - `--verbose`, `-v` - Verbose output
 - `--debug` - Diagnostic logging output

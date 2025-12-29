@@ -59,12 +59,6 @@ public static class ExportCommand
                 result.AddError("--batch-size cannot exceed 5000 (Dataverse limit)");
         });
 
-        var includeFilesOption = new Option<bool>("--include-files")
-        {
-            Description = "Export file attachments (notes, annotations)",
-            DefaultValueFactory = _ => false
-        };
-
         var jsonOption = new Option<bool>("--json", "-j")
         {
             Description = "Output progress as JSON (for tool integration)",
@@ -91,7 +85,6 @@ public static class ExportCommand
             DataCommandGroup.EnvironmentOption,
             parallelOption,
             batchSizeOption,
-            includeFilesOption,
             jsonOption,
             verboseOption,
             debugOption
@@ -105,14 +98,13 @@ public static class ExportCommand
             var environment = parseResult.GetValue(DataCommandGroup.EnvironmentOption);
             var parallel = parseResult.GetValue(parallelOption);
             var batchSize = parseResult.GetValue(batchSizeOption);
-            var includeFiles = parseResult.GetValue(includeFilesOption);
             var json = parseResult.GetValue(jsonOption);
             var verbose = parseResult.GetValue(verboseOption);
             var debug = parseResult.GetValue(debugOption);
 
             return await ExecuteAsync(
                 profile, environment, schema, output, parallel, batchSize,
-                includeFiles, json, verbose, debug, cancellationToken);
+                json, verbose, debug, cancellationToken);
         });
 
         return command;
@@ -125,7 +117,6 @@ public static class ExportCommand
         FileInfo output,
         int parallel,
         int batchSize,
-        bool includeFiles,
         bool json,
         bool verbose,
         bool debug,
@@ -155,8 +146,7 @@ public static class ExportCommand
             var exportOptions = new ExportOptions
             {
                 DegreeOfParallelism = parallel,
-                PageSize = batchSize,
-                ExportFiles = includeFiles
+                PageSize = batchSize
             };
 
             var result = await exporter.ExportAsync(

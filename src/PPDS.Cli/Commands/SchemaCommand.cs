@@ -44,9 +44,9 @@ public static class SchemaCommand
                 result.AddError($"Output directory does not exist: {file.Directory.FullName}");
         });
 
-        var includeSystemFieldsOption = new Option<bool>("--include-system-fields")
+        var includeAuditFieldsOption = new Option<bool>("--include-audit-fields")
         {
-            Description = "Include system fields (createdon, modifiedon, etc.)",
+            Description = "Include audit fields (createdon, createdby, modifiedon, modifiedby, overriddencreatedon)",
             DefaultValueFactory = _ => false
         };
 
@@ -74,12 +74,6 @@ public static class SchemaCommand
             AllowMultipleArgumentsPerToken = true
         };
 
-        var excludePatternsOption = new Option<string[]?>("--exclude-patterns")
-        {
-            Description = "Exclude attributes matching patterns (e.g., 'new_*', '*_base')",
-            AllowMultipleArgumentsPerToken = true
-        };
-
         var jsonOption = new Option<bool>("--json", "-j")
         {
             Description = "Output progress as JSON",
@@ -104,12 +98,11 @@ public static class SchemaCommand
             outputOption,
             DataCommandGroup.ProfileOption,
             DataCommandGroup.EnvironmentOption,
-            includeSystemFieldsOption,
+            includeAuditFieldsOption,
             includeRelationshipsOption,
             disablePluginsOption,
             includeAttributesOption,
             excludeAttributesOption,
-            excludePatternsOption,
             jsonOption,
             verboseOption,
             debugOption
@@ -121,12 +114,11 @@ public static class SchemaCommand
             var output = parseResult.GetValue(outputOption)!;
             var profile = parseResult.GetValue(DataCommandGroup.ProfileOption);
             var environment = parseResult.GetValue(DataCommandGroup.EnvironmentOption);
-            var includeSystemFields = parseResult.GetValue(includeSystemFieldsOption);
+            var includeAuditFields = parseResult.GetValue(includeAuditFieldsOption);
             var includeRelationships = parseResult.GetValue(includeRelationshipsOption);
             var disablePlugins = parseResult.GetValue(disablePluginsOption);
             var includeAttributes = parseResult.GetValue(includeAttributesOption);
             var excludeAttributes = parseResult.GetValue(excludeAttributesOption);
-            var excludePatterns = parseResult.GetValue(excludePatternsOption);
             var json = parseResult.GetValue(jsonOption);
             var verbose = parseResult.GetValue(verboseOption);
             var debug = parseResult.GetValue(debugOption);
@@ -145,12 +137,11 @@ public static class SchemaCommand
 
             var includeAttrList = ParseAttributeList(includeAttributes);
             var excludeAttrList = ParseAttributeList(excludeAttributes);
-            var excludePatternList = ParseAttributeList(excludePatterns);
 
             return await ExecuteGenerateAsync(
                 profile, environment, entityList, output,
-                includeSystemFields, includeRelationships, disablePlugins,
-                includeAttrList, excludeAttrList, excludePatternList,
+                includeAuditFields, includeRelationships, disablePlugins,
+                includeAttrList, excludeAttrList,
                 json, verbose, debug, cancellationToken);
         });
 
@@ -216,12 +207,11 @@ public static class SchemaCommand
         string? environment,
         List<string> entities,
         FileInfo output,
-        bool includeSystemFields,
+        bool includeAuditFields,
         bool includeRelationships,
         bool disablePlugins,
         List<string>? includeAttributes,
         List<string>? excludeAttributes,
-        List<string>? excludePatterns,
         bool json,
         bool verbose,
         bool debug,
@@ -234,7 +224,6 @@ public static class SchemaCommand
             var optionsMsg = new List<string>();
             if (includeAttributes != null) optionsMsg.Add($"include: {string.Join(",", includeAttributes)}");
             if (excludeAttributes != null) optionsMsg.Add($"exclude: {string.Join(",", excludeAttributes)}");
-            if (excludePatterns != null) optionsMsg.Add($"patterns: {string.Join(",", excludePatterns)}");
 
             await using var serviceProvider = await ProfileServiceFactory.CreateFromProfileAsync(
                 profile,
@@ -263,12 +252,11 @@ public static class SchemaCommand
 
             var options = new SchemaGeneratorOptions
             {
-                IncludeSystemFields = includeSystemFields,
+                IncludeAuditFields = includeAuditFields,
                 IncludeRelationships = includeRelationships,
                 DisablePluginsByDefault = disablePlugins,
                 IncludeAttributes = includeAttributes,
-                ExcludeAttributes = excludeAttributes,
-                ExcludeAttributePatterns = excludePatterns
+                ExcludeAttributes = excludeAttributes
             };
 
             var schema = await generator.GenerateAsync(
