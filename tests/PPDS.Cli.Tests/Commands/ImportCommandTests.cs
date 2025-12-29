@@ -152,11 +152,21 @@ public class ImportCommandTests : IDisposable
         Assert.Empty(result.Errors);
     }
 
-    [Fact]
-    public void Parse_WithOptionalBypassPlugins_Succeeds()
+    [Theory]
+    [InlineData("sync")]
+    [InlineData("async")]
+    [InlineData("all")]
+    public void Parse_WithBypassPlugins_ValidValues_Succeeds(string value)
     {
-        var result = _command.Parse($"-d \"{_tempDataFile}\" --bypass-plugins");
+        var result = _command.Parse($"-d \"{_tempDataFile}\" --bypass-plugins {value}");
         Assert.Empty(result.Errors);
+    }
+
+    [Fact]
+    public void Parse_WithBypassPlugins_InvalidValue_HasError()
+    {
+        var result = _command.Parse($"-d \"{_tempDataFile}\" --bypass-plugins invalid");
+        Assert.NotEmpty(result.Errors);
     }
 
     [Fact]
@@ -193,7 +203,7 @@ public class ImportCommandTests : IDisposable
     [Fact]
     public void Parse_WithAllBypassOptions_Succeeds()
     {
-        var result = _command.Parse($"-d \"{_tempDataFile}\" --bypass-plugins --bypass-flows");
+        var result = _command.Parse($"-d \"{_tempDataFile}\" --bypass-plugins all --bypass-flows");
         Assert.Empty(result.Errors);
     }
 
