@@ -29,7 +29,7 @@ public static class CopyCommand
 
         var targetProfileOption = new Option<string?>("--target-profile", "-tp")
         {
-            Description = "Authentication profile for target environment (defaults to active profile)"
+            Description = "Authentication profile(s) for target environment - comma-separated for parallel imports (defaults to active profile)"
         };
 
         var sourceEnvOption = new Option<string>("--source-env", "-se")
@@ -235,7 +235,8 @@ public static class CopyCommand
                 return ExitCodes.Failure;
             }
 
-            await using var targetProvider = await ProfileServiceFactory.CreateFromProfileAsync(
+            // Target supports comma-separated profiles for parallel import scaling
+            await using var targetProvider = await ProfileServiceFactory.CreateFromProfilesAsync(
                 targetProfileName,
                 targetEnv,
                 verbose,
