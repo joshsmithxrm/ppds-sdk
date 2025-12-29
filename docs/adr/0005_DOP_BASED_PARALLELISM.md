@@ -30,16 +30,15 @@ Simply use `RecommendedDegreesOfParallelism × connectionCount` as a fixed ceili
 
 ### Test Results
 
-We ran extensive tests with 72,493 records:
+We ran extensive tests with 72,493 records (developer environment, DOP=5 per user):
 
-| Approach | Connections | Parallelism | Throughput | Time | Throttles |
-|----------|-------------|-------------|------------|------|-----------|
-| DOP-only | 1 | 4 | 176 rec/s | 6:50 | 0 |
-| DOP-only | 2 | 8 | 339 rec/s | 3:33 | 0 |
-| Adaptive (exceeded DOP) | 1 | 10-11 | ~250 rec/s | ~5:30 | Yes |
-| Adaptive (exceeded DOP) | 2 | ~20 | 547 rec/s | 2:12 | 0* |
+| Approach | Users | DOP | Throughput | Time | Throttles |
+|----------|-------|-----|------------|------|-----------|
+| DOP-based | 1 | 5 | 202 rec/s | 05:58 | 0 |
+| DOP-based | 2 | 10 | 395 rec/s | 03:03 | 0 |
+| Exceeded DOP | 1 | 10+ | ~100 rec/s | 12:15 | **155** |
 
-*Only avoided throttle because job finished before 5-minute budget exhausted. Not sustainable.
+The 1-user test that exceeded DOP hit 155 throttle events with 30-second Retry-After durations, resulting in 4x slower performance than respecting DOP limits.
 
 ### Key Finding
 
@@ -78,20 +77,30 @@ Our testing confirmed this. The adaptive approach that exceeded DOP achieved hig
 ### Code Structure
 
 ```csharp
-// Pool tracks DOP per connection source
-private readonly ConcurrentDictionary<string, int> _sourceDop = new();
+// Pool reads live DOP from each connection source's seed client
+public int GetLiveSourceDop(string sourceName)
+{
+    if (_seedClients.TryGetValue(sourceName, out var seed))
+    {
+        var liveDop = seed.RecommendedDegreesOfParallelism;
+        return Math.Min(liveDop, MicrosoftHardLimitPerUser); // Cap at 52
+    }
+    return DefaultDop; // Fallback
+}
 
-// Initialize from seed client
-var dop = seed.RecommendedDegreesOfParallelism;
-var cappedDop = Math.Min(dop, MicrosoftHardLimitPerUser); // 52
-_sourceDop[connectionName] = cappedDop;
-
-// Get total parallelism
+// Get total parallelism across all sources
 public int GetTotalRecommendedParallelism()
 {
-    return _sourceDop.Values.Sum();
+    return _seedClients.Keys.Sum(name => GetLiveSourceDop(name));
 }
+
+// Bulk operations read DOP each iteration for adaptive execution
+await Parallel.ForEachAsync(batches,
+    new ParallelOptions { MaxDegreeOfParallelism = pool.GetTotalRecommendedParallelism() },
+    async (batch, ct) => { ... });
 ```
+
+**Note:** DOP is read live from `ServiceClient.RecommendedDegreesOfParallelism` rather than cached at initialization. This allows the pool to adapt if the server changes its recommendation mid-operation.
 
 ### Throttle Handling
 
@@ -107,16 +116,26 @@ The pool's `MaxRetryAfterTolerance` option allows failing fast if the wait excee
 
 ### Positive
 
-- **Zero throttles** when respecting DOP
+- **Zero throttles** when respecting DOP (vs 155 throttles when exceeding)
 - **Simpler code** - Removed ~500 lines of adaptive rate control logic
 - **Predictable performance** - No ramping delays, immediate optimal throughput
-- **Environment-adaptive** - Automatically adjusts to trial (DOP=4) vs production (DOP=50)
+- **Near-linear scaling** - 2 users = 1.95x throughput (theoretical max 2.0x)
+- **Environment-adaptive** - Automatically adjusts to dev (DOP=5) vs production (DOP=50)
 - **Clear scaling model** - "Add Application Users for more throughput"
 
 ### Negative
 
 - **Lower peak throughput** on short operations where exceeding DOP wouldn't exhaust budget
 - **Requires multiple Application Users** for high throughput (by design)
+
+### Measured Results
+
+| Metric | 1 User | 2 Users |
+|--------|--------|---------|
+| DOP | 5 | 10 |
+| Throughput | 202 rec/s | 395 rec/s |
+| Scaling | baseline | 1.95x |
+| Throttles | 0 | 0 |
 
 ### Removed Components
 
