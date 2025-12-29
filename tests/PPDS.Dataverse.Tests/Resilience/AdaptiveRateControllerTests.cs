@@ -274,20 +274,22 @@ namespace PPDS.Dataverse.Tests.Resilience
             // Arrange
             var controller = CreateController(new AdaptiveRateOptions
             {
-                Preset = RateControlPreset.Balanced // RequestRateCeilingFactor = 16
+                Preset = RateControlPreset.Balanced // RequestRateCeilingFactor = 16, ExecutionTimeCeilingFactor = 50
             });
 
             controller.GetParallelism(recommendedPerConnection: 4, connectionCount: 1);
 
-            // Record 2-second batches: RequestRateCeiling = 16 * 2 = 32
-            controller.RecordBatchCompletion(TimeSpan.FromSeconds(2));
-            controller.RecordBatchCompletion(TimeSpan.FromSeconds(2));
-            controller.RecordBatchCompletion(TimeSpan.FromSeconds(2));
+            // Record 1.5-second batches:
+            // RequestRateCeiling = 16 * 1.5 = 24 (binding)
+            // ExecutionTimeCeiling = 50 / 1.5 ≈ 33
+            controller.RecordBatchCompletion(TimeSpan.FromSeconds(1.5));
+            controller.RecordBatchCompletion(TimeSpan.FromSeconds(1.5));
+            controller.RecordBatchCompletion(TimeSpan.FromSeconds(1.5));
 
-            // Assert
+            // Assert - request rate ceiling is the binding constraint
             var stats = controller.GetStatistics();
-            stats.RequestRateCeiling.Should().Be(32);
-            stats.EffectiveCeiling.Should().Be(32);
+            stats.RequestRateCeiling.Should().Be(24);
+            stats.EffectiveCeiling.Should().Be(24);
         }
 
         #endregion
@@ -767,12 +769,11 @@ namespace PPDS.Dataverse.Tests.Resilience
             var options = new AdaptiveRateOptions
             {
                 Preset = RateControlPreset.Conservative,
-                ExecutionTimeCeilingFactor = 200 // Override preset's 140
+                ExecutionTimeCeilingFactor = 200 // Override preset's 35
             };
 
             // Assert - explicit value used, other preset values unchanged
             options.ExecutionTimeCeilingFactor.Should().Be(200); // Overridden
-            options.SlowBatchThresholdMs.Should().Be(6_000); // From Conservative
             options.DecreaseFactor.Should().Be(0.4); // From Conservative
         }
 

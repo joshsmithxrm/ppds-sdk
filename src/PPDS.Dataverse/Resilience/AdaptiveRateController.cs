@@ -455,6 +455,15 @@ namespace PPDS.Dataverse.Resilience
                 return;
             }
 
+            // Recovery cooldown: Don't increase within 30s of a throttle
+            // The server's 5-minute sliding window still remembers our previous load,
+            // so ramping back up immediately risks cascading throttles
+            if (_lastThrottleTime.HasValue &&
+                (DateTime.UtcNow - _lastThrottleTime.Value) < _options.RecoveryCooldown)
+            {
+                return;
+            }
+
             // Hard request rate cap: 6000 requests per 5 min = 20/sec
             // Stop increasing if we're already at 90% of this limit (18 batch/sec)
             // This is a safety valve regardless of other ceiling calculations
@@ -489,16 +498,18 @@ namespace PPDS.Dataverse.Resilience
             }
 
             // Request rate ceiling: Always applied when available
+            // Protects fast operations from exhausting the 6,000 requests/5-min budget
             if (_requestRateCeiling.HasValue)
             {
                 effectiveCeiling = Math.Min(effectiveCeiling, _requestRateCeiling.Value);
                 requestRateCeilingActive = _requestRateCeiling.Value < _ceilingParallelism;
             }
 
-            // Execution time ceiling: Only apply for slow batches
-            if (_executionTimeCeiling.HasValue &&
-                _batchDurationEmaMs.HasValue &&
-                _batchDurationEmaMs.Value >= _options.SlowBatchThresholdMs)
+            // Execution time ceiling: Always applied when available
+            // Protects all operations from exhausting the 20-min/5-min execution time budget
+            // The formulas are inverses (Factor/duration vs Factor×duration) so one is always
+            // more restrictive - no threshold needed, just take min(both)
+            if (_executionTimeCeiling.HasValue)
             {
                 effectiveCeiling = Math.Min(effectiveCeiling, _executionTimeCeiling.Value);
                 execTimeCeilingActive = _executionTimeCeiling.Value < _ceilingParallelism;
@@ -568,11 +579,10 @@ namespace PPDS.Dataverse.Resilience
 
             _logger.LogInformation(
                 "Adaptive rate control: Preset={Preset}, ExecTimeFactor={ExecTimeFactor}, RequestRateFactor={RequestRateFactor}, " +
-                "SlowThreshold={Threshold}ms, DecreaseFactor={DecreaseFactor}, Stabilization={Stabilization}, Interval={Interval}s",
+                "DecreaseFactor={DecreaseFactor}, Stabilization={Stabilization}, Interval={Interval}s",
                 _options.Preset,
                 AdaptiveRateOptions.FormatValue(_options.ExecutionTimeCeilingFactor, _options.IsExecutionTimeCeilingFactorOverridden),
                 AdaptiveRateOptions.FormatValue(_options.RequestRateCeilingFactor, _options.IsRequestRateCeilingFactorOverridden),
-                AdaptiveRateOptions.FormatValue(_options.SlowBatchThresholdMs, _options.IsSlowBatchThresholdMsOverridden),
                 AdaptiveRateOptions.FormatValue(_options.DecreaseFactor, _options.IsDecreaseFactorOverridden),
                 AdaptiveRateOptions.FormatValue(_options.StabilizationBatches, _options.IsStabilizationBatchesOverridden),
                 AdaptiveRateOptions.FormatValue(_options.MinIncreaseInterval.TotalSeconds, _options.IsMinIncreaseIntervalOverridden));

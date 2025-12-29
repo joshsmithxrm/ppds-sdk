@@ -27,8 +27,7 @@ namespace PPDS.Dataverse.Resilience
             // Conservative: 60% of request rate limit (12 of 20 req/sec)
             // Prioritizes avoiding throttles over throughput
             RateControlPreset.Conservative => new PresetDefaults(
-                ExecutionTimeCeilingFactor: 140,
-                SlowBatchThresholdMs: 6_000,
+                ExecutionTimeCeilingFactor: 35,
                 DecreaseFactor: 0.4,
                 StabilizationBatches: 5,
                 MinIncreaseIntervalSeconds: 8,
@@ -37,8 +36,7 @@ namespace PPDS.Dataverse.Resilience
             // Balanced: 80% of request rate limit (16 of 20 req/sec)
             // Good throughput with reasonable safety margin
             RateControlPreset.Balanced => new PresetDefaults(
-                ExecutionTimeCeilingFactor: 200,
-                SlowBatchThresholdMs: 8_000,
+                ExecutionTimeCeilingFactor: 50,
                 DecreaseFactor: 0.5,
                 StabilizationBatches: 3,
                 MinIncreaseIntervalSeconds: 5,
@@ -47,8 +45,7 @@ namespace PPDS.Dataverse.Resilience
             // Aggressive: 90% of request rate limit (18 of 20 req/sec)
             // Maximum throughput, accepts occasional throttles
             RateControlPreset.Aggressive => new PresetDefaults(
-                ExecutionTimeCeilingFactor: 320,
-                SlowBatchThresholdMs: 11_000,
+                ExecutionTimeCeilingFactor: 80,
                 DecreaseFactor: 0.6,
                 StabilizationBatches: 2,
                 MinIncreaseIntervalSeconds: 3,
@@ -59,7 +56,6 @@ namespace PPDS.Dataverse.Resilience
 
         internal readonly record struct PresetDefaults(
             int ExecutionTimeCeilingFactor,
-            int SlowBatchThresholdMs,
             double DecreaseFactor,
             int StabilizationBatches,
             int MinIncreaseIntervalSeconds,
@@ -110,30 +106,12 @@ namespace PPDS.Dataverse.Resilience
         /// If not set, uses the value from <see cref="Preset"/>.
         /// </summary>
         /// <remarks>
-        /// Preset defaults: Conservative=140, Balanced=200, Aggressive=320
+        /// Preset defaults: Conservative=35, Balanced=50, Aggressive=80
         /// </remarks>
         public int ExecutionTimeCeilingFactor
         {
             get => _executionTimeCeilingFactor ?? GetPresetDefaults(Preset).ExecutionTimeCeilingFactor;
             set => _executionTimeCeilingFactor = value;
-        }
-
-        private int? _slowBatchThresholdMs;
-
-        /// <summary>
-        /// Gets or sets the slow batch threshold in milliseconds.
-        /// Execution time ceiling is only applied when average batch duration exceeds this threshold.
-        /// This allows fast operations (like creates) to run at full parallelism while
-        /// protecting slow operations (like updates/deletes) from execution time exhaustion.
-        /// If not set, uses the value from <see cref="Preset"/>.
-        /// </summary>
-        /// <remarks>
-        /// Preset defaults: Conservative=6000, Balanced=8000, Aggressive=11000
-        /// </remarks>
-        public int SlowBatchThresholdMs
-        {
-            get => _slowBatchThresholdMs ?? GetPresetDefaults(Preset).SlowBatchThresholdMs;
-            set => _slowBatchThresholdMs = value;
         }
 
         private double? _decreaseFactor;
@@ -231,11 +209,6 @@ namespace PPDS.Dataverse.Resilience
                 _executionTimeCeilingFactor = null;
             }
 
-            if (!configuredKeys.Contains(nameof(SlowBatchThresholdMs)))
-            {
-                _slowBatchThresholdMs = null;
-            }
-
             if (!configuredKeys.Contains(nameof(DecreaseFactor)))
             {
                 _decreaseFactor = null;
@@ -265,11 +238,6 @@ namespace PPDS.Dataverse.Resilience
         /// Returns true if ExecutionTimeCeilingFactor was explicitly set (not from preset).
         /// </summary>
         internal bool IsExecutionTimeCeilingFactorOverridden => _executionTimeCeilingFactor.HasValue;
-
-        /// <summary>
-        /// Returns true if SlowBatchThresholdMs was explicitly set (not from preset).
-        /// </summary>
-        internal bool IsSlowBatchThresholdMsOverridden => _slowBatchThresholdMs.HasValue;
 
         /// <summary>
         /// Returns true if DecreaseFactor was explicitly set (not from preset).
@@ -360,6 +328,13 @@ namespace PPDS.Dataverse.Resilience
         /// (floor as increase rate). Prevents 8→16→24→... in first minute.
         /// </summary>
         internal int MinBatchesForAggressiveRamp => 30;
+
+        /// <summary>
+        /// Cooldown period after a throttle before allowing parallelism increases.
+        /// The server's 5-minute sliding window still remembers previous load,
+        /// so ramping back up immediately risks cascading throttles.
+        /// </summary>
+        internal TimeSpan RecoveryCooldown => TimeSpan.FromSeconds(30);
 
         #endregion
     }
