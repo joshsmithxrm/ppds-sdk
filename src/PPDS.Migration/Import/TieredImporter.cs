@@ -300,12 +300,22 @@ namespace PPDS.Migration.Import
                 // Calculate record-level failure count from entity results
                 var recordFailureCount = entityResults.Sum(r => r.FailureCount);
 
+                // Aggregate created/updated counts from entity results (only populated for upsert mode)
+                var totalCreated = entityResults.Any(r => r.CreatedCount.HasValue)
+                    ? entityResults.Sum(r => r.CreatedCount ?? 0)
+                    : (int?)null;
+                var totalUpdated = entityResults.Any(r => r.UpdatedCount.HasValue)
+                    ? entityResults.Sum(r => r.UpdatedCount ?? 0)
+                    : (int?)null;
+
                 progress?.Complete(new MigrationResult
                 {
                     Success = result.Success,
                     RecordsProcessed = result.RecordsImported + result.RecordsUpdated + recordFailureCount,
                     SuccessCount = result.RecordsImported + result.RecordsUpdated,
                     FailureCount = recordFailureCount,
+                    CreatedCount = totalCreated,
+                    UpdatedCount = totalUpdated,
                     Duration = result.Duration,
                     Errors = errors.ToArray()
                 });
@@ -402,7 +412,8 @@ namespace PPDS.Migration.Import
                         Total = (int)snapshot.Total,
                         SuccessCount = (int)snapshot.Succeeded,
                         FailureCount = (int)snapshot.Failed,
-                        RecordsPerSecond = snapshot.RatePerSecond
+                        RecordsPerSecond = snapshot.RatePerSecond,
+                        EstimatedRemaining = snapshot.EstimatedRemaining
                     });
                 })
                 : null;
@@ -457,6 +468,8 @@ namespace PPDS.Migration.Import
                 RecordCount = records.Count,
                 SuccessCount = bulkResult.SuccessCount,
                 FailureCount = bulkResult.FailureCount,
+                CreatedCount = bulkResult.CreatedCount,
+                UpdatedCount = bulkResult.UpdatedCount,
                 Duration = entityStopwatch.Elapsed,
                 Success = bulkResult.FailureCount == 0,
                 Errors = allErrors

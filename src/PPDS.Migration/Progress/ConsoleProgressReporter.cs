@@ -62,13 +62,14 @@ namespace PPDS.Migration.Progress
                         var tierInfo = args.TierNumber.HasValue ? $" (Tier {args.TierNumber})" : "";
                         var rps = args.RecordsPerSecond.HasValue ? $" @ {args.RecordsPerSecond:F1} rec/s" : "";
                         var pct = args.Total > 0 ? $" ({args.PercentComplete:F0}%)" : "";
+                        var eta = args.EstimatedRemaining.HasValue ? $" | ETA: {FormatEta(args.EstimatedRemaining.Value)}" : "";
 
                         // Show success/failure breakdown if there are failures
                         var failureInfo = args.FailureCount > 0
                             ? $" [{args.SuccessCount} ok, {args.FailureCount} failed]"
                             : "";
 
-                        Console.WriteLine($"{prefix} [{phase}] {args.Entity}{tierInfo}: {args.Current:N0}/{args.Total:N0}{pct}{rps}{failureInfo}");
+                        Console.WriteLine($"{prefix} [{phase}] {args.Entity}{tierInfo}: {args.Current:N0}/{args.Total:N0}{pct}{rps}{eta}{failureInfo}");
 
                         _lastEntity = args.Entity;
                         _lastProgress = args.Current;
@@ -122,6 +123,12 @@ namespace PPDS.Migration.Progress
 
             // Summary line: "    42,366 records in 00:00:08 (4,774.5 rec/s)"
             Console.WriteLine($"    {result.SuccessCount:N0} record(s) in {result.Duration:hh\\:mm\\:ss} ({result.RecordsPerSecond:F1} rec/s)");
+
+            // Show created/updated breakdown for upsert operations
+            if (result.CreatedCount.HasValue && result.UpdatedCount.HasValue)
+            {
+                Console.WriteLine($"        Created: {result.CreatedCount:N0} | Updated: {result.UpdatedCount:N0}");
+            }
 
             // Error count if any
             if (result.FailureCount > 0)
@@ -361,6 +368,18 @@ namespace PPDS.Migration.Progress
         {
             // Update every 1000 records or 100 records, whichever comes first
             return current - _lastProgress >= 1000 || current - _lastProgress >= 100;
+        }
+
+        /// <summary>
+        /// Formats a TimeSpan for ETA display, handling hour+ durations correctly.
+        /// </summary>
+        private static string FormatEta(TimeSpan eta)
+        {
+            if (eta.TotalHours >= 1)
+            {
+                return $"{(int)eta.TotalHours}:{eta.Minutes:D2}:{eta.Seconds:D2}";
+            }
+            return $"{(int)eta.TotalMinutes}:{eta.Seconds:D2}";
         }
     }
 }
