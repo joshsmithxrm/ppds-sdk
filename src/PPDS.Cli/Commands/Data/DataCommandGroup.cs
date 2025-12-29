@@ -1,5 +1,4 @@
 using System.CommandLine;
-using PPDS.Dataverse.Resilience;
 
 namespace PPDS.Cli.Commands.Data;
 
@@ -23,15 +22,6 @@ public static class DataCommandGroup
     public static readonly Option<string?> EnvironmentOption = new("--environment", "-env")
     {
         Description = "Override the environment URL. Takes precedence over profile's bound environment."
-    };
-
-    /// <summary>
-    /// Rate control preset for throttle management.
-    /// </summary>
-    public static readonly Option<RateControlPreset> RatePresetOption = new("--rate-preset")
-    {
-        Description = "Rate control preset: Conservative (avoid throttles), Balanced (default), Aggressive (max throughput)",
-        DefaultValueFactory = _ => RateControlPreset.Balanced
     };
 
     /// <summary>

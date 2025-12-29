@@ -38,7 +38,7 @@
 | Dispose pooled clients with `await using` | Returns connections to pool; prevents leaks |
 | Use bulk APIs (`CreateMultiple`, `UpdateMultiple`, `UpsertMultiple`) | 5x faster than `ExecuteMultiple` (~10M vs ~2M records/hour) |
 | Reference Microsoft Learn docs in ADRs | Authoritative source for Dataverse best practices |
-| Use `Conservative` preset for production bulk operations | Prevents throttle cascades; slightly lower throughput but zero throttles |
+| Scale throughput by adding Application Users | Each user has independent API quota; DOP × connections = total parallelism |
 
 ---
 
@@ -175,7 +175,7 @@ namespace PPDS.Plugins.Enums;        // Enums
 namespace PPDS.Dataverse.Pooling;        // Connection pool, IConnectionSource
 namespace PPDS.Dataverse.BulkOperations; // Bulk API wrappers
 namespace PPDS.Dataverse.Configuration;  // Options, connection config
-namespace PPDS.Dataverse.Resilience;     // Throttle tracking, rate control
+namespace PPDS.Dataverse.Resilience;     // Throttle tracking, service protection
 
 // PPDS.Migration
 namespace PPDS.Migration.Export;     // IExporter
@@ -311,30 +311,26 @@ ServicePointManager.UseNagleAlgorithm = false;
 - [Service protection API limits](https://learn.microsoft.com/en-us/power-apps/developer/data-platform/api-limits)
 - [Use bulk operation messages](https://learn.microsoft.com/en-us/power-apps/developer/data-platform/bulk-operations)
 
-### Adaptive Rate Control
+### DOP-Based Parallelism
 
-The pool implements AIMD-based (Additive Increase, Multiplicative Decrease) rate control that:
-- Starts at server-recommended parallelism
-- Increases gradually after sustained success
-- Backs off aggressively on throttle (50% reduction)
-- Applies execution time-aware ceiling for slow operations
+The pool uses Microsoft's `RecommendedDegreesOfParallelism` (from `x-ms-dop-hint` header) as the parallelism limit:
 
-### Rate Control Presets
-
-| Preset | Use Case | Behavior |
-|--------|----------|----------|
-| `Conservative` | Production bulk jobs, migrations | Lower ceiling, avoids all throttles |
-| `Balanced` | General purpose (default) | Balanced throughput vs safety |
-| `Aggressive` | Dev/test with monitoring | Higher ceiling, accepts some throttles |
-
-**Configuration:**
-```json
-{"Dataverse": {"AdaptiveRate": {"Preset": "Conservative"}}}
+```
+Total Parallelism = sum(DOP per connection)
 ```
 
-**For production bulk operations, always use `Conservative`** to prevent throttle cascades.
+- **DOP varies by environment**: Trial environments report ~4, production can report up to 50
+- **Hard cap of 52 per user**: Microsoft's enforced limit per Application User
+- **Scale by adding connections**: 2 users at DOP=4 = 8 parallel requests
 
-See [ADR-0006](docs/adr/0006_EXECUTION_TIME_CEILING.md) for execution time ceiling details.
+**Scaling Strategy:**
+```
+1 Application User  @ DOP=4  →  4 parallel requests
+2 Application Users @ DOP=4  →  8 parallel requests
+4 Application Users @ DOP=4  → 16 parallel requests
+```
+
+See [ADR-0005](docs/adr/0005_DOP_BASED_PARALLELISM.md) for details.
 
 ### Architecture Decision Records
 
@@ -344,9 +340,8 @@ See [ADR-0006](docs/adr/0006_EXECUTION_TIME_CEILING.md) for execution time ceili
 | [0002](docs/adr/0002_MULTI_CONNECTION_POOLING.md) | Multiple Application Users multiply API quota |
 | [0003](docs/adr/0003_THROTTLE_AWARE_SELECTION.md) | Route away from throttled connections |
 | [0004](docs/adr/0004_THROTTLE_RECOVERY_STRATEGY.md) | Transparent throttle waiting without blocking |
-| [0005](docs/adr/0005_POOL_SIZING_PER_CONNECTION.md) | Per-user pool sizing (52 per Application User) |
-| [0006](docs/adr/0006_EXECUTION_TIME_CEILING.md) | Execution time-aware parallelism ceiling |
-| [0007](docs/adr/0007_CONNECTION_SOURCE_ABSTRACTION.md) | IConnectionSource for custom auth methods |
+| [0005](docs/adr/0005_DOP_BASED_PARALLELISM.md) | DOP-based parallelism (server-recommended limits) |
+| [0006](docs/adr/0006_CONNECTION_SOURCE_ABSTRACTION.md) | IConnectionSource for custom auth methods |
 
 ---
 

@@ -1,4 +1,4 @@
-# ADR-0007: Connection Source Abstraction
+# ADR-0006: Connection Source Abstraction
 
 **Status:** Accepted
 **Date:** 2025-12-27
@@ -9,7 +9,7 @@
 The `DataverseConnectionPool` was tightly coupled to connection string-based authentication via `DataverseOptions`. This forced the CLI to use a separate `DeviceCodeConnectionPool` implementation that:
 
 1. **Didn't actually pool** - Cloned on every request instead of reusing connections
-2. **Missed all pool features** - No throttle tracking, no adaptive rate control, no connection validation
+2. **Missed all pool features** - No throttle tracking, no connection validation
 3. **Caused failures under load** - `Clone()` during throttle periods failed and wasn't retried properly
 
 The root cause was that the pool conflated two concerns:
@@ -24,7 +24,6 @@ Introduce `IConnectionSource` abstraction to separate authentication from poolin
 public interface IConnectionSource : IDisposable
 {
     string Name { get; }
-    int MaxPoolSize { get; }
     ServiceClient GetSeedClient();
 }
 ```
@@ -35,7 +34,7 @@ The pool now accepts `IConnectionSource[]` instead of `DataverseOptions`:
 public DataverseConnectionPool(
     IEnumerable<IConnectionSource> sources,
     IThrottleTracker throttleTracker,
-    IAdaptiveRateController adaptiveRateController,
+    ConnectionPoolOptions poolOptions,
     ILogger<DataverseConnectionPool> logger)
 ```
 
@@ -58,15 +57,15 @@ services.AddDataverseConnectionPool(configuration);
 ```csharp
 // CLI device code flow
 var client = await DeviceCodeAuth.AuthenticateAsync(url);
-var source = new ServiceClientSource(client, "Interactive", maxPoolSize: 32);
-var pool = new DataverseConnectionPool(new[] { source }, throttleTracker, rateController, logger);
+var source = new ServiceClientSource(client, "Interactive");
+var pool = new DataverseConnectionPool(new[] { source }, throttleTracker, poolOptions, logger);
 ```
 
 **Managed identity:**
 ```csharp
 var client = new ServiceClient(url, tokenProviderFunc);
 var source = new ServiceClientSource(client, "ManagedIdentity");
-var pool = new DataverseConnectionPool(new[] { source }, ...);
+var pool = new DataverseConnectionPool(new[] { source }, throttleTracker, poolOptions, logger);
 ```
 
 ## Consequences
@@ -74,7 +73,7 @@ var pool = new DataverseConnectionPool(new[] { source }, ...);
 ### Positive
 
 - **Any auth method can use the pool** - Device code, managed identity, certificate, custom token providers
-- **CLI gets full pool features** - Throttle tracking, adaptive rate control, connection validation
+- **CLI gets full pool features** - Throttle tracking, DOP-based parallelism, connection validation
 - **No duplicate implementations** - Single pool handles all scenarios
 - **Testability** - Easy to mock connection sources in tests
 - **Extensibility** - Custom sources for specialized scenarios (e.g., rotating credentials)
@@ -91,4 +90,4 @@ Existing code using `AddDataverseConnectionPool(configuration)` continues to wor
 ## References
 
 - [ADR-0002: Multi-Connection Pooling](0002_MULTI_CONNECTION_POOLING.md) - Original pooling design
-- [ADR-0005: Pool Sizing Per Connection](0005_POOL_SIZING_PER_CONNECTION.md) - Per-source sizing
+- [ADR-0005: DOP-Based Parallelism](0005_DOP_BASED_PARALLELISM.md) - Parallelism model

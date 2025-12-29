@@ -47,7 +47,6 @@ public static class ProfileServiceFactory
     /// <param name="verbose">Enable verbose logging.</param>
     /// <param name="debug">Enable debug logging.</param>
     /// <param name="deviceCodeCallback">Callback for device code display.</param>
-    /// <param name="ratePreset">Rate control preset for throttle management.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>A configured service provider.</returns>
     public static async Task<ServiceProvider> CreateFromProfileAsync(
@@ -56,7 +55,6 @@ public static class ProfileServiceFactory
         bool verbose = false,
         bool debug = false,
         Action<DeviceCodeInfo>? deviceCodeCallback = null,
-        RateControlPreset ratePreset = RateControlPreset.Balanced,
         CancellationToken cancellationToken = default)
     {
         var store = new ProfileStore();
@@ -90,7 +88,7 @@ public static class ProfileServiceFactory
             EnvironmentDisplayName = envDisplayName
         };
 
-        return CreateProviderFromSources(new[] { adapter }, connectionInfo, verbose, debug, ratePreset);
+        return CreateProviderFromSources(new[] { adapter }, connectionInfo, verbose, debug);
     }
 
     /// <summary>
@@ -137,7 +135,6 @@ public static class ProfileServiceFactory
     /// <param name="verbose">Enable verbose logging.</param>
     /// <param name="debug">Enable debug logging.</param>
     /// <param name="deviceCodeCallback">Callback for device code display.</param>
-    /// <param name="ratePreset">Rate control preset for throttle management.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>A configured service provider.</returns>
     public static async Task<ServiceProvider> CreateFromProfilesAsync(
@@ -146,7 +143,6 @@ public static class ProfileServiceFactory
         bool verbose = false,
         bool debug = false,
         Action<DeviceCodeInfo>? deviceCodeCallback = null,
-        RateControlPreset ratePreset = RateControlPreset.Balanced,
         CancellationToken cancellationToken = default)
     {
         var names = ConnectionResolver.ParseProfileString(profileNames);
@@ -156,7 +152,7 @@ public static class ProfileServiceFactory
         {
             return await CreateFromProfileAsync(
                 names.Count == 0 ? null : names[0],
-                environmentOverride, verbose, debug, deviceCodeCallback, ratePreset,
+                environmentOverride, verbose, debug, deviceCodeCallback,
                 cancellationToken)
                 .ConfigureAwait(false);
         }
@@ -186,7 +182,7 @@ public static class ProfileServiceFactory
             EnvironmentDisplayName = envDisplayName
         };
 
-        return CreateProviderFromSources(adapters, connectionInfo, verbose, debug, ratePreset);
+        return CreateProviderFromSources(adapters, connectionInfo, verbose, debug);
     }
 
     /// <summary>
@@ -244,36 +240,29 @@ public static class ProfileServiceFactory
         IConnectionSource[] sources,
         ResolvedConnectionInfo connectionInfo,
         bool verbose,
-        bool debug,
-        RateControlPreset ratePreset = RateControlPreset.Balanced)
+        bool debug)
     {
         var services = new ServiceCollection();
         ConfigureLogging(services, verbose, debug);
 
         services.AddSingleton(connectionInfo);
 
-        var dataverseOptions = new DataverseOptions
-        {
-            AdaptiveRate = { Preset = ratePreset }
-        };
+        var dataverseOptions = new DataverseOptions();
         services.AddSingleton<IOptions<DataverseOptions>>(new OptionsWrapper<DataverseOptions>(dataverseOptions));
 
         var poolOptions = new ConnectionPoolOptions
         {
             Enabled = true,
             MinPoolSize = 0,
-            MaxConnectionsPerUser = 52,
             DisableAffinityCookie = true
         };
 
         services.AddSingleton<IThrottleTracker, ThrottleTracker>();
-        services.AddSingleton<IAdaptiveRateController, AdaptiveRateController>();
 
         services.AddSingleton<IDataverseConnectionPool>(sp =>
             new DataverseConnectionPool(
                 sources,
                 sp.GetRequiredService<IThrottleTracker>(),
-                sp.GetRequiredService<IAdaptiveRateController>(),
                 poolOptions,
                 sp.GetRequiredService<ILogger<DataverseConnectionPool>>()));
 

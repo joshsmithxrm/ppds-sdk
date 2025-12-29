@@ -28,9 +28,9 @@ namespace PPDS.Dataverse.Pooling
         private readonly IReadOnlyList<IConnectionSource> _sources;
         private readonly ConnectionPoolOptions _poolOptions;
         private readonly IThrottleTracker _throttleTracker;
-        private readonly IAdaptiveRateController _adaptiveRateController;
         private readonly IConnectionSelectionStrategy _selectionStrategy;
         private readonly ConcurrentDictionary<string, ServiceClient> _seedClients = new();
+        private readonly ConcurrentDictionary<string, int> _sourceDop = new();
 
         private readonly ConcurrentDictionary<string, ConcurrentQueue<PooledClient>> _pools;
         private readonly ConcurrentDictionary<string, int> _activeConnections;
@@ -58,25 +58,21 @@ namespace PPDS.Dataverse.Pooling
         /// Each source's seed will be cloned to create pool members.
         /// </param>
         /// <param name="throttleTracker">Throttle tracking service.</param>
-        /// <param name="adaptiveRateController">Adaptive rate control service.</param>
         /// <param name="poolOptions">Pool configuration options.</param>
         /// <param name="logger">Logger instance.</param>
         public DataverseConnectionPool(
             IEnumerable<IConnectionSource> sources,
             IThrottleTracker throttleTracker,
-            IAdaptiveRateController adaptiveRateController,
             ConnectionPoolOptions poolOptions,
             ILogger<DataverseConnectionPool> logger)
         {
             ArgumentNullException.ThrowIfNull(sources);
             ArgumentNullException.ThrowIfNull(throttleTracker);
-            ArgumentNullException.ThrowIfNull(adaptiveRateController);
             ArgumentNullException.ThrowIfNull(poolOptions);
             ArgumentNullException.ThrowIfNull(logger);
 
             _sources = sources.ToList().AsReadOnly();
             _throttleTracker = throttleTracker;
-            _adaptiveRateController = adaptiveRateController;
             _poolOptions = poolOptions;
             _logger = logger;
 
@@ -122,7 +118,7 @@ namespace PPDS.Dataverse.Pooling
                 "DataverseConnectionPool initialized. Sources: {SourceCount}, PoolCapacity: {PoolCapacity}, PerUser: {PerUser}, Strategy: {Strategy}",
                 _sources.Count,
                 _totalPoolCapacity,
-                _poolOptions.MaxConnectionsPerUser,
+                ConnectionPoolOptions.MicrosoftHardLimitPerUser,
                 _poolOptions.SelectionStrategy);
         }
 
@@ -134,12 +130,10 @@ namespace PPDS.Dataverse.Pooling
         public DataverseConnectionPool(
             IOptions<DataverseOptions> options,
             IThrottleTracker throttleTracker,
-            IAdaptiveRateController adaptiveRateController,
             ILogger<DataverseConnectionPool> logger)
             : this(
                 CreateSourcesFromOptions(options?.Value ?? throw new ArgumentNullException(nameof(options))),
                 throttleTracker,
-                adaptiveRateController,
                 options.Value.Pool,
                 logger)
         {
@@ -166,7 +160,23 @@ namespace PPDS.Dataverse.Pooling
         public bool IsEnabled => _poolOptions.Enabled;
 
         /// <inheritdoc />
+        public int SourceCount => _sources.Count;
+
+        /// <inheritdoc />
         public PoolStatistics Statistics => GetStatistics();
+
+        /// <inheritdoc />
+        public int GetTotalRecommendedParallelism()
+        {
+            // If no DOP values are set yet (no seeds created), use conservative default
+            if (_sourceDop.IsEmpty)
+            {
+                // Default to 4 per source (conservative) until actual DOP is known
+                return _sources.Count * 4;
+            }
+
+            return _sourceDop.Values.Sum();
+        }
 
         /// <inheritdoc />
         public async Task<IPooledClient> GetClientAsync(
@@ -216,6 +226,14 @@ namespace PPDS.Dataverse.Pooling
                     // Phase 4: Get the actual connection from pool
                     return GetConnectionFromPoolCore(connectionName, options);
                 }
+                catch (DataverseConnectionException ex) when (ex.Message.Contains("throttled"))
+                {
+                    // CreateNewConnection blocked due to throttle (race condition).
+                    // Release semaphore and retry - WaitForNonThrottledConnectionAsync will wait.
+                    _connectionSemaphore.Release();
+                    _logger.LogDebug("Clone blocked by throttle, retrying after wait. {Message}", ex.Message);
+                    continue;
+                }
                 catch
                 {
                     _connectionSemaphore.Release();
@@ -258,6 +276,9 @@ namespace PPDS.Dataverse.Pooling
         /// Waits until at least one connection is not throttled.
         /// This method does NOT hold the semaphore, allowing other requests to also wait.
         /// </summary>
+        /// <exception cref="ServiceProtectionException">
+        /// Thrown when all connections are throttled and the wait time exceeds MaxRetryAfterTolerance.
+        /// </exception>
         private async Task WaitForNonThrottledConnectionAsync(
             string? excludeConnectionName,
             CancellationToken cancellationToken)
@@ -277,11 +298,19 @@ namespace PPDS.Dataverse.Pooling
                     return; // At least one connection is available
                 }
 
-                // All connections are throttled - wait for shortest expiry
+                // All connections are throttled - check tolerance before waiting
                 var waitTime = _throttleTracker.GetShortestExpiry();
                 if (waitTime <= TimeSpan.Zero)
                 {
                     return; // Throttle already expired
+                }
+
+                // Check if wait exceeds tolerance
+                if (_poolOptions.MaxRetryAfterTolerance.HasValue &&
+                    waitTime > _poolOptions.MaxRetryAfterTolerance.Value)
+                {
+                    throw new ServiceProtectionException(
+                        $"All connections throttled. Wait time ({waitTime:g}) exceeds tolerance ({_poolOptions.MaxRetryAfterTolerance.Value:g}).");
                 }
 
                 // Add a small buffer for timing
@@ -399,13 +428,37 @@ namespace PPDS.Dataverse.Pooling
             return _seedClients.GetOrAdd(connectionName, name =>
             {
                 var source = _sources.First(s => s.Name == name);
-                return source.GetSeedClient();
+                var seed = source.GetSeedClient();
+
+                // Initialize DOP for this source from the seed client
+                // ServiceClient.RecommendedDegreesOfParallelism is populated after first request (WhoAmI during connection)
+                var dop = seed.RecommendedDegreesOfParallelism;
+                var cappedDop = Math.Min(Math.Max(dop, 1), ConnectionPoolOptions.MicrosoftHardLimitPerUser);
+                _sourceDop[connectionName] = cappedDop;
+
+                _logger.LogDebug(
+                    "Initialized DOP for {ConnectionName}: {Dop} (capped at {Cap})",
+                    connectionName, dop, ConnectionPoolOptions.MicrosoftHardLimitPerUser);
+
+                return seed;
             });
         }
 
         private PooledClient CreateNewConnection(string connectionName)
         {
             _logger.LogDebug("Creating new connection for {ConnectionName}", connectionName);
+
+            // Don't attempt to clone when the connection is throttled.
+            // Clone() internally calls RefreshInstanceDetails() which makes an API call.
+            // If we're throttled (especially execution time limit), that call will fail,
+            // causing the entire operation to fail instead of just waiting.
+            if (_throttleTracker.IsThrottled(connectionName))
+            {
+                var expiry = _throttleTracker.GetThrottleExpiry(connectionName);
+                throw new DataverseConnectionException(connectionName,
+                    $"Cannot create new connection while throttled. Throttle expires at {expiry:HH:mm:ss}.",
+                    new InvalidOperationException("Connection source is throttled"));
+            }
 
             var seed = GetSeedClient(connectionName);
 
@@ -457,9 +510,6 @@ namespace PPDS.Dataverse.Pooling
         {
             // Record throttle per-connection for routing decisions (avoid throttled connections)
             _throttleTracker.RecordThrottle(connectionName, retryAfter);
-
-            // Record throttle at pool level for parallelism decisions
-            _adaptiveRateController.RecordThrottle(retryAfter);
         }
 
         private PooledClient CreateDirectClient(DataverseClientOptions? options)
@@ -725,9 +775,12 @@ namespace PPDS.Dataverse.Pooling
 
         /// <summary>
         /// Calculates the total pool capacity based on sources.
-        /// Uses per-source sizing (MaxConnectionsPerUser × source count) unless
-        /// MaxPoolSize override is set.
+        /// Uses per-source sizing (52 × source count) unless MaxPoolSize override is set.
         /// </summary>
+        /// <remarks>
+        /// The semaphore is sized at Microsoft's hard limit (52 per user).
+        /// Actual parallelism is controlled by RecommendedDegreesOfParallelism from the server.
+        /// </remarks>
         private int CalculateTotalPoolCapacity()
         {
             // Fixed pool size override
@@ -736,8 +789,8 @@ namespace PPDS.Dataverse.Pooling
                 return _poolOptions.MaxPoolSize;
             }
 
-            // Per-source sizing
-            return _sources.Count * _poolOptions.MaxConnectionsPerUser;
+            // Per-source sizing at Microsoft's hard limit
+            return _sources.Count * ConnectionPoolOptions.MicrosoftHardLimitPerUser;
         }
 
         private static void ValidateConnection(DataverseConnection connection)

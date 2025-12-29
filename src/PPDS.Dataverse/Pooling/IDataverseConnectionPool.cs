@@ -46,6 +46,12 @@ namespace PPDS.Dataverse.Pooling
         bool IsEnabled { get; }
 
         /// <summary>
+        /// Gets the number of connection sources configured in the pool.
+        /// This represents the number of Application Users/app registrations available.
+        /// </summary>
+        int SourceCount { get; }
+
+        /// <summary>
         /// Records an authentication failure for statistics.
         /// </summary>
         void RecordAuthFailure();
@@ -91,5 +97,23 @@ namespace PPDS.Dataverse.Pooling
         /// Service protection errors never escape this method - it retries until success or cancellation.
         /// </remarks>
         Task<OrganizationResponse> ExecuteAsync(OrganizationRequest request, CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// Gets the total recommended parallelism across all connection sources.
+        /// This is the sum of RecommendedDegreesOfParallelism for each source, capped at 52 per source.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// The value comes from the x-ms-dop-hint response header, exposed via
+        /// <c>ServiceClient.RecommendedDegreesOfParallelism</c>. This is Microsoft's recommended
+        /// concurrent request limit per Application User.
+        /// </para>
+        /// <para>
+        /// Scaling throughput should be done by adding more Application Users (connection sources),
+        /// not by exceeding the recommended parallelism per user.
+        /// </para>
+        /// </remarks>
+        /// <returns>The total recommended parallelism across all sources.</returns>
+        int GetTotalRecommendedParallelism();
     }
 }

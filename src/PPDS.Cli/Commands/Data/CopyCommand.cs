@@ -2,7 +2,6 @@ using System.CommandLine;
 using Microsoft.Extensions.DependencyInjection;
 using PPDS.Cli.Commands;
 using PPDS.Cli.Infrastructure;
-using PPDS.Dataverse.Resilience;
 using PPDS.Migration.Export;
 using PPDS.Migration.Import;
 using PPDS.Migration.Progress;
@@ -111,7 +110,6 @@ public static class CopyCommand
             targetProfileOption,
             sourceEnvOption,
             targetEnvOption,
-            DataCommandGroup.RatePresetOption,
             tempDirOption,
             parallelOption,
             batchSizeOption,
@@ -129,7 +127,6 @@ public static class CopyCommand
             var targetProfile = parseResult.GetValue(targetProfileOption);
             var sourceEnv = parseResult.GetValue(sourceEnvOption)!;
             var targetEnv = parseResult.GetValue(targetEnvOption)!;
-            var ratePreset = parseResult.GetValue(DataCommandGroup.RatePresetOption);
             var tempDir = parseResult.GetValue(tempDirOption);
             var parallel = parseResult.GetValue(parallelOption);
             var batchSize = parseResult.GetValue(batchSizeOption);
@@ -141,7 +138,7 @@ public static class CopyCommand
 
             return await ExecuteAsync(
                 sourceProfile, targetProfile,
-                sourceEnv, targetEnv, ratePreset,
+                sourceEnv, targetEnv,
                 schema, tempDir, parallel, batchSize,
                 bypassPlugins, bypassFlows,
                 json, verbose, debug, cancellationToken);
@@ -155,7 +152,6 @@ public static class CopyCommand
         string? targetProfileName,
         string sourceEnv,
         string targetEnv,
-        RateControlPreset ratePreset,
         FileInfo schema,
         DirectoryInfo? tempDir,
         int parallel,
@@ -188,7 +184,6 @@ public static class CopyCommand
                 verbose,
                 debug,
                 ProfileServiceFactory.DefaultDeviceCodeCallback,
-                ratePreset,
                 cancellationToken);
 
             if (!json)
@@ -223,7 +218,6 @@ public static class CopyCommand
                 verbose,
                 debug,
                 ProfileServiceFactory.DefaultDeviceCodeCallback,
-                ratePreset,
                 cancellationToken);
 
             if (!json)
