@@ -45,10 +45,9 @@ public class AccountService
 Reuse connections efficiently with automatic lifecycle management:
 
 ```csharp
-options.Pool.MaxConnectionsPerUser = 52;  // Per Application User (default)
-options.Pool.MinPoolSize = 5;              // Keep warm
 options.Pool.MaxIdleTime = TimeSpan.FromMinutes(5);
 options.Pool.MaxLifetime = TimeSpan.FromMinutes(30);
+// Pool size is automatically determined by DOP (server-recommended parallelism)
 ```
 
 ### Multi-Connection Load Distribution

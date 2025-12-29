@@ -84,10 +84,6 @@ namespace PPDS.Dataverse.Pooling
             _pools = new ConcurrentDictionary<string, ConcurrentQueue<PooledClient>>();
             _activeConnections = new ConcurrentDictionary<string, int>();
             _requestCounts = new ConcurrentDictionary<string, long>();
-            _totalPoolCapacity = CalculateTotalPoolCapacity();
-            _connectionSemaphore = new SemaphoreSlim(_totalPoolCapacity, _totalPoolCapacity);
-
-            _selectionStrategy = CreateSelectionStrategy();
 
             // Initialize pools for each source
             foreach (var source in _sources)
@@ -97,8 +93,17 @@ namespace PPDS.Dataverse.Pooling
                 _requestCounts[source.Name] = 0;
             }
 
-            // Apply performance settings once
+            // Apply performance settings before creating connections
             ApplyPerformanceSettings();
+
+            // Create seeds first to discover DOP from server before sizing the semaphore
+            InitializeSeedsAndDiscoverDop();
+
+            // Now size the semaphore based on actual DOP (not the 52 hard limit)
+            _totalPoolCapacity = CalculateTotalPoolCapacity();
+            _connectionSemaphore = new SemaphoreSlim(_totalPoolCapacity, _totalPoolCapacity);
+
+            _selectionStrategy = CreateSelectionStrategy();
 
             // Start background validation if enabled
             _validationCts = new CancellationTokenSource();
@@ -111,14 +116,13 @@ namespace PPDS.Dataverse.Pooling
                 _validationTask = Task.CompletedTask;
             }
 
-            // Initialize minimum connections
-            InitializeMinimumConnections();
+            // Warm up pool with 1 connection per source
+            WarmUpConnections();
 
             _logger.LogInformation(
-                "DataverseConnectionPool initialized. Sources: {SourceCount}, PoolCapacity: {PoolCapacity}, PerUser: {PerUser}, Strategy: {Strategy}",
+                "DataverseConnectionPool initialized. Sources: {SourceCount}, TotalDOP: {TotalDOP}, Strategy: {Strategy}",
                 _sources.Count,
                 _totalPoolCapacity,
-                ConnectionPoolOptions.MicrosoftHardLimitPerUser,
                 _poolOptions.SelectionStrategy);
         }
 
@@ -681,31 +685,49 @@ namespace PPDS.Dataverse.Pooling
             }
         }
 
-        private void InitializeMinimumConnections()
+        /// <summary>
+        /// Creates seed clients for all sources and discovers their DOP values.
+        /// Must be called before CalculateTotalPoolCapacity() to enable DOP-based sizing.
+        /// </summary>
+        private void InitializeSeedsAndDiscoverDop()
         {
-            if (!IsEnabled || _poolOptions.MinPoolSize <= 0)
+            if (!IsEnabled)
             {
                 return;
             }
 
-            _logger.LogDebug("Initializing minimum pool connections");
+            foreach (var source in _sources)
+            {
+                try
+                {
+                    // GetSeedClient populates _sourceDop with the server's RecommendedDegreesOfParallelism
+                    GetSeedClient(source.Name);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed to initialize seed for {ConnectionName}, using default DOP=4", source.Name);
+                    // Use conservative default if seed creation fails
+                    _sourceDop[source.Name] = 4;
+                }
+            }
+        }
+
+        /// <summary>
+        /// Warms up the pool by creating one connection per source.
+        /// </summary>
+        private void WarmUpConnections()
+        {
+            if (!IsEnabled)
+            {
+                return;
+            }
 
             foreach (var source in _sources)
             {
                 var pool = _pools[source.Name];
-                var activeCount = _activeConnections.GetValueOrDefault(source.Name, 0);
-                var currentTotal = pool.Count + activeCount;
-                var targetMin = Math.Min(_poolOptions.MinPoolSize, source.MaxPoolSize);
-                var toCreate = Math.Max(0, targetMin - currentTotal);
 
-                if (toCreate > 0)
-                {
-                    _logger.LogDebug(
-                        "Pool {ConnectionName}: Active={Active}, Idle={Idle}, Target={Target}, Creating={ToCreate}",
-                        source.Name, activeCount, pool.Count, targetMin, toCreate);
-                }
-
-                for (int i = 0; i < toCreate; i++)
+                // Only warm up if pool is empty
+                if (pool.IsEmpty)
                 {
                     try
                     {
@@ -714,7 +736,7 @@ namespace PPDS.Dataverse.Pooling
                     }
                     catch (Exception ex)
                     {
-                        _logger.LogWarning(ex, "Failed to initialize connection for {ConnectionName}", source.Name);
+                        _logger.LogWarning(ex, "Failed to warm up connection for {ConnectionName}", source.Name);
                     }
                 }
             }
@@ -769,17 +791,17 @@ namespace PPDS.Dataverse.Pooling
                 }
             }
 
-            // Ensure minimum pool size
-            InitializeMinimumConnections();
+            // Ensure at least 1 warm connection per source
+            WarmUpConnections();
         }
 
         /// <summary>
-        /// Calculates the total pool capacity based on sources.
-        /// Uses per-source sizing (52 × source count) unless MaxPoolSize override is set.
+        /// Calculates the total pool capacity based on discovered DOP values.
         /// </summary>
         /// <remarks>
-        /// The semaphore is sized at Microsoft's hard limit (52 per user).
-        /// Actual parallelism is controlled by RecommendedDegreesOfParallelism from the server.
+        /// Pool capacity = sum of DOP for all sources. This is the server-recommended
+        /// parallelism based on RecommendedDegreesOfParallelism from each connection.
+        /// Seeds must be initialized before calling this method.
         /// </remarks>
         private int CalculateTotalPoolCapacity()
         {
@@ -789,8 +811,14 @@ namespace PPDS.Dataverse.Pooling
                 return _poolOptions.MaxPoolSize;
             }
 
-            // Per-source sizing at Microsoft's hard limit
-            return _sources.Count * ConnectionPoolOptions.MicrosoftHardLimitPerUser;
+            // DOP-based sizing from discovered values
+            if (!_sourceDop.IsEmpty)
+            {
+                return _sourceDop.Values.Sum();
+            }
+
+            // Fallback: conservative default if seeds not yet initialized (shouldn't happen)
+            return _sources.Count * 4;
         }
 
         private static void ValidateConnection(DataverseConnection connection)

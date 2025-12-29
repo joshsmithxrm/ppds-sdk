@@ -253,7 +253,6 @@ public static class ProfileServiceFactory
         var poolOptions = new ConnectionPoolOptions
         {
             Enabled = true,
-            MinPoolSize = 0,
             DisableAffinityCookie = true
         };
 

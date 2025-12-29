@@ -45,11 +45,6 @@ namespace PPDS.Dataverse.Pooling
         /// </remarks>
         public TimeSpan? MaxRetryAfterTolerance { get; set; } = null;
 
-        /// <summary>
-        /// Gets or sets the minimum idle connections to maintain.
-        /// Default: 5
-        /// </summary>
-        public int MinPoolSize { get; set; } = 5;
 
         /// <summary>
         /// Gets or sets the maximum time to wait for a connection.
