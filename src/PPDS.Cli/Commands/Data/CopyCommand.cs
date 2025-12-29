@@ -4,7 +4,9 @@ using PPDS.Cli.Commands;
 using PPDS.Cli.Infrastructure;
 using PPDS.Dataverse.BulkOperations;
 using PPDS.Migration.Export;
+using PPDS.Migration.Formats;
 using PPDS.Migration.Import;
+using PPDS.Migration.Models;
 using PPDS.Migration.Progress;
 
 namespace PPDS.Cli.Commands.Data;
@@ -92,6 +94,29 @@ public static class CopyCommand
             DefaultValueFactory = _ => false
         };
 
+        var continueOnErrorOption = new Option<bool>("--continue-on-error")
+        {
+            Description = "Continue import on individual record failures",
+            DefaultValueFactory = _ => true
+        };
+
+        var stripOwnerFieldsOption = new Option<bool>("--strip-owner-fields")
+        {
+            Description = "Strip ownership fields (ownerid, createdby, modifiedby) allowing Dataverse to assign current user",
+            DefaultValueFactory = _ => false
+        };
+
+        var userMappingOption = new Option<FileInfo?>("--user-mapping", "-u")
+        {
+            Description = "Path to user mapping XML file for remapping user references"
+        };
+        userMappingOption.Validators.Add(result =>
+        {
+            var file = result.GetValue(userMappingOption);
+            if (file is { Exists: false })
+                result.AddError($"User mapping file not found: {file.FullName}");
+        });
+
         var jsonOption = new Option<bool>("--json", "-j")
         {
             Description = "Output progress as JSON (for tool integration)",
@@ -123,6 +148,9 @@ public static class CopyCommand
             bypassPluginsOption,
             bypassFlowsOption,
             skipMissingColumnsOption,
+            continueOnErrorOption,
+            stripOwnerFieldsOption,
+            userMappingOption,
             jsonOption,
             verboseOption,
             debugOption
@@ -141,6 +169,9 @@ public static class CopyCommand
             var bypassPluginsValue = parseResult.GetValue(bypassPluginsOption);
             var bypassFlows = parseResult.GetValue(bypassFlowsOption);
             var skipMissingColumns = parseResult.GetValue(skipMissingColumnsOption);
+            var continueOnError = parseResult.GetValue(continueOnErrorOption);
+            var stripOwnerFields = parseResult.GetValue(stripOwnerFieldsOption);
+            var userMappingFile = parseResult.GetValue(userMappingOption);
             var json = parseResult.GetValue(jsonOption);
             var verbose = parseResult.GetValue(verboseOption);
             var debug = parseResult.GetValue(debugOption);
@@ -152,6 +183,7 @@ public static class CopyCommand
                 sourceEnv, targetEnv,
                 schema, tempDir, parallel, batchSize,
                 bypassPlugins, bypassFlows, skipMissingColumns,
+                continueOnError, stripOwnerFields, userMappingFile,
                 json, verbose, debug, cancellationToken);
         });
 
@@ -181,6 +213,9 @@ public static class CopyCommand
         CustomLogicBypass bypassPlugins,
         bool bypassFlows,
         bool skipMissingColumns,
+        bool continueOnError,
+        bool stripOwnerFields,
+        FileInfo? userMappingFile,
         bool json,
         bool verbose,
         bool debug,
@@ -253,11 +288,43 @@ public static class CopyCommand
 
             var importer = targetProvider.GetRequiredService<IImporter>();
 
+            // Load user mappings if specified
+            UserMappingCollection? userMappings = null;
+            if (userMappingFile != null)
+            {
+                progressReporter.Report(new ProgressEventArgs
+                {
+                    Phase = MigrationPhase.Analyzing,
+                    Message = $"Loading user mappings from {userMappingFile.Name}..."
+                });
+
+                var mappingReader = new UserMappingReader();
+                userMappings = await mappingReader.ReadAsync(userMappingFile.FullName, cancellationToken);
+
+                progressReporter.Report(new ProgressEventArgs
+                {
+                    Phase = MigrationPhase.Analyzing,
+                    Message = $"Loaded {userMappings.Mappings.Count} user mapping(s)."
+                });
+            }
+
+            if (stripOwnerFields)
+            {
+                progressReporter.Report(new ProgressEventArgs
+                {
+                    Phase = MigrationPhase.Analyzing,
+                    Message = "Owner fields will be stripped (ownerid, createdby, modifiedby, etc.)"
+                });
+            }
+
             var importOptions = new ImportOptions
             {
                 BypassCustomPlugins = bypassPlugins,
                 BypassPowerAutomateFlows = bypassFlows,
-                SkipMissingColumns = skipMissingColumns
+                SkipMissingColumns = skipMissingColumns,
+                ContinueOnError = continueOnError,
+                StripOwnerFields = stripOwnerFields,
+                UserMappings = userMappings
             };
 
             var importResult = await importer.ImportAsync(
