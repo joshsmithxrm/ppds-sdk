@@ -349,6 +349,14 @@ namespace PPDS.Migration.Progress
             Console.ResetColor();
         }
 
+        /// <inheritdoc />
+        public void Reset()
+        {
+            _stopwatch.Restart();
+            _lastEntity = null;
+            _lastProgress = 0;
+        }
+
         private bool ShouldUpdate(int current)
         {
             // Update every 1000 records or 100 records, whichever comes first

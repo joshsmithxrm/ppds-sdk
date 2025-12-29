@@ -30,5 +30,12 @@ namespace PPDS.Migration.Progress
         /// <param name="exception">The exception that occurred.</param>
         /// <param name="context">Optional context about what was happening.</param>
         void Error(Exception exception, string? context = null);
+
+        /// <summary>
+        /// Resets the progress reporter for a new operation phase.
+        /// Restarts the internal stopwatch and clears any cached state.
+        /// Use this between phases (e.g., between export and import in a copy operation).
+        /// </summary>
+        void Reset();
     }
 }

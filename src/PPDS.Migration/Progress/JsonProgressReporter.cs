@@ -104,6 +104,13 @@ namespace PPDS.Migration.Progress
             WriteLine(output);
         }
 
+        /// <inheritdoc />
+        public void Reset()
+        {
+            _lastReportedProgress = 0;
+            _lastEntity = null;
+        }
+
         private bool ShouldReport(ProgressEventArgs args)
         {
             // Always report phase changes, completion, and new entities

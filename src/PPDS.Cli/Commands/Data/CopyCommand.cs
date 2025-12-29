@@ -258,6 +258,9 @@ public static class CopyCommand
                 PageSize = batchSize
             };
 
+            // Set operation name for export phase
+            progressReporter.OperationName = "Export";
+
             var exportResult = await exporter.ExportAsync(
                 schema.FullName,
                 tempDataFile,
@@ -269,6 +272,10 @@ public static class CopyCommand
             {
                 return ExitCodes.Failure;
             }
+
+            // Reset progress reporter for import phase (restarts stopwatch)
+            progressReporter.Reset();
+            progressReporter.OperationName = "Copy";
 
             // Target supports comma-separated profiles for parallel import scaling
             await using var targetProvider = await ProfileServiceFactory.CreateFromProfilesAsync(
