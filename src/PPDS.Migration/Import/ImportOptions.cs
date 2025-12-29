@@ -83,6 +83,21 @@ namespace PPDS.Migration.Import
         /// Default: false
         /// </summary>
         public bool StripOwnerFields { get; set; } = false;
+
+        /// <summary>
+        /// Gets or sets whether to skip columns that exist in exported data but not in the target environment.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// When false (default), import fails with a detailed report of missing columns.
+        /// This prevents silent data loss and helps identify schema drift between environments.
+        /// </para>
+        /// <para>
+        /// When true, missing columns are logged as warnings and skipped during import.
+        /// Use this when intentionally importing to an environment with different schema.
+        /// </para>
+        /// </remarks>
+        public bool SkipMissingColumns { get; set; } = false;
     }
 
     /// <summary>

@@ -86,6 +86,12 @@ public static class CopyCommand
             DefaultValueFactory = _ => false
         };
 
+        var skipMissingColumnsOption = new Option<bool>("--skip-missing-columns")
+        {
+            Description = "Skip columns that exist in source but not in target environment (prevents schema mismatch errors)",
+            DefaultValueFactory = _ => false
+        };
+
         var jsonOption = new Option<bool>("--json", "-j")
         {
             Description = "Output progress as JSON (for tool integration)",
@@ -116,6 +122,7 @@ public static class CopyCommand
             batchSizeOption,
             bypassPluginsOption,
             bypassFlowsOption,
+            skipMissingColumnsOption,
             jsonOption,
             verboseOption,
             debugOption
@@ -133,6 +140,7 @@ public static class CopyCommand
             var batchSize = parseResult.GetValue(batchSizeOption);
             var bypassPluginsValue = parseResult.GetValue(bypassPluginsOption);
             var bypassFlows = parseResult.GetValue(bypassFlowsOption);
+            var skipMissingColumns = parseResult.GetValue(skipMissingColumnsOption);
             var json = parseResult.GetValue(jsonOption);
             var verbose = parseResult.GetValue(verboseOption);
             var debug = parseResult.GetValue(debugOption);
@@ -143,7 +151,7 @@ public static class CopyCommand
                 sourceProfile, targetProfile,
                 sourceEnv, targetEnv,
                 schema, tempDir, parallel, batchSize,
-                bypassPlugins, bypassFlows,
+                bypassPlugins, bypassFlows, skipMissingColumns,
                 json, verbose, debug, cancellationToken);
         });
 
@@ -172,6 +180,7 @@ public static class CopyCommand
         int batchSize,
         CustomLogicBypass bypassPlugins,
         bool bypassFlows,
+        bool skipMissingColumns,
         bool json,
         bool verbose,
         bool debug,
@@ -246,7 +255,8 @@ public static class CopyCommand
             var importOptions = new ImportOptions
             {
                 BypassCustomPlugins = bypassPlugins,
-                BypassPowerAutomateFlows = bypassFlows
+                BypassPowerAutomateFlows = bypassFlows,
+                SkipMissingColumns = skipMissingColumns
             };
 
             var importResult = await importer.ImportAsync(
@@ -260,6 +270,13 @@ public static class CopyCommand
         catch (OperationCanceledException)
         {
             progressReporter.Error(new OperationCanceledException(), "Copy cancelled by user.");
+            return ExitCodes.Failure;
+        }
+        catch (SchemaMismatchException ex)
+        {
+            // Schema mismatch gets special handling - display the detailed message
+            Console.Error.WriteLine();
+            Console.Error.WriteLine(ex.Message);
             return ExitCodes.Failure;
         }
         catch (Exception ex)

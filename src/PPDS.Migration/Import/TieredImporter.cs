@@ -125,6 +125,58 @@ namespace PPDS.Migration.Import
             var entityNames = data.Schema.Entities.Select(e => e.LogicalName).ToList();
             var targetFieldMetadata = await LoadTargetFieldMetadataAsync(entityNames, progress, cancellationToken).ConfigureAwait(false);
 
+            // Pre-flight check: detect columns that exist in export but not in target
+            var missingColumns = DetectMissingColumns(data, targetFieldMetadata);
+            if (missingColumns.Count > 0)
+            {
+                var totalMissing = missingColumns.Values.Sum(v => v.Count);
+
+                if (!options.SkipMissingColumns)
+                {
+                    // Build detailed error message
+                    var details = new System.Text.StringBuilder();
+                    details.AppendLine($"Schema mismatch: {totalMissing} column(s) in exported data do not exist in target environment.");
+                    details.AppendLine();
+
+                    foreach (var (entity, columns) in missingColumns.OrderBy(x => x.Key))
+                    {
+                        details.AppendLine($"  {entity}:");
+                        foreach (var col in columns)
+                        {
+                            details.AppendLine($"    - {col}");
+                        }
+                    }
+
+                    details.AppendLine();
+                    details.Append("Use --skip-missing-columns to import anyway (these columns will be skipped).");
+
+                    _logger?.LogError("Schema mismatch detected: {Count} columns missing in target", totalMissing);
+
+                    progress?.Report(new ProgressEventArgs
+                    {
+                        Phase = MigrationPhase.Analyzing,
+                        Message = $"Schema mismatch: {totalMissing} column(s) not found in target"
+                    });
+
+                    throw new SchemaMismatchException(details.ToString(), missingColumns);
+                }
+
+                // SkipMissingColumns is true - log warnings and continue
+                _logger?.LogWarning("Skipping {Count} columns not found in target environment", totalMissing);
+
+                foreach (var (entity, columns) in missingColumns)
+                {
+                    _logger?.LogWarning("Entity {Entity}: skipping columns [{Columns}]",
+                        entity, string.Join(", ", columns));
+                }
+
+                progress?.Report(new ProgressEventArgs
+                {
+                    Phase = MigrationPhase.Analyzing,
+                    Message = $"Warning: Skipping {totalMissing} column(s) not found in target"
+                });
+            }
+
             // Disable plugins on entities with disableplugins=true
             IReadOnlyList<Guid> disabledPluginSteps = Array.Empty<Guid>();
             if (options.RespectDisablePluginsSetting && _pluginStepManager != null)
@@ -509,7 +561,7 @@ namespace PPDS.Migration.Import
                 }
 
                 // Skip fields that are not valid for the current operation based on target metadata
-                if (!ShouldIncludeField(attr.Key, options.Mode, fieldMetadata))
+                if (!ShouldIncludeField(attr.Key, options.Mode, fieldMetadata, out _))
                 {
                     continue;
                 }
@@ -911,15 +963,24 @@ namespace PPDS.Migration.Import
         /// <summary>
         /// Determines if a field should be included in the import based on operation mode and metadata.
         /// </summary>
+        /// <param name="fieldName">The field name to check.</param>
+        /// <param name="mode">The import mode.</param>
+        /// <param name="fieldMetadata">Target environment field metadata.</param>
+        /// <param name="reason">Output: reason field was excluded, if any.</param>
+        /// <returns>True if field should be included, false otherwise.</returns>
         private static bool ShouldIncludeField(
             string fieldName,
             ImportMode mode,
-            Dictionary<string, (bool IsValidForCreate, bool IsValidForUpdate)>? fieldMetadata)
+            Dictionary<string, (bool IsValidForCreate, bool IsValidForUpdate)>? fieldMetadata,
+            out string? reason)
         {
-            // If no metadata available for this entity, include all fields (backwards compatibility)
+            reason = null;
+
+            // If no metadata available for this entity, skip unknown fields to prevent Dataverse errors
             if (fieldMetadata == null || !fieldMetadata.TryGetValue(fieldName, out var validity))
             {
-                return true;
+                reason = "not found in target";
+                return false;
             }
 
             var (isValidForCreate, isValidForUpdate) = validity;
@@ -927,24 +988,69 @@ namespace PPDS.Migration.Import
             // Never include fields that are not valid for any write operation
             if (!isValidForCreate && !isValidForUpdate)
             {
+                reason = "not valid for create or update";
                 return false;
             }
 
             // For Update mode, skip fields not valid for update
             if (mode == ImportMode.Update && !isValidForUpdate)
             {
+                reason = "not valid for update";
                 return false;
             }
 
             // For Create mode, skip fields not valid for create
             if (mode == ImportMode.Create && !isValidForCreate)
             {
+                reason = "not valid for create";
                 return false;
             }
 
             // For Upsert mode, include fields valid for either operation
             // (the actual operation will determine validity per-record)
             return true;
+        }
+
+        /// <summary>
+        /// Detects columns in exported data that don't exist in target environment.
+        /// </summary>
+        /// <returns>Dictionary of entity name to list of missing column names.</returns>
+        private static Dictionary<string, List<string>> DetectMissingColumns(
+            MigrationData data,
+            Dictionary<string, Dictionary<string, (bool IsValidForCreate, bool IsValidForUpdate)>> targetFieldMetadata)
+        {
+            var missingColumns = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
+
+            foreach (var (entityName, records) in data.EntityData)
+            {
+                if (records.Count == 0)
+                    continue;
+
+                // Get all unique field names from exported records
+                var exportedFields = records
+                    .SelectMany(r => r.Attributes.Keys)
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+
+                // Get target metadata for this entity
+                targetFieldMetadata.TryGetValue(entityName, out var targetFields);
+                targetFields ??= new Dictionary<string, (bool, bool)>(StringComparer.OrdinalIgnoreCase);
+
+                // Find fields that exist in export but not in target
+                var missing = exportedFields
+                    .Where(f => !targetFields.ContainsKey(f))
+                    .Where(f => !f.EndsWith("id", StringComparison.OrdinalIgnoreCase) ||
+                                !f.Equals($"{entityName}id", StringComparison.OrdinalIgnoreCase)) // Skip primary key
+                    .OrderBy(f => f)
+                    .ToList();
+
+                if (missing.Count > 0)
+                {
+                    missingColumns[entityName] = missing;
+                }
+            }
+
+            return missingColumns;
         }
     }
 }

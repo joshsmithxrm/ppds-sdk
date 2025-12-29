@@ -63,6 +63,12 @@ public static class ImportCommand
             DefaultValueFactory = _ => false
         };
 
+        var skipMissingColumnsOption = new Option<bool>("--skip-missing-columns")
+        {
+            Description = "Skip columns that exist in exported data but not in target environment (prevents schema mismatch errors)",
+            DefaultValueFactory = _ => false
+        };
+
         var jsonOption = new Option<bool>("--json", "-j")
         {
             Description = "Output progress as JSON (for tool integration)",
@@ -92,6 +98,7 @@ public static class ImportCommand
             modeOption,
             userMappingOption,
             stripOwnerFieldsOption,
+            skipMissingColumnsOption,
             jsonOption,
             verboseOption,
             debugOption
@@ -108,6 +115,7 @@ public static class ImportCommand
             var mode = parseResult.GetValue(modeOption);
             var userMappingFile = parseResult.GetValue(userMappingOption);
             var stripOwnerFields = parseResult.GetValue(stripOwnerFieldsOption);
+            var skipMissingColumns = parseResult.GetValue(skipMissingColumnsOption);
             var json = parseResult.GetValue(jsonOption);
             var verbose = parseResult.GetValue(verboseOption);
             var debug = parseResult.GetValue(debugOption);
@@ -117,7 +125,7 @@ public static class ImportCommand
             return await ExecuteAsync(
                 profile, environment, data, bypassPlugins, bypassFlows,
                 continueOnError, mode, userMappingFile, stripOwnerFields,
-                json, verbose, debug, cancellationToken);
+                skipMissingColumns, json, verbose, debug, cancellationToken);
         });
 
         return command;
@@ -144,6 +152,7 @@ public static class ImportCommand
         ImportMode mode,
         FileInfo? userMappingFile,
         bool stripOwnerFields,
+        bool skipMissingColumns,
         bool json,
         bool verbose,
         bool debug,
@@ -206,7 +215,8 @@ public static class ImportCommand
                 ContinueOnError = continueOnError,
                 Mode = mode,
                 UserMappings = userMappings,
-                StripOwnerFields = stripOwnerFields
+                StripOwnerFields = stripOwnerFields,
+                SkipMissingColumns = skipMissingColumns
             };
 
             var result = await importer.ImportAsync(
@@ -220,6 +230,13 @@ public static class ImportCommand
         catch (OperationCanceledException)
         {
             progressReporter.Error(new OperationCanceledException(), "Import cancelled by user.");
+            return ExitCodes.Failure;
+        }
+        catch (SchemaMismatchException ex)
+        {
+            // Schema mismatch gets special handling - display the detailed message
+            Console.Error.WriteLine();
+            Console.Error.WriteLine(ex.Message);
             return ExitCodes.Failure;
         }
         catch (Exception ex)
