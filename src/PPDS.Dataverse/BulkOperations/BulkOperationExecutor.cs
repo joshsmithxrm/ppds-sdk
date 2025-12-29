@@ -128,11 +128,10 @@ namespace PPDS.Dataverse.BulkOperations
             }
             else
             {
-                // Parallel execution at DOP-based parallelism
-                result = await ExecuteBatchesParallelAsync(
+                // Adaptive execution respects per-source DOP limits
+                result = await ExecuteBatchesAdaptiveAsync(
                     batches,
                     (batch, ct) => ExecuteCreateMultipleBatchAsync(entityLogicalName, batch, options, ct),
-                    parallelism,
                     tracker,
                     progress,
                     cancellationToken);
@@ -192,11 +191,10 @@ namespace PPDS.Dataverse.BulkOperations
             }
             else
             {
-                // Parallel execution at DOP-based parallelism
-                result = await ExecuteBatchesParallelAsync(
+                // Adaptive execution respects per-source DOP limits
+                result = await ExecuteBatchesAdaptiveAsync(
                     batches,
                     (batch, ct) => ExecuteUpdateMultipleBatchAsync(entityLogicalName, batch, options, ct),
-                    parallelism,
                     tracker,
                     progress,
                     cancellationToken);
@@ -256,11 +254,10 @@ namespace PPDS.Dataverse.BulkOperations
             }
             else
             {
-                // Parallel execution at DOP-based parallelism
-                result = await ExecuteBatchesParallelAsync(
+                // Adaptive execution respects per-source DOP limits
+                result = await ExecuteBatchesAdaptiveAsync(
                     batches,
                     (batch, ct) => ExecuteUpsertMultipleBatchAsync(entityLogicalName, batch, options, ct),
-                    parallelism,
                     tracker,
                     progress,
                     cancellationToken);
@@ -320,8 +317,8 @@ namespace PPDS.Dataverse.BulkOperations
             }
             else
             {
-                // Parallel execution at DOP-based parallelism
-                result = await ExecuteBatchesParallelAsync(batches, executeBatch, parallelism, tracker, progress, cancellationToken);
+                // Adaptive execution respects per-source DOP limits
+                result = await ExecuteBatchesAdaptiveAsync(batches, executeBatch, tracker, progress, cancellationToken);
             }
 
             stopwatch.Stop();
@@ -1448,6 +1445,120 @@ namespace PPDS.Dataverse.BulkOperations
                 CreatedCount = hasUpsertCounts == 1 ? createdCount : null,
                 UpdatedCount = hasUpsertCounts == 1 ? updatedCount : null
             };
+        }
+
+        /// <summary>
+        /// Executes batches with adaptive per-source DOP control.
+        /// Respects the live DOP limit for each connection source.
+        /// </summary>
+        private async Task<BulkOperationResult> ExecuteBatchesAdaptiveAsync<T>(
+            List<List<T>> batches,
+            Func<List<T>, CancellationToken, Task<BulkOperationResult>> executeBatch,
+            ProgressTracker tracker,
+            IProgress<ProgressSnapshot>? progress,
+            CancellationToken cancellationToken)
+        {
+            var allErrors = new ConcurrentBag<BulkOperationError>();
+            var allCreatedIds = new ConcurrentBag<Guid>();
+            var successCount = 0;
+            var failureCount = 0;
+            var createdCount = 0;
+            var updatedCount = 0;
+            var hasUpsertCounts = 0; // 0 = false, 1 = true (for thread-safe flag)
+
+            var pending = new Queue<List<T>>(batches);
+            var inFlight = new List<Task<(BulkOperationResult result, List<T> batch)>>();
+            const int capacityCheckDelayMs = 10;
+
+            while (pending.Count > 0 || inFlight.Count > 0)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+
+                // Try to start new batches while there's capacity
+                while (pending.Count > 0)
+                {
+                    // Check if any source has DOP capacity
+                    var client = await _connectionPool.TryGetClientWithCapacityAsync(cancellationToken);
+                    if (client == null)
+                    {
+                        // No capacity available - break and wait for in-flight to complete
+                        break;
+                    }
+
+                    // We got a client - return it immediately (we just needed to check capacity)
+                    // The batch function will get its own client
+                    await client.DisposeAsync();
+
+                    var batch = pending.Dequeue();
+                    var task = ExecuteBatchWithResultAsync(batch, executeBatch, cancellationToken);
+                    inFlight.Add(task);
+                }
+
+                if (inFlight.Count == 0)
+                {
+                    // No capacity and nothing in flight - wait briefly and retry
+                    await Task.Delay(capacityCheckDelayMs, cancellationToken);
+                    continue;
+                }
+
+                // Wait for any batch to complete
+                var completedTask = await Task.WhenAny(inFlight);
+                inFlight.Remove(completedTask);
+
+                var (batchResult, _) = await completedTask;
+
+                // Aggregate results
+                Interlocked.Add(ref successCount, batchResult.SuccessCount);
+                Interlocked.Add(ref failureCount, batchResult.FailureCount);
+
+                foreach (var error in batchResult.Errors)
+                {
+                    allErrors.Add(error);
+                }
+
+                if (batchResult.CreatedIds != null)
+                {
+                    foreach (var id in batchResult.CreatedIds)
+                    {
+                        allCreatedIds.Add(id);
+                    }
+                }
+
+                if (batchResult.CreatedCount.HasValue)
+                {
+                    Interlocked.Exchange(ref hasUpsertCounts, 1);
+                    Interlocked.Add(ref createdCount, batchResult.CreatedCount.Value);
+                }
+                if (batchResult.UpdatedCount.HasValue)
+                {
+                    Interlocked.Exchange(ref hasUpsertCounts, 1);
+                    Interlocked.Add(ref updatedCount, batchResult.UpdatedCount.Value);
+                }
+
+                // Report progress
+                tracker.RecordProgress(batchResult.SuccessCount, batchResult.FailureCount);
+                progress?.Report(tracker.GetSnapshot());
+            }
+
+            return new BulkOperationResult
+            {
+                SuccessCount = successCount,
+                FailureCount = failureCount,
+                Errors = allErrors.ToList(),
+                Duration = TimeSpan.Zero,
+                CreatedIds = allCreatedIds.Count > 0 ? allCreatedIds.ToList() : null,
+                CreatedCount = hasUpsertCounts == 1 ? createdCount : null,
+                UpdatedCount = hasUpsertCounts == 1 ? updatedCount : null
+            };
+        }
+
+        private static async Task<(BulkOperationResult result, List<T> batch)> ExecuteBatchWithResultAsync<T>(
+            List<T> batch,
+            Func<List<T>, CancellationToken, Task<BulkOperationResult>> executeBatch,
+            CancellationToken cancellationToken)
+        {
+            var result = await executeBatch(batch, cancellationToken);
+            return (result, batch);
         }
 
         /// <summary>

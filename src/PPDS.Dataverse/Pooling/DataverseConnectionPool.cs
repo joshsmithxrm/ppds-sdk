@@ -172,14 +172,138 @@ namespace PPDS.Dataverse.Pooling
         /// <inheritdoc />
         public int GetTotalRecommendedParallelism()
         {
-            // If no DOP values are set yet (no seeds created), use conservative default
-            if (_sourceDop.IsEmpty)
+            // Sum live DOP values from seed clients
+            int total = 0;
+            foreach (var source in _sources)
             {
-                // Default to 4 per source (conservative) until actual DOP is known
-                return _sources.Count * 4;
+                total += GetLiveSourceDop(source.Name);
+            }
+            return total;
+        }
+
+        /// <inheritdoc />
+        public int GetLiveSourceDop(string sourceName)
+        {
+            // Read live value from seed client if available
+            if (_seedClients.TryGetValue(sourceName, out var seed))
+            {
+                return Math.Clamp(seed.RecommendedDegreesOfParallelism, 1, ConnectionPoolOptions.MicrosoftHardLimitPerUser);
             }
 
-            return _sourceDop.Values.Sum();
+            // Fall back to cached value if seed exists in cache
+            if (_sourceDop.TryGetValue(sourceName, out var cached))
+            {
+                return cached;
+            }
+
+            // Conservative default
+            return 4;
+        }
+
+        /// <inheritdoc />
+        public int GetActiveConnectionCount(string sourceName)
+        {
+            return _activeConnections.GetValueOrDefault(sourceName, 0);
+        }
+
+        /// <inheritdoc />
+        public async Task<IPooledClient?> TryGetClientWithCapacityAsync(CancellationToken cancellationToken = default)
+        {
+            ThrowIfDisposed();
+
+            if (!IsEnabled)
+            {
+                return CreateDirectClient(null);
+            }
+
+            // Find a source that has DOP headroom and is not throttled
+            foreach (var source in _sources)
+            {
+                var active = _activeConnections.GetValueOrDefault(source.Name, 0);
+                var dop = GetLiveSourceDop(source.Name);
+
+                if (active < dop && !_throttleTracker.IsThrottled(source.Name))
+                {
+                    // This source has capacity - try to get a client from it
+                    try
+                    {
+                        return await GetClientFromSourceAsync(source.Name, null, cancellationToken);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogDebug(ex, "Failed to get client from {Source}, trying next", source.Name);
+                        // Continue to next source
+                    }
+                }
+            }
+
+            // No source has capacity
+            return null;
+        }
+
+        /// <summary>
+        /// Gets a client specifically from the named source.
+        /// </summary>
+        private async Task<IPooledClient> GetClientFromSourceAsync(
+            string sourceName,
+            DataverseClientOptions? options,
+            CancellationToken cancellationToken)
+        {
+            // Acquire semaphore
+            var acquired = await _connectionSemaphore.WaitAsync(_poolOptions.AcquireTimeout, cancellationToken);
+            if (!acquired)
+            {
+                throw new TimeoutException($"Timed out waiting for connection from {sourceName}");
+            }
+
+            try
+            {
+                var pool = _pools[sourceName];
+
+                // Try to get from pool first
+                while (pool.TryDequeue(out var existingClient))
+                {
+                    if (IsValidConnection(existingClient))
+                    {
+                        _activeConnections.AddOrUpdate(sourceName, 1, (_, v) => v + 1);
+                        Interlocked.Increment(ref _totalRequestsServed);
+                        _requestCounts.AddOrUpdate(sourceName, 1, (_, v) => v + 1);
+
+                        existingClient.UpdateLastUsed();
+                        if (options != null)
+                        {
+                            existingClient.ApplyOptions(options);
+                        }
+
+                        _logger.LogDebug(
+                            "Retrieved connection from pool. ConnectionId: {ConnectionId}, Name: {ConnectionName}",
+                            existingClient.ConnectionId, existingClient.ConnectionName);
+
+                        return existingClient;
+                    }
+
+                    // Invalid - dispose and try next
+                    existingClient.ForceDispose();
+                }
+
+                // Pool is empty, create new connection
+                var newClient = CreateNewConnection(sourceName);
+                _activeConnections.AddOrUpdate(sourceName, 1, (_, v) => v + 1);
+                Interlocked.Increment(ref _totalRequestsServed);
+                _requestCounts.AddOrUpdate(sourceName, 1, (_, v) => v + 1);
+
+                if (options != null)
+                {
+                    newClient.ApplyOptions(options);
+                }
+
+                return newClient;
+            }
+            catch
+            {
+                _connectionSemaphore.Release();
+                throw;
+            }
         }
 
         /// <inheritdoc />

@@ -100,7 +100,7 @@ namespace PPDS.Dataverse.Pooling
 
         /// <summary>
         /// Gets the total recommended parallelism across all connection sources.
-        /// This is the sum of RecommendedDegreesOfParallelism for each source, capped at 52 per source.
+        /// This is the sum of live RecommendedDegreesOfParallelism for each source.
         /// </summary>
         /// <remarks>
         /// <para>
@@ -109,11 +109,33 @@ namespace PPDS.Dataverse.Pooling
         /// concurrent request limit per Application User.
         /// </para>
         /// <para>
-        /// Scaling throughput should be done by adding more Application Users (connection sources),
-        /// not by exceeding the recommended parallelism per user.
+        /// This reads live values from seed clients, not cached values, so it reflects
+        /// the server's current recommendation which may change based on load.
         /// </para>
         /// </remarks>
         /// <returns>The total recommended parallelism across all sources.</returns>
         int GetTotalRecommendedParallelism();
+
+        /// <summary>
+        /// Gets the live DOP (degrees of parallelism) for a specific connection source.
+        /// </summary>
+        /// <param name="sourceName">The name of the connection source.</param>
+        /// <returns>The current recommended parallelism for this source (1-52).</returns>
+        int GetLiveSourceDop(string sourceName);
+
+        /// <summary>
+        /// Gets the current number of active (checked-out) connections for a source.
+        /// </summary>
+        /// <param name="sourceName">The name of the connection source.</param>
+        /// <returns>The number of currently active connections.</returns>
+        int GetActiveConnectionCount(string sourceName);
+
+        /// <summary>
+        /// Tries to get a client from a source that has available DOP capacity.
+        /// Returns null if all sources are at capacity or throttled.
+        /// </summary>
+        /// <param name="cancellationToken">Cancellation token.</param>
+        /// <returns>A pooled client if capacity is available, null otherwise.</returns>
+        Task<IPooledClient?> TryGetClientWithCapacityAsync(CancellationToken cancellationToken = default);
     }
 }
