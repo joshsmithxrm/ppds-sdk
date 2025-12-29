@@ -1,4 +1,4 @@
-# ADR-0008: Unified CLI and Shared Authentication
+# ADR-0007: Unified CLI and Shared Authentication
 
 **Status:** Accepted
 **Date:** 2025-01-27

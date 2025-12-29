@@ -70,10 +70,12 @@ ppds-sdk/
 │   │   ├── Resilience/          # Throttle tracking, retry logic
 │   │   └── PPDS.Dataverse.csproj
 │   ├── PPDS.Migration/          # Migration engine library
-│   └── PPDS.Migration.Cli/      # CLI tool (ppds-migrate)
+│   ├── PPDS.Auth/               # Authentication profiles and credentials
+│   └── PPDS.Cli/                # Unified CLI tool (ppds command)
 ├── tests/
 │   ├── PPDS.Plugins.Tests/
-│   └── PPDS.Dataverse.Tests/
+│   ├── PPDS.Dataverse.Tests/
+│   └── PPDS.Cli.Tests/
 ├── docs/
 │   ├── adr/                     # Architecture Decision Records
 │   └── architecture/            # Pattern documentation
@@ -180,6 +182,18 @@ namespace PPDS.Dataverse.Resilience;     // Throttle tracking, service protectio
 // PPDS.Migration
 namespace PPDS.Migration.Export;     // IExporter
 namespace PPDS.Migration.Import;     // IImporter
+
+// PPDS.Auth
+namespace PPDS.Auth.Profiles;        // AuthProfile, ProfileStore, ProfileCollection
+namespace PPDS.Auth.Credentials;     // ICredentialProvider, credential implementations
+namespace PPDS.Auth.Discovery;       // GlobalDiscoveryService, EnvironmentResolver
+namespace PPDS.Auth.Cloud;           // CloudEnvironment, CloudEndpoints
+
+// PPDS.Cli
+namespace PPDS.Cli.Commands.Auth;    // Auth command group
+namespace PPDS.Cli.Commands.Env;     // Environment command group
+namespace PPDS.Cli.Commands.Data;    // Data command group (export, import, copy)
+namespace PPDS.Cli.Infrastructure;   // ServiceFactory, ProfileServiceFactory
 ```
 
 ---
@@ -192,7 +206,9 @@ Each package has independent versioning using [MinVer](https://github.com/adamra
 |---------|------------|---------|
 | PPDS.Plugins | `Plugins-v{version}` | `Plugins-v1.2.0` |
 | PPDS.Dataverse | `Dataverse-v{version}` | `Dataverse-v1.0.0` |
-| PPDS.Migration + CLI | `Migration-v{version}` | `Migration-v1.0.0` |
+| PPDS.Migration | `Migration-v{version}` | `Migration-v1.0.0` |
+| PPDS.Auth | `Auth-v{version}` | `Auth-v1.0.0` |
+| PPDS.Cli | `Cli-v{version}` | `Cli-v1.0.0` |
 
 - Follow SemVer: `MAJOR.MINOR.PATCH`
 - Pre-release: `-alpha.N`, `-beta.N`, `-rc.N` suffix
@@ -224,6 +240,8 @@ See per-package changelogs:
 - [PPDS.Plugins](src/PPDS.Plugins/CHANGELOG.md)
 - [PPDS.Dataverse](src/PPDS.Dataverse/CHANGELOG.md)
 - [PPDS.Migration](src/PPDS.Migration/CHANGELOG.md)
+- [PPDS.Auth](src/PPDS.Auth/CHANGELOG.md)
+- [PPDS.Cli](src/PPDS.Cli/CHANGELOG.md)
 
 ---
 
@@ -236,14 +254,15 @@ See per-package changelogs:
 | PPDS.Plugins | NuGet |
 | PPDS.Dataverse | NuGet |
 | PPDS.Migration | NuGet |
-| PPDS.Migration.Cli | .NET Tool |
+| PPDS.Auth | NuGet |
+| PPDS.Cli | .NET Tool |
 
 ### Consumed By
 
 | Consumer | How | Breaking Change Impact |
 |----------|-----|------------------------|
 | ppds-tools | Reflects on attributes | Must update reflection code |
-| ppds-tools | Shells to `ppds-migrate` CLI | Must update CLI calls |
+| ppds-tools | Shells to `ppds` CLI | Must update CLI calls |
 | ppds-demo | NuGet reference | Must update package reference |
 
 ### Version Sync Rules
@@ -258,7 +277,7 @@ See per-package changelogs:
 
 - Adding required properties to `PluginStepAttribute` or `PluginImageAttribute`
 - Changing attribute property types or names
-- Changing `ppds-migrate` CLI arguments or output format
+- Changing `ppds` CLI arguments or output format
 
 ---
 
@@ -342,27 +361,51 @@ See [ADR-0005](docs/adr/0005_DOP_BASED_PARALLELISM.md) for details.
 | [0004](docs/adr/0004_THROTTLE_RECOVERY_STRATEGY.md) | Transparent throttle waiting without blocking |
 | [0005](docs/adr/0005_DOP_BASED_PARALLELISM.md) | DOP-based parallelism (server-recommended limits) |
 | [0006](docs/adr/0006_CONNECTION_SOURCE_ABSTRACTION.md) | IConnectionSource for custom auth methods |
+| [0007](docs/adr/0007_UNIFIED_CLI_AND_AUTH.md) | Unified CLI and shared authentication profiles |
 
 ---
 
-## 🖥️ CLI (PPDS.Migration.Cli)
+## 🖥️ CLI (PPDS.Cli)
 
-### Authentication Modes
+The unified CLI (`ppds`) uses stored authentication profiles. Create a profile once, then all commands use it automatically.
 
-| Mode | Flag | Use Case |
-|------|------|----------|
-| Interactive | `--auth interactive` (default) | Development, ad-hoc usage |
-| Environment | `--auth env` | CI/CD pipelines |
-| Managed Identity | `--auth managed` | Azure-hosted workloads |
+### Command Structure
 
-**CI/CD environment variables:**
-```bash
-DATAVERSE__URL=https://org.crm.dynamics.com
-DATAVERSE__CLIENTID=your-client-id
-DATAVERSE__CLIENTSECRET=your-secret
+```
+ppds
+├── auth      Authentication profile management
+├── env       Environment discovery and selection
+├── data      Data operations (export, import, copy, analyze)
+├── schema    Schema generation and entity listing
+└── users     User mapping for cross-environment migrations
 ```
 
-See [CLI README](src/PPDS.Migration.Cli/README.md) for full documentation.
+### Quick Start
+
+```bash
+# Create profile (opens browser)
+ppds auth create --name dev
+
+# Select environment
+ppds env select --environment "My Environment"
+
+# Run commands
+ppds data export --schema schema.xml --output data.zip
+```
+
+### Authentication Methods
+
+| Method | Flags | Use Case |
+|--------|-------|----------|
+| Interactive Browser | (default) | Development |
+| Device Code | `--deviceCode` | Headless/SSH |
+| Client Secret | `--applicationId` + `--clientSecret` + `--tenant` | CI/CD |
+| Certificate | `--applicationId` + `--certificateDiskPath` + `--tenant` | Automated |
+| Managed Identity | `--managedIdentity` | Azure-hosted |
+| GitHub OIDC | `--githubFederated` + `--applicationId` + `--tenant` | GitHub Actions |
+| Azure DevOps OIDC | `--azureDevOpsFederated` + `--applicationId` + `--tenant` | Azure Pipelines |
+
+See [CLI README](src/PPDS.Cli/README.md) for full documentation.
 
 ---
 
