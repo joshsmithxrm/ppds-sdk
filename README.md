@@ -19,11 +19,11 @@ NuGet packages for Microsoft Dataverse development. Part of the [Power Platform 
 
 | Package | Target Frameworks |
 |---------|-------------------|
-| PPDS.Plugins | net462, net8.0, net10.0 |
-| PPDS.Dataverse | net8.0, net10.0 |
-| PPDS.Migration | net8.0, net10.0 |
-| PPDS.Auth | net8.0, net10.0 |
-| PPDS.Cli | net10.0 |
+| PPDS.Plugins | net462 |
+| PPDS.Dataverse | net8.0, net9.0, net10.0 |
+| PPDS.Migration | net8.0, net9.0, net10.0 |
+| PPDS.Auth | net8.0, net9.0, net10.0 |
+| PPDS.Cli | net8.0, net9.0, net10.0 |
 
 ---
 
