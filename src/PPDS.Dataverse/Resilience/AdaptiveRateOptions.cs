@@ -27,7 +27,7 @@ namespace PPDS.Dataverse.Resilience
             // Conservative: 60% of request rate limit (12 of 20 req/sec)
             // Prioritizes avoiding throttles over throughput
             RateControlPreset.Conservative => new PresetDefaults(
-                ExecutionTimeCeilingFactor: 35,
+                ExecutionTimeCeilingFactor: 17,
                 DecreaseFactor: 0.4,
                 StabilizationBatches: 5,
                 MinIncreaseIntervalSeconds: 8,
@@ -36,7 +36,7 @@ namespace PPDS.Dataverse.Resilience
             // Balanced: 80% of request rate limit (16 of 20 req/sec)
             // Good throughput with reasonable safety margin
             RateControlPreset.Balanced => new PresetDefaults(
-                ExecutionTimeCeilingFactor: 50,
+                ExecutionTimeCeilingFactor: 25,
                 DecreaseFactor: 0.5,
                 StabilizationBatches: 3,
                 MinIncreaseIntervalSeconds: 5,
@@ -45,7 +45,7 @@ namespace PPDS.Dataverse.Resilience
             // Aggressive: 90% of request rate limit (18 of 20 req/sec)
             // Maximum throughput, accepts occasional throttles
             RateControlPreset.Aggressive => new PresetDefaults(
-                ExecutionTimeCeilingFactor: 80,
+                ExecutionTimeCeilingFactor: 40,
                 DecreaseFactor: 0.6,
                 StabilizationBatches: 2,
                 MinIncreaseIntervalSeconds: 3,
@@ -106,7 +106,8 @@ namespace PPDS.Dataverse.Resilience
         /// If not set, uses the value from <see cref="Preset"/>.
         /// </summary>
         /// <remarks>
-        /// Preset defaults: Conservative=35, Balanced=50, Aggressive=80
+        /// Preset defaults: Conservative=17, Balanced=25, Aggressive=40.
+        /// Ceiling = Factor * connectionCount / batchDuration.
         /// </remarks>
         public int ExecutionTimeCeilingFactor
         {

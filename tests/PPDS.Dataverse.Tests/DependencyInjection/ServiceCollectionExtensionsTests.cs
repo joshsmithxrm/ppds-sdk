@@ -637,10 +637,10 @@ public class ServiceCollectionExtensionsTests
         var options = provider.GetRequiredService<IOptions<DataverseOptions>>().Value;
 
         // Assert - should use Conservative preset values, not Balanced
-        // Conservative: Factor=35, DecreaseFactor=0.4, Stabilization=5, Interval=8s
-        // Balanced:     Factor=50, DecreaseFactor=0.5, Stabilization=3, Interval=5s
+        // Conservative: Factor=17, DecreaseFactor=0.4, Stabilization=5, Interval=8s
+        // Balanced:     Factor=25, DecreaseFactor=0.5, Stabilization=3, Interval=5s
         options.AdaptiveRate.Preset.Should().Be(RateControlPreset.Conservative);
-        options.AdaptiveRate.ExecutionTimeCeilingFactor.Should().Be(35, "Conservative preset should use 35");
+        options.AdaptiveRate.ExecutionTimeCeilingFactor.Should().Be(17, "Conservative preset should use 17");
         options.AdaptiveRate.DecreaseFactor.Should().Be(0.4, "Conservative preset should use 0.4");
         options.AdaptiveRate.StabilizationBatches.Should().Be(5, "Conservative preset should use 5");
         options.AdaptiveRate.MinIncreaseInterval.Should().Be(TimeSpan.FromSeconds(8), "Conservative preset should use 8s");
@@ -658,13 +658,13 @@ public class ServiceCollectionExtensionsTests
         options.Preset = RateControlPreset.Balanced;
 
         // Assert initial values
-        options.ExecutionTimeCeilingFactor.Should().Be(50, "Balanced default");
+        options.ExecutionTimeCeilingFactor.Should().Be(25, "Balanced default");
 
         // Act - change preset
         options.Preset = RateControlPreset.Conservative;
 
         // Assert - getter should now return Conservative default
-        options.ExecutionTimeCeilingFactor.Should().Be(35, "should switch to Conservative default");
+        options.ExecutionTimeCeilingFactor.Should().Be(17, "should switch to Conservative default");
     }
 
     /// <summary>
@@ -692,15 +692,15 @@ public class ServiceCollectionExtensionsTests
 
         // Assert - Preset should be Balanced
         options.Preset.Should().Be(RateControlPreset.Balanced);
-        options.ExecutionTimeCeilingFactor.Should().Be(50, "getter returns Balanced default");
+        options.ExecutionTimeCeilingFactor.Should().Be(25, "getter returns Balanced default");
 
         // Act - change Preset
         options.Preset = RateControlPreset.Conservative;
 
         // Without the fix (ClearNonConfiguredBackingFields), the backing field was populated
-        // by Bind() reading the getter and writing to the setter, so it stays 50
+        // by Bind() reading the getter and writing to the setter, so it stays 25
         // This documents WHY we need the fix in AddDataverseConnectionPool
-        options.ExecutionTimeCeilingFactor.Should().Be(50,
+        options.ExecutionTimeCeilingFactor.Should().Be(25,
             "without the fix, Bind() populated backing field, so changing Preset doesn't affect this property");
     }
 

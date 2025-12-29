@@ -408,10 +408,10 @@ namespace PPDS.Dataverse.Resilience
 
             var avgBatchSeconds = _batchDurationEmaMs.Value / 1000.0;
 
-            // Execution time ceiling: Factor / batchDuration (uses EMA - slow batches need this)
+            // Execution time ceiling: Factor * connectionCount / batchDuration
+            // Scales with connections since each user has independent 1200s/5min budget
             // Protects slow operations from exhausting the 20-minute execution time budget
-            // Lower batch duration = higher ceiling (fast ops don't need this protection)
-            var execTimeCeiling = (int)(_options.ExecutionTimeCeilingFactor / avgBatchSeconds);
+            var execTimeCeiling = (int)(_options.ExecutionTimeCeilingFactor * _connectionCount / avgBatchSeconds);
             execTimeCeiling = Math.Max(_floorParallelism, Math.Min(execTimeCeiling, _ceilingParallelism));
 
             // Request rate ceiling: Factor × batchDuration (uses MINIMUM - fastest observed)

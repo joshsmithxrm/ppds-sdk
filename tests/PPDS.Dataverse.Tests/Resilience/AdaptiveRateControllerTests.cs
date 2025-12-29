@@ -274,22 +274,22 @@ namespace PPDS.Dataverse.Tests.Resilience
             // Arrange
             var controller = CreateController(new AdaptiveRateOptions
             {
-                Preset = RateControlPreset.Balanced // RequestRateCeilingFactor = 16, ExecutionTimeCeilingFactor = 50
+                Preset = RateControlPreset.Balanced // RequestRateCeilingFactor = 16, ExecutionTimeCeilingFactor = 25
             });
 
             controller.GetParallelism(recommendedPerConnection: 4, connectionCount: 1);
 
-            // Record 1.5-second batches:
-            // RequestRateCeiling = 16 * 1.5 = 24 (binding)
-            // ExecutionTimeCeiling = 50 / 1.5 ≈ 33
-            controller.RecordBatchCompletion(TimeSpan.FromSeconds(1.5));
-            controller.RecordBatchCompletion(TimeSpan.FromSeconds(1.5));
-            controller.RecordBatchCompletion(TimeSpan.FromSeconds(1.5));
+            // Record 1-second batches:
+            // RequestRateCeiling = 16 * 1 = 16 (binding)
+            // ExecutionTimeCeiling = 25 * 1 / 1 = 25
+            controller.RecordBatchCompletion(TimeSpan.FromSeconds(1));
+            controller.RecordBatchCompletion(TimeSpan.FromSeconds(1));
+            controller.RecordBatchCompletion(TimeSpan.FromSeconds(1));
 
             // Assert - request rate ceiling is the binding constraint
             var stats = controller.GetStatistics();
-            stats.RequestRateCeiling.Should().Be(24);
-            stats.EffectiveCeiling.Should().Be(24);
+            stats.RequestRateCeiling.Should().Be(16);
+            stats.EffectiveCeiling.Should().Be(16);
         }
 
         #endregion
@@ -769,7 +769,7 @@ namespace PPDS.Dataverse.Tests.Resilience
             var options = new AdaptiveRateOptions
             {
                 Preset = RateControlPreset.Conservative,
-                ExecutionTimeCeilingFactor = 200 // Override preset's 35
+                ExecutionTimeCeilingFactor = 200 // Override preset's 17
             };
 
             // Assert - explicit value used, other preset values unchanged
