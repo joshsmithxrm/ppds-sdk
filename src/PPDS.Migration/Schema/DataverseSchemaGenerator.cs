@@ -406,6 +406,12 @@ namespace PPDS.Migration.Schema
                 return attr is ImageAttributeMetadata or MultiSelectPicklistAttributeMetadata;
             }
 
+            // Exclude system bookkeeping fields (customizable but not migration-relevant)
+            if (IsNonMigratableSystemField(attr.LogicalName))
+            {
+                return false;
+            }
+
             // Customizable system fields are included (statecode, statuscode, most lookups, etc.)
             if (attr.IsCustomizable?.Value == true)
             {
@@ -425,9 +431,20 @@ namespace PPDS.Migration.Schema
             }
 
             // All other non-customizable system fields are excluded
-            // This includes: importsequencenumber, timezoneruleversionnumber, utcconversiontimezonecode,
-            // owningbusinessunit, owningteam, owninguser, etc.
+            // (owningbusinessunit, owningteam, owninguser, etc.)
             return false;
+        }
+
+        /// <summary>
+        /// System bookkeeping fields that are marked IsCustomizable=true but serve no purpose in data migration.
+        /// These exist on every entity and contain system-managed values, not business data.
+        /// </summary>
+        private static bool IsNonMigratableSystemField(string fieldName)
+        {
+            return fieldName is
+                "timezoneruleversionnumber" or
+                "utcconversiontimezonecode" or
+                "importsequencenumber";
         }
 
         /// <summary>

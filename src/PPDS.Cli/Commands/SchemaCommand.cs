@@ -606,6 +606,10 @@ public static class SchemaCommand
             return (FieldFilterResult.Exclude, "Virtual");
         }
 
+        // System bookkeeping fields (customizable but not migration-relevant)
+        if (IsNonMigratableSystemField(attr.LogicalName))
+            return (FieldFilterResult.Exclude, "System");
+
         // Customizable system fields
         if (attr.IsCustomizable?.Value == true)
             return (FieldFilterResult.Include, null);
@@ -623,6 +627,17 @@ public static class SchemaCommand
             return (FieldFilterResult.Include, "BPF");
 
         return (FieldFilterResult.Exclude, null);
+    }
+
+    /// <summary>
+    /// System bookkeeping fields that are marked IsCustomizable=true but serve no purpose in data migration.
+    /// </summary>
+    private static bool IsNonMigratableSystemField(string fieldName)
+    {
+        return fieldName is
+            "timezoneruleversionnumber" or
+            "utcconversiontimezonecode" or
+            "importsequencenumber";
     }
 
     /// <summary>
