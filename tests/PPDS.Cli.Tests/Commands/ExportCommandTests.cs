@@ -86,14 +86,6 @@ public class ExportCommandTests : IDisposable
     }
 
     [Fact]
-    public void Create_HasOptionalIncludeFilesOption()
-    {
-        var option = _command.Options.FirstOrDefault(o => o.Name == "--include-files");
-        Assert.NotNull(option);
-        Assert.False(option.Required);
-    }
-
-    [Fact]
     public void Create_HasOptionalJsonOption()
     {
         var option = _command.Options.FirstOrDefault(o => o.Name == "--json");
@@ -152,13 +144,6 @@ public class ExportCommandTests : IDisposable
     public void Parse_WithOptionalBatchSize_Succeeds()
     {
         var result = _command.Parse($"-s \"{_tempSchemaFile}\" -o \"{_tempOutputFile}\" --batch-size 1000");
-        Assert.Empty(result.Errors);
-    }
-
-    [Fact]
-    public void Parse_WithOptionalIncludeFiles_Succeeds()
-    {
-        var result = _command.Parse($"-s \"{_tempSchemaFile}\" -o \"{_tempOutputFile}\" --include-files");
         Assert.Empty(result.Errors);
     }
 
