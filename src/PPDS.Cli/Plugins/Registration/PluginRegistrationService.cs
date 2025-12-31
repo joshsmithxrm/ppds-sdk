@@ -94,37 +94,49 @@ public sealed class PluginRegistrationService
     }
 
     /// <summary>
-    /// Lists all plugin types for a package by querying through the package's assemblies.
+    /// Lists all assemblies contained in a plugin package.
     /// </summary>
-    public async Task<List<PluginTypeInfo>> ListTypesForPackageAsync(Guid packageId)
+    public async Task<List<PluginAssemblyInfo>> ListAssembliesForPackageAsync(Guid packageId)
     {
-        // Plugin packages contain assemblies, and assemblies contain types.
-        // We need to query: pluginpackage -> pluginassembly (via packageid) -> plugintype (via pluginassemblyid)
-
-        // First, get all assemblies for this package
-        var assemblyQuery = new QueryExpression("pluginassembly")
+        var query = new QueryExpression("pluginassembly")
         {
-            ColumnSet = new ColumnSet("pluginassemblyid"),
+            ColumnSet = new ColumnSet("name", "version", "publickeytoken", "culture", "isolationmode", "sourcetype"),
             Criteria = new FilterExpression
             {
                 Conditions =
                 {
                     new ConditionExpression("packageid", ConditionOperator.Equal, packageId)
                 }
-            }
+            },
+            Orders = { new OrderExpression("name", OrderType.Ascending) }
         };
 
-        var assemblyResults = await Task.Run(() => _service.RetrieveMultiple(assemblyQuery));
-        var assemblyIds = assemblyResults.Entities.Select(e => e.Id).ToList();
+        var results = await Task.Run(() => _service.RetrieveMultiple(query));
 
-        if (assemblyIds.Count == 0)
+        return results.Entities.Select(e => new PluginAssemblyInfo
+        {
+            Id = e.Id,
+            Name = e.GetAttributeValue<string>("name") ?? string.Empty,
+            Version = e.GetAttributeValue<string>("version"),
+            PublicKeyToken = e.GetAttributeValue<string>("publickeytoken"),
+            IsolationMode = e.GetAttributeValue<OptionSetValue>("isolationmode")?.Value ?? 2
+        }).ToList();
+    }
+
+    /// <summary>
+    /// Lists all plugin types for a package by querying through the package's assemblies.
+    /// </summary>
+    public async Task<List<PluginTypeInfo>> ListTypesForPackageAsync(Guid packageId)
+    {
+        var assemblies = await ListAssembliesForPackageAsync(packageId);
+
+        if (assemblies.Count == 0)
             return [];
 
-        // Now get all types for those assemblies
         var allTypes = new List<PluginTypeInfo>();
-        foreach (var assemblyId in assemblyIds)
+        foreach (var assembly in assemblies)
         {
-            var types = await ListTypesForAssemblyAsync(assemblyId);
+            var types = await ListTypesForAssemblyAsync(assembly.Id);
             allTypes.AddRange(types);
         }
 
@@ -168,7 +180,8 @@ public sealed class PluginRegistrationService
         {
             ColumnSet = new ColumnSet(
                 "name", "stage", "mode", "rank", "filteringattributes",
-                "configuration", "statecode"),
+                "configuration", "statecode", "description", "supporteddeployment",
+                "impersonatinguserid", "asyncautodelete"),
             Criteria = new FilterExpression
             {
                 Conditions =
@@ -187,6 +200,11 @@ public sealed class PluginRegistrationService
                 {
                     Columns = new ColumnSet("primaryobjecttypecode", "secondaryobjecttypecode"),
                     EntityAlias = "filter"
+                },
+                new LinkEntity("sdkmessageprocessingstep", "systemuser", "impersonatinguserid", "systemuserid", JoinOperator.LeftOuter)
+                {
+                    Columns = new ColumnSet("fullname", "domainname"),
+                    EntityAlias = "impersonatinguser"
                 }
             },
             Orders = { new OrderExpression("name", OrderType.Ascending) }
@@ -194,19 +212,31 @@ public sealed class PluginRegistrationService
 
         var results = await Task.Run(() => _service.RetrieveMultiple(query));
 
-        return results.Entities.Select(e => new PluginStepInfo
+        return results.Entities.Select(e =>
         {
-            Id = e.Id,
-            Name = e.GetAttributeValue<string>("name") ?? string.Empty,
-            Message = e.GetAttributeValue<AliasedValue>("message.name")?.Value?.ToString() ?? string.Empty,
-            PrimaryEntity = e.GetAttributeValue<AliasedValue>("filter.primaryobjecttypecode")?.Value?.ToString() ?? "none",
-            SecondaryEntity = e.GetAttributeValue<AliasedValue>("filter.secondaryobjecttypecode")?.Value?.ToString(),
-            Stage = MapStageFromValue(e.GetAttributeValue<OptionSetValue>("stage")?.Value ?? 40),
-            Mode = MapModeFromValue(e.GetAttributeValue<OptionSetValue>("mode")?.Value ?? 0),
-            ExecutionOrder = e.GetAttributeValue<int>("rank"),
-            FilteringAttributes = e.GetAttributeValue<string>("filteringattributes"),
-            Configuration = e.GetAttributeValue<string>("configuration"),
-            IsEnabled = e.GetAttributeValue<OptionSetValue>("statecode")?.Value == 0
+            var impersonatingUserRef = e.GetAttributeValue<EntityReference>("impersonatinguserid");
+            var impersonatingUserName = e.GetAttributeValue<AliasedValue>("impersonatinguser.fullname")?.Value?.ToString()
+                ?? e.GetAttributeValue<AliasedValue>("impersonatinguser.domainname")?.Value?.ToString();
+
+            return new PluginStepInfo
+            {
+                Id = e.Id,
+                Name = e.GetAttributeValue<string>("name") ?? string.Empty,
+                Message = e.GetAttributeValue<AliasedValue>("message.name")?.Value?.ToString() ?? string.Empty,
+                PrimaryEntity = e.GetAttributeValue<AliasedValue>("filter.primaryobjecttypecode")?.Value?.ToString() ?? "none",
+                SecondaryEntity = e.GetAttributeValue<AliasedValue>("filter.secondaryobjecttypecode")?.Value?.ToString(),
+                Stage = MapStageFromValue(e.GetAttributeValue<OptionSetValue>("stage")?.Value ?? 40),
+                Mode = MapModeFromValue(e.GetAttributeValue<OptionSetValue>("mode")?.Value ?? 0),
+                ExecutionOrder = e.GetAttributeValue<int>("rank"),
+                FilteringAttributes = e.GetAttributeValue<string>("filteringattributes"),
+                Configuration = e.GetAttributeValue<string>("configuration"),
+                IsEnabled = e.GetAttributeValue<OptionSetValue>("statecode")?.Value == 0,
+                Description = e.GetAttributeValue<string>("description"),
+                Deployment = MapDeploymentFromValue(e.GetAttributeValue<OptionSetValue>("supporteddeployment")?.Value ?? 0),
+                ImpersonatingUserId = impersonatingUserRef?.Id,
+                ImpersonatingUserName = impersonatingUserName,
+                AsyncAutoDelete = e.GetAttributeValue<bool?>("asyncautodelete") ?? false
+            };
         }).ToList();
     }
 
@@ -405,7 +435,7 @@ public sealed class PluginRegistrationService
             ["stage"] = new OptionSetValue(MapStageToValue(stepConfig.Stage)),
             ["mode"] = new OptionSetValue(MapModeToValue(stepConfig.Mode)),
             ["rank"] = stepConfig.ExecutionOrder,
-            ["supporteddeployment"] = new OptionSetValue(0), // Server only
+            ["supporteddeployment"] = new OptionSetValue(MapDeploymentToValue(stepConfig.Deployment)),
             ["invocationsource"] = new OptionSetValue(0) // Internal (legacy, but required)
         };
 
@@ -422,6 +452,27 @@ public sealed class PluginRegistrationService
         if (!string.IsNullOrEmpty(stepConfig.Configuration))
         {
             entity["configuration"] = stepConfig.Configuration;
+        }
+
+        if (!string.IsNullOrEmpty(stepConfig.Description))
+        {
+            entity["description"] = stepConfig.Description;
+        }
+
+        // Handle impersonating user (Run in User's Context)
+        if (!string.IsNullOrEmpty(stepConfig.RunAsUser) &&
+            !stepConfig.RunAsUser.Equals("CallingUser", StringComparison.OrdinalIgnoreCase))
+        {
+            if (Guid.TryParse(stepConfig.RunAsUser, out var userId))
+            {
+                entity["impersonatinguserid"] = new EntityReference("systemuser", userId);
+            }
+        }
+
+        // Async auto-delete (only applies to async steps)
+        if (stepConfig.AsyncAutoDelete == true && stepConfig.Mode == "Asynchronous")
+        {
+            entity["asyncautodelete"] = true;
         }
 
         if (existing != null)
@@ -618,6 +669,22 @@ public sealed class PluginRegistrationService
         _ => int.TryParse(imageType, out var v) ? v : 0
     };
 
+    private static string MapDeploymentFromValue(int value) => value switch
+    {
+        0 => "ServerOnly",
+        1 => "Offline",
+        2 => "Both",
+        _ => value.ToString()
+    };
+
+    private static int MapDeploymentToValue(string? deployment) => deployment switch
+    {
+        "ServerOnly" or null => 0,
+        "Offline" => 1,
+        "Both" => 2,
+        _ => int.TryParse(deployment, out var v) ? v : 0
+    };
+
     #endregion
 }
 
@@ -672,6 +739,11 @@ public sealed class PluginStepInfo
     public string? FilteringAttributes { get; set; }
     public string? Configuration { get; set; }
     public bool IsEnabled { get; set; }
+    public string? Description { get; set; }
+    public string Deployment { get; set; } = "ServerOnly";
+    public Guid? ImpersonatingUserId { get; set; }
+    public string? ImpersonatingUserName { get; set; }
+    public bool AsyncAutoDelete { get; set; }
 }
 
 /// <summary>

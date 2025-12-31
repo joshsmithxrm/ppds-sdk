@@ -97,7 +97,6 @@ public static class ListCommand
                         Name = assembly.Name,
                         Version = assembly.Version,
                         PublicKeyToken = assembly.PublicKeyToken,
-                        Type = "Assembly",
                         Types = []
                     };
 
@@ -115,17 +114,30 @@ public static class ListCommand
 
                 foreach (var package in packages)
                 {
-                    var packageOutput = new AssemblyOutput
+                    var packageOutput = new PackageOutput
                     {
                         Name = package.Name,
                         UniqueName = package.UniqueName,
                         Version = package.Version,
-                        Type = "Package",
-                        Types = []
+                        Assemblies = []
                     };
 
-                    var types = await registrationService.ListTypesForPackageAsync(package.Id);
-                    await PopulateTypesAsync(registrationService, types, packageOutput.Types);
+                    var assemblies = await registrationService.ListAssembliesForPackageAsync(package.Id);
+                    foreach (var assembly in assemblies)
+                    {
+                        var assemblyOutput = new AssemblyOutput
+                        {
+                            Name = assembly.Name,
+                            Version = assembly.Version,
+                            PublicKeyToken = assembly.PublicKeyToken,
+                            Types = []
+                        };
+
+                        var types = await registrationService.ListTypesForAssemblyAsync(assembly.Id);
+                        await PopulateTypesAsync(registrationService, types, assemblyOutput.Types);
+
+                        packageOutput.Assemblies.Add(assemblyOutput);
+                    }
 
                     output.Packages.Add(packageOutput);
                 }
@@ -166,13 +178,36 @@ public static class ListCommand
                 {
                     var uniqueName = package.UniqueName != package.Name ? $" [{package.UniqueName}]" : "";
                     Console.WriteLine($"Package: {package.Name}{uniqueName} (v{package.Version})");
-                    PrintTypes(package.Types);
+                    PrintPackageAssemblies(package.Assemblies);
                     Console.WriteLine();
                 }
 
-                var totalAssemblySteps = output.Assemblies.Sum(a => a.Types.Sum(t => t.Steps.Count));
-                var totalPackageSteps = output.Packages.Sum(p => p.Types.Sum(t => t.Steps.Count));
-                Console.WriteLine($"Total: {totalAssemblies} assembly(ies), {totalPackages} package(s), {totalAssemblySteps + totalPackageSteps} step(s)");
+                var totalPackageAssemblies = output.Packages.Sum(p => p.Assemblies.Count);
+                var totalTypes = output.Assemblies.Sum(a => a.Types.Count) +
+                                 output.Packages.Sum(p => p.Assemblies.Sum(a => a.Types.Count));
+                var totalSteps = output.Assemblies.Sum(a => a.Types.Sum(t => t.Steps.Count)) +
+                                 output.Packages.Sum(p => p.Assemblies.Sum(a => a.Types.Sum(t => t.Steps.Count)));
+                var totalImages = output.Assemblies.Sum(a => a.Types.Sum(t => t.Steps.Sum(s => s.Images.Count))) +
+                                  output.Packages.Sum(p => p.Assemblies.Sum(a => a.Types.Sum(t => t.Steps.Sum(s => s.Images.Count))));
+
+                // Build summary parts based on what's present
+                var summaryParts = new List<string>();
+                if (totalAssemblies > 0)
+                {
+                    summaryParts.Add(Pluralize(totalAssemblies, "assembly", "assemblies"));
+                }
+                if (totalPackages > 0)
+                {
+                    summaryParts.Add($"{Pluralize(totalPackages, "package", "packages")} ({Pluralize(totalPackageAssemblies, "assembly", "assemblies")})");
+                }
+                summaryParts.Add(Pluralize(totalTypes, "type", "types"));
+                summaryParts.Add(Pluralize(totalSteps, "step", "steps"));
+                if (totalImages > 0)
+                {
+                    summaryParts.Add(Pluralize(totalImages, "image", "images"));
+                }
+
+                Console.WriteLine($"Total: {string.Join(", ", summaryParts)}");
             }
 
             return ExitCodes.Success;
@@ -211,6 +246,10 @@ public static class ListCommand
                     ExecutionOrder = step.ExecutionOrder,
                     FilteringAttributes = step.FilteringAttributes,
                     IsEnabled = step.IsEnabled,
+                    Description = step.Description,
+                    Deployment = step.Deployment,
+                    RunAsUser = step.ImpersonatingUserName,
+                    AsyncAutoDelete = step.AsyncAutoDelete,
                     Images = []
                 };
 
@@ -233,31 +272,67 @@ public static class ListCommand
         }
     }
 
-    private static void PrintTypes(List<TypeOutput> types)
+    private static void PrintTypes(List<TypeOutput> types, string indent = "  ")
     {
         foreach (var type in types)
         {
-            Console.WriteLine($"  Type: {type.TypeName}");
+            Console.WriteLine($"{indent}Type: {type.TypeName}");
 
             foreach (var step in type.Steps)
             {
                 var status = step.IsEnabled ? "" : " [DISABLED]";
-                Console.WriteLine($"    Step: {step.Name}{status}");
-                Console.WriteLine($"      {step.Message} on {step.Entity} ({step.Stage}, {step.Mode})");
+                Console.WriteLine($"{indent}  Step: {step.Name}{status}");
+                Console.WriteLine($"{indent}    {step.Message} on {step.Entity} ({step.Stage}, {step.Mode})");
+
+                // Show non-default deployment/user/async settings on one line if any are set
+                var stepOptions = new List<string>();
+                if (step.Deployment != "ServerOnly")
+                {
+                    stepOptions.Add($"Deployment: {step.Deployment}");
+                }
+                if (!string.IsNullOrEmpty(step.RunAsUser))
+                {
+                    stepOptions.Add($"Run as: {step.RunAsUser}");
+                }
+                if (step.AsyncAutoDelete && step.Mode == "Asynchronous")
+                {
+                    stepOptions.Add("Auto-delete: Yes");
+                }
+                if (stepOptions.Count > 0)
+                {
+                    Console.WriteLine($"{indent}    {string.Join(" | ", stepOptions)}");
+                }
 
                 if (!string.IsNullOrEmpty(step.FilteringAttributes))
                 {
-                    Console.WriteLine($"      Filtering: {step.FilteringAttributes}");
+                    Console.WriteLine($"{indent}    Filtering: {step.FilteringAttributes}");
+                }
+
+                if (!string.IsNullOrEmpty(step.Description))
+                {
+                    Console.WriteLine($"{indent}    Description: {step.Description}");
                 }
 
                 foreach (var image in step.Images)
                 {
                     var attrs = string.IsNullOrEmpty(image.Attributes) ? "all" : image.Attributes;
-                    Console.WriteLine($"      Image: {image.Name} ({image.ImageType}) - {attrs}");
+                    Console.WriteLine($"{indent}    Image: {image.Name} ({image.ImageType}) - {attrs}");
                 }
             }
         }
     }
+
+    private static void PrintPackageAssemblies(List<AssemblyOutput> assemblies)
+    {
+        foreach (var assembly in assemblies)
+        {
+            Console.WriteLine($"  Assembly: {assembly.Name} (v{assembly.Version})");
+            PrintTypes(assembly.Types, "    ");
+        }
+    }
+
+    private static string Pluralize(int count, string singular, string plural) =>
+        count == 1 ? $"{count} {singular}" : $"{count} {plural}";
 
     #region Output Models
 
@@ -267,10 +342,10 @@ public static class ListCommand
         public List<AssemblyOutput> Assemblies { get; set; } = [];
 
         [JsonPropertyName("packages")]
-        public List<AssemblyOutput> Packages { get; set; } = [];
+        public List<PackageOutput> Packages { get; set; } = [];
     }
 
-    private sealed class AssemblyOutput
+    private sealed class PackageOutput
     {
         [JsonPropertyName("name")]
         public string Name { get; set; } = string.Empty;
@@ -281,11 +356,20 @@ public static class ListCommand
         [JsonPropertyName("version")]
         public string? Version { get; set; }
 
+        [JsonPropertyName("assemblies")]
+        public List<AssemblyOutput> Assemblies { get; set; } = [];
+    }
+
+    private sealed class AssemblyOutput
+    {
+        [JsonPropertyName("name")]
+        public string Name { get; set; } = string.Empty;
+
+        [JsonPropertyName("version")]
+        public string? Version { get; set; }
+
         [JsonPropertyName("publicKeyToken")]
         public string? PublicKeyToken { get; set; }
-
-        [JsonPropertyName("type")]
-        public string Type { get; set; } = "Assembly";
 
         [JsonPropertyName("types")]
         public List<TypeOutput> Types { get; set; } = [];
@@ -325,6 +409,18 @@ public static class ListCommand
 
         [JsonPropertyName("isEnabled")]
         public bool IsEnabled { get; set; }
+
+        [JsonPropertyName("description")]
+        public string? Description { get; set; }
+
+        [JsonPropertyName("deployment")]
+        public string Deployment { get; set; } = "ServerOnly";
+
+        [JsonPropertyName("runAsUser")]
+        public string? RunAsUser { get; set; }
+
+        [JsonPropertyName("asyncAutoDelete")]
+        public bool AsyncAutoDelete { get; set; }
 
         [JsonPropertyName("images")]
         public List<ImageOutput> Images { get; set; } = [];

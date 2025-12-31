@@ -161,6 +161,32 @@ public sealed class PluginStepConfig
     public string? Configuration { get; set; }
 
     /// <summary>
+    /// Deployment target: ServerOnly (default), Offline, or Both.
+    /// </summary>
+    [JsonPropertyName("deployment")]
+    public string? Deployment { get; set; }
+
+    /// <summary>
+    /// User context to run the plugin as.
+    /// Use "CallingUser" (default), "System", or a systemuser GUID.
+    /// </summary>
+    [JsonPropertyName("runAsUser")]
+    public string? RunAsUser { get; set; }
+
+    /// <summary>
+    /// Description of what this step does.
+    /// </summary>
+    [JsonPropertyName("description")]
+    public string? Description { get; set; }
+
+    /// <summary>
+    /// For async steps, whether to delete the async job on successful completion.
+    /// Default is false (keep async job records).
+    /// </summary>
+    [JsonPropertyName("asyncAutoDelete")]
+    public bool? AsyncAutoDelete { get; set; }
+
+    /// <summary>
     /// Step identifier for associating images with specific steps on multi-step plugins.
     /// </summary>
     [JsonPropertyName("stepId")]
