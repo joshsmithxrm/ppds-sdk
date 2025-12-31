@@ -1,3 +1,4 @@
+using System.Text.Json;
 using System.Text.Json.Serialization;
 
 namespace PPDS.Cli.Plugins.Models;
@@ -31,6 +32,12 @@ public sealed class PluginRegistrationConfig
     /// </summary>
     [JsonPropertyName("assemblies")]
     public List<PluginAssemblyConfig> Assemblies { get; set; } = [];
+
+    /// <summary>
+    /// Preserves unknown JSON properties during round-trip serialization.
+    /// </summary>
+    [JsonExtensionData]
+    public Dictionary<string, JsonElement>? ExtensionData { get; set; }
 }
 
 /// <summary>
@@ -80,6 +87,12 @@ public sealed class PluginAssemblyConfig
     /// </summary>
     [JsonPropertyName("types")]
     public List<PluginTypeConfig> Types { get; set; } = [];
+
+    /// <summary>
+    /// Preserves unknown JSON properties during round-trip serialization.
+    /// </summary>
+    [JsonExtensionData]
+    public Dictionary<string, JsonElement>? ExtensionData { get; set; }
 }
 
 /// <summary>
@@ -98,6 +111,12 @@ public sealed class PluginTypeConfig
     /// </summary>
     [JsonPropertyName("steps")]
     public List<PluginStepConfig> Steps { get; set; } = [];
+
+    /// <summary>
+    /// Preserves unknown JSON properties during round-trip serialization.
+    /// </summary>
+    [JsonExtensionData]
+    public Dictionary<string, JsonElement>? ExtensionData { get; set; }
 }
 
 /// <summary>
@@ -197,6 +216,12 @@ public sealed class PluginStepConfig
     /// </summary>
     [JsonPropertyName("images")]
     public List<PluginImageConfig> Images { get; set; } = [];
+
+    /// <summary>
+    /// Preserves unknown JSON properties during round-trip serialization.
+    /// </summary>
+    [JsonExtensionData]
+    public Dictionary<string, JsonElement>? ExtensionData { get; set; }
 }
 
 /// <summary>
@@ -227,4 +252,10 @@ public sealed class PluginImageConfig
     /// </summary>
     [JsonPropertyName("entityAlias")]
     public string? EntityAlias { get; set; }
+
+    /// <summary>
+    /// Preserves unknown JSON properties during round-trip serialization.
+    /// </summary>
+    [JsonExtensionData]
+    public Dictionary<string, JsonElement>? ExtensionData { get; set; }
 }

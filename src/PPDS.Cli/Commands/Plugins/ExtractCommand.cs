@@ -31,10 +31,22 @@ public static class ExtractCommand
             Description = "Output file path (default: registrations.json in input directory)"
         };
 
+        var solutionOption = new Option<string?>("--solution", "-s")
+        {
+            Description = "Solution unique name to add components to"
+        };
+
+        var forceOption = new Option<bool>("--force", "-f")
+        {
+            Description = "Overwrite existing file without merging"
+        };
+
         var command = new Command("extract", "Extract plugin step/image attributes from assembly to JSON configuration")
         {
             inputOption,
             outputOption,
+            solutionOption,
+            forceOption,
             PluginsCommandGroup.JsonOption
         };
 
@@ -42,9 +54,11 @@ public static class ExtractCommand
         {
             var input = parseResult.GetValue(inputOption)!;
             var output = parseResult.GetValue(outputOption);
+            var solution = parseResult.GetValue(solutionOption);
+            var force = parseResult.GetValue(forceOption);
             var json = parseResult.GetValue(PluginsCommandGroup.JsonOption);
 
-            return await ExecuteAsync(input, output, json, cancellationToken);
+            return await ExecuteAsync(input, output, solution, force, json, cancellationToken);
         });
 
         return command;
@@ -53,6 +67,8 @@ public static class ExtractCommand
     private static Task<int> ExecuteAsync(
         FileInfo input,
         FileInfo? output,
+        string? solution,
+        bool force,
         bool json,
         CancellationToken cancellationToken)
     {
@@ -100,13 +116,49 @@ public static class ExtractCommand
                 assemblyConfig.Path = null;
             }
 
-            var config = new PluginRegistrationConfig
+            // Apply solution from CLI if provided
+            if (!string.IsNullOrEmpty(solution))
             {
-                Schema = "https://raw.githubusercontent.com/joshsmithxrm/ppds-sdk/main/schemas/plugin-registration.schema.json",
-                Version = "1.0",
-                GeneratedAt = DateTimeOffset.UtcNow,
-                Assemblies = [assemblyConfig]
-            };
+                assemblyConfig.Solution = solution;
+            }
+
+            // Check for existing file and merge if not forced
+            PluginRegistrationConfig config;
+            var existingFile = new FileInfo(outputPath);
+
+            if (existingFile.Exists && !force && !json)
+            {
+                if (!json)
+                    Console.WriteLine($"Merging with existing configuration...");
+
+                var existingContent = File.ReadAllText(outputPath);
+                var existingConfig = JsonSerializer.Deserialize<PluginRegistrationConfig>(existingContent, JsonOptions);
+
+                if (existingConfig != null)
+                {
+                    // Merge: preserve deployment settings from existing, update code-derived values from fresh
+                    MergeAssemblyConfig(assemblyConfig, existingConfig);
+                }
+
+                config = new PluginRegistrationConfig
+                {
+                    Schema = "https://raw.githubusercontent.com/joshsmithxrm/ppds-sdk/main/schemas/plugin-registration.schema.json",
+                    Version = existingConfig?.Version ?? "1.0",
+                    GeneratedAt = DateTimeOffset.UtcNow,
+                    Assemblies = [assemblyConfig],
+                    ExtensionData = existingConfig?.ExtensionData
+                };
+            }
+            else
+            {
+                config = new PluginRegistrationConfig
+                {
+                    Schema = "https://raw.githubusercontent.com/joshsmithxrm/ppds-sdk/main/schemas/plugin-registration.schema.json",
+                    Version = "1.0",
+                    GeneratedAt = DateTimeOffset.UtcNow,
+                    Assemblies = [assemblyConfig]
+                };
+            }
 
             var jsonContent = JsonSerializer.Serialize(config, JsonOptions);
 
@@ -130,6 +182,73 @@ public static class ExtractCommand
         {
             Console.Error.WriteLine($"Error extracting plugin registrations: {ex.Message}");
             return Task.FromResult(ExitCodes.Failure);
+        }
+    }
+
+    /// <summary>
+    /// Merges deployment settings from existing config into fresh extracted config.
+    /// Preserves: solution, runAsUser, description, deployment, asyncAutoDelete, and any unknown fields.
+    /// </summary>
+    private static void MergeAssemblyConfig(PluginAssemblyConfig fresh, PluginRegistrationConfig existing)
+    {
+        var existingAssembly = existing.Assemblies.FirstOrDefault(a =>
+            a.Name.Equals(fresh.Name, StringComparison.OrdinalIgnoreCase));
+
+        if (existingAssembly == null)
+            return;
+
+        // Preserve assembly-level deployment settings (only if not set via CLI)
+        if (string.IsNullOrEmpty(fresh.Solution))
+            fresh.Solution = existingAssembly.Solution;
+
+        // Preserve unknown fields at assembly level
+        fresh.ExtensionData = existingAssembly.ExtensionData;
+
+        // Merge types
+        foreach (var freshType in fresh.Types)
+        {
+            var existingType = existingAssembly.Types.FirstOrDefault(t =>
+                t.TypeName.Equals(freshType.TypeName, StringComparison.OrdinalIgnoreCase));
+
+            if (existingType == null)
+                continue;
+
+            // Preserve unknown fields at type level
+            freshType.ExtensionData = existingType.ExtensionData;
+
+            // Merge steps - match by message + entity + stage (functional identity)
+            foreach (var freshStep in freshType.Steps)
+            {
+                var existingStep = existingType.Steps.FirstOrDefault(s =>
+                    s.Message.Equals(freshStep.Message, StringComparison.OrdinalIgnoreCase) &&
+                    s.Entity.Equals(freshStep.Entity, StringComparison.OrdinalIgnoreCase) &&
+                    s.Stage.Equals(freshStep.Stage, StringComparison.OrdinalIgnoreCase));
+
+                if (existingStep == null)
+                    continue;
+
+                // Preserve deployment settings from existing step
+                freshStep.Deployment ??= existingStep.Deployment;
+                freshStep.RunAsUser ??= existingStep.RunAsUser;
+                freshStep.Description ??= existingStep.Description;
+                freshStep.AsyncAutoDelete ??= existingStep.AsyncAutoDelete;
+
+                // Preserve unknown fields at step level
+                freshStep.ExtensionData = existingStep.ExtensionData;
+
+                // Merge images - match by name
+                foreach (var freshImage in freshStep.Images)
+                {
+                    var existingImage = existingStep.Images.FirstOrDefault(i =>
+                        i.Name.Equals(freshImage.Name, StringComparison.OrdinalIgnoreCase));
+
+                    if (existingImage == null)
+                        continue;
+
+                    // Preserve unknown fields at image level
+                    freshImage.ExtensionData = existingImage.ExtensionData;
+                }
+            }
         }
     }
 }
