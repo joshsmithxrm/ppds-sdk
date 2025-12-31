@@ -12,10 +12,13 @@ namespace PPDS.Cli.Plugins.Registration;
 public sealed class PluginRegistrationService
 {
     private readonly IOrganizationService _service;
+    private readonly IOrganizationServiceAsync2? _asyncService;
 
     public PluginRegistrationService(IOrganizationService service)
     {
         _service = service;
+        // Use native async when available (ServiceClient implements IOrganizationServiceAsync2)
+        _asyncService = service as IOrganizationServiceAsync2;
     }
 
     #region Query Operations
@@ -45,7 +48,7 @@ public sealed class PluginRegistrationService
             query.Criteria.AddCondition("name", ConditionOperator.Equal, assemblyNameFilter);
         }
 
-        var results = await Task.Run(() => _service.RetrieveMultiple(query));
+        var results = await RetrieveMultipleAsync(query);
 
         return results.Entities.Select(e => new PluginAssemblyInfo
         {
@@ -82,7 +85,7 @@ public sealed class PluginRegistrationService
             };
         }
 
-        var results = await Task.Run(() => _service.RetrieveMultiple(query));
+        var results = await RetrieveMultipleAsync(query);
 
         return results.Entities.Select(e => new PluginPackageInfo
         {
@@ -111,7 +114,7 @@ public sealed class PluginRegistrationService
             Orders = { new OrderExpression("name", OrderType.Ascending) }
         };
 
-        var results = await Task.Run(() => _service.RetrieveMultiple(query));
+        var results = await RetrieveMultipleAsync(query);
 
         return results.Entities.Select(e => new PluginAssemblyInfo
         {
@@ -161,7 +164,7 @@ public sealed class PluginRegistrationService
             Orders = { new OrderExpression("typename", OrderType.Ascending) }
         };
 
-        var results = await Task.Run(() => _service.RetrieveMultiple(query));
+        var results = await RetrieveMultipleAsync(query);
 
         return results.Entities.Select(e => new PluginTypeInfo
         {
@@ -210,7 +213,7 @@ public sealed class PluginRegistrationService
             Orders = { new OrderExpression("name", OrderType.Ascending) }
         };
 
-        var results = await Task.Run(() => _service.RetrieveMultiple(query));
+        var results = await RetrieveMultipleAsync(query);
 
         return results.Entities.Select(e =>
         {
@@ -258,7 +261,7 @@ public sealed class PluginRegistrationService
             Orders = { new OrderExpression("name", OrderType.Ascending) }
         };
 
-        var results = await Task.Run(() => _service.RetrieveMultiple(query));
+        var results = await RetrieveMultipleAsync(query);
 
         return results.Entities.Select(e => new PluginImageInfo
         {
@@ -300,7 +303,7 @@ public sealed class PluginRegistrationService
             }
         };
 
-        var results = await Task.Run(() => _service.RetrieveMultiple(query));
+        var results = await RetrieveMultipleAsync(query);
         return results.Entities.FirstOrDefault()?.Id;
     }
 
@@ -327,7 +330,7 @@ public sealed class PluginRegistrationService
             query.Criteria.AddCondition("secondaryobjecttypecode", ConditionOperator.Equal, secondaryEntity);
         }
 
-        var results = await Task.Run(() => _service.RetrieveMultiple(query));
+        var results = await RetrieveMultipleAsync(query);
         return results.Entities.FirstOrDefault()?.Id;
     }
 
@@ -353,7 +356,7 @@ public sealed class PluginRegistrationService
         if (existing != null)
         {
             entity.Id = existing.Id;
-            await Task.Run(() => _service.Update(entity));
+            await UpdateAsync(entity);
             return existing.Id;
         }
         else
@@ -381,7 +384,7 @@ public sealed class PluginRegistrationService
             }
         };
 
-        var results = await Task.Run(() => _service.RetrieveMultiple(query));
+        var results = await RetrieveMultipleAsync(query);
         var existing = results.Entities.FirstOrDefault();
 
         if (existing != null)
@@ -424,7 +427,7 @@ public sealed class PluginRegistrationService
             }
         };
 
-        var results = await Task.Run(() => _service.RetrieveMultiple(query));
+        var results = await RetrieveMultipleAsync(query);
         var existing = results.Entities.FirstOrDefault();
 
         var entity = new Entity("sdkmessageprocessingstep")
@@ -478,7 +481,7 @@ public sealed class PluginRegistrationService
         if (existing != null)
         {
             entity.Id = existing.Id;
-            await Task.Run(() => _service.Update(entity));
+            await UpdateAsync(entity);
             return existing.Id;
         }
         else
@@ -506,7 +509,7 @@ public sealed class PluginRegistrationService
             }
         };
 
-        var results = await Task.Run(() => _service.RetrieveMultiple(query));
+        var results = await RetrieveMultipleAsync(query);
         var existing = results.Entities.FirstOrDefault();
 
         var entity = new Entity("sdkmessageprocessingstepimage")
@@ -526,12 +529,12 @@ public sealed class PluginRegistrationService
         if (existing != null)
         {
             entity.Id = existing.Id;
-            await Task.Run(() => _service.Update(entity));
+            await UpdateAsync(entity);
             return existing.Id;
         }
         else
         {
-            return await Task.Run(() => _service.Create(entity));
+            return await CreateAsync(entity);
         }
     }
 
@@ -544,7 +547,7 @@ public sealed class PluginRegistrationService
     /// </summary>
     public async Task DeleteImageAsync(Guid imageId)
     {
-        await Task.Run(() => _service.Delete("sdkmessageprocessingstepimage", imageId));
+        await DeleteAsync("sdkmessageprocessingstepimage", imageId);
     }
 
     /// <summary>
@@ -559,7 +562,7 @@ public sealed class PluginRegistrationService
             await DeleteImageAsync(image.Id);
         }
 
-        await Task.Run(() => _service.Delete("sdkmessageprocessingstep", stepId));
+        await DeleteAsync("sdkmessageprocessingstep", stepId);
     }
 
     /// <summary>
@@ -567,7 +570,7 @@ public sealed class PluginRegistrationService
     /// </summary>
     public async Task DeletePluginTypeAsync(Guid pluginTypeId)
     {
-        await Task.Run(() => _service.Delete("plugintype", pluginTypeId));
+        await DeleteAsync("plugintype", pluginTypeId);
     }
 
     #endregion
@@ -589,7 +592,7 @@ public sealed class PluginRegistrationService
 
         try
         {
-            await Task.Run(() => _service.Execute(request));
+            await ExecuteAsync(request);
         }
         catch (Exception ex) when (ex.Message.Contains("already exists"))
         {
@@ -603,7 +606,7 @@ public sealed class PluginRegistrationService
 
     private async Task<Guid> CreateWithSolutionAsync(Entity entity, string? solutionName)
     {
-        var id = await Task.Run(() => _service.Create(entity));
+        var id = await CreateAsync(entity);
 
         if (!string.IsNullOrEmpty(solutionName))
         {
@@ -684,6 +687,44 @@ public sealed class PluginRegistrationService
         "Both" => 2,
         _ => int.TryParse(deployment, out var v) ? v : 0
     };
+
+    // Native async helpers - use async SDK when available, otherwise fall back to Task.Run
+    private async Task<EntityCollection> RetrieveMultipleAsync(QueryExpression query)
+    {
+        if (_asyncService != null)
+            return await _asyncService.RetrieveMultipleAsync(query);
+        return await Task.Run(() => _service.RetrieveMultiple(query));
+    }
+
+    private async Task<Guid> CreateAsync(Entity entity)
+    {
+        if (_asyncService != null)
+            return await _asyncService.CreateAsync(entity);
+        return await Task.Run(() => _service.Create(entity));
+    }
+
+    private async Task UpdateAsync(Entity entity)
+    {
+        if (_asyncService != null)
+            await _asyncService.UpdateAsync(entity);
+        else
+            await Task.Run(() => _service.Update(entity));
+    }
+
+    private async Task DeleteAsync(string entityName, Guid id)
+    {
+        if (_asyncService != null)
+            await _asyncService.DeleteAsync(entityName, id);
+        else
+            await Task.Run(() => _service.Delete(entityName, id));
+    }
+
+    private async Task<OrganizationResponse> ExecuteAsync(OrganizationRequest request)
+    {
+        if (_asyncService != null)
+            return await _asyncService.ExecuteAsync(request);
+        return await Task.Run(() => _service.Execute(request));
+    }
 
     #endregion
 }

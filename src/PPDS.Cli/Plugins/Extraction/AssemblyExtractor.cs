@@ -254,27 +254,14 @@ public sealed class AssemblyExtractor : IDisposable
 
     private static bool MatchesStep(CustomAttributeData imageAttr, CustomAttributeData stepAttr)
     {
-        // Get StepId from both attributes
-        string? imageStepId = null;
-        string? stepStepId = null;
+        // Get StepId from both attributes using LINQ for clearer intent
+        var imageStepId = imageAttr.NamedArguments
+            .FirstOrDefault(na => na.MemberName == "StepId")
+            .TypedValue.Value?.ToString();
 
-        foreach (var namedArg in imageAttr.NamedArguments)
-        {
-            if (namedArg.MemberName == "StepId")
-            {
-                imageStepId = namedArg.TypedValue.Value?.ToString();
-                break;
-            }
-        }
-
-        foreach (var namedArg in stepAttr.NamedArguments)
-        {
-            if (namedArg.MemberName == "StepId")
-            {
-                stepStepId = namedArg.TypedValue.Value?.ToString();
-                break;
-            }
-        }
+        var stepStepId = stepAttr.NamedArguments
+            .FirstOrDefault(na => na.MemberName == "StepId")
+            .TypedValue.Value?.ToString();
 
         // If image has no StepId, it applies to all steps (or the only step)
         if (string.IsNullOrEmpty(imageStepId))

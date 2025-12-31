@@ -128,8 +128,7 @@ public static class ExtractCommand
 
             if (existingFile.Exists && !force && !json)
             {
-                if (!json)
-                    Console.WriteLine($"Merging with existing configuration...");
+                Console.WriteLine($"Merging with existing configuration...");
 
                 var existingContent = File.ReadAllText(outputPath);
                 var existingConfig = JsonSerializer.Deserialize<PluginRegistrationConfig>(existingContent, JsonOptions);

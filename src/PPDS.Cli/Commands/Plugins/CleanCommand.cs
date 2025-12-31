@@ -193,19 +193,6 @@ public static class CleanCommand
             }
         }
 
-        // Build set of configured type names
-        var configuredTypeNames = new HashSet<string>(
-            assemblyConfig.Types.Select(t => t.TypeName));
-
-        // Also include allTypeNames if provided (for detecting orphaned types)
-        if (assemblyConfig.AllTypeNames.Count > 0)
-        {
-            foreach (var typeName in assemblyConfig.AllTypeNames)
-            {
-                configuredTypeNames.Add(typeName);
-            }
-        }
-
         // Get existing types and steps
         var existingTypes = await service.ListTypesForAssemblyAsync(assembly.Id);
 
@@ -215,30 +202,29 @@ public static class CleanCommand
 
             var steps = await service.ListStepsForTypeAsync(existingType.Id);
 
-            // Find orphaned steps
-            foreach (var step in steps)
-            {
-                if (!configuredStepNames.Contains(step.Name))
-                {
-                    result.OrphanedSteps.Add(new OrphanedStep
-                    {
-                        TypeName = existingType.TypeName,
-                        StepName = step.Name,
-                        StepId = step.Id
-                    });
+            // Find orphaned steps and track count for type cleanup
+            var orphanedStepsInType = steps.Where(s => !configuredStepNames.Contains(s.Name)).ToList();
 
-                    if (whatIf)
-                    {
-                        if (!json)
-                            Console.WriteLine($"  [What-If] Would delete step: {step.Name}");
-                    }
-                    else
-                    {
-                        await service.DeleteStepAsync(step.Id);
-                        result.StepsDeleted++;
-                        if (!json)
-                            Console.WriteLine($"  Deleted step: {step.Name}");
-                    }
+            foreach (var step in orphanedStepsInType)
+            {
+                result.OrphanedSteps.Add(new OrphanedStep
+                {
+                    TypeName = existingType.TypeName,
+                    StepName = step.Name,
+                    StepId = step.Id
+                });
+
+                if (whatIf)
+                {
+                    if (!json)
+                        Console.WriteLine($"  [What-If] Would delete step: {step.Name}");
+                }
+                else
+                {
+                    await service.DeleteStepAsync(step.Id);
+                    result.StepsDeleted++;
+                    if (!json)
+                        Console.WriteLine($"  Deleted step: {step.Name}");
                 }
             }
 
@@ -250,10 +236,10 @@ public static class CleanCommand
 
             if (!typeHasConfiguredSteps && !typeInAllTypeNames)
             {
-                // Refresh step count after deletions
-                var remainingSteps = await service.ListStepsForTypeAsync(existingType.Id);
+                // Calculate remaining steps in memory instead of re-querying
+                var remainingStepsCount = steps.Count - orphanedStepsInType.Count;
 
-                if (remainingSteps.Count == 0)
+                if (remainingStepsCount == 0)
                 {
                     result.OrphanedTypes.Add(new OrphanedType
                     {

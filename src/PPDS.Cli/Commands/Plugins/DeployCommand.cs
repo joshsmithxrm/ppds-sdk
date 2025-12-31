@@ -219,8 +219,8 @@ public static class DeployCommand
                     Console.WriteLine($"  Assembly registered: {assemblyId}");
             }
 
-            // Track existing steps for orphan detection
-            var existingStepNames = new HashSet<string>();
+            // Track existing steps for orphan detection - use dictionary for O(1) lookup during cleanup
+            var existingStepsMap = new Dictionary<string, PluginStepInfo>();
             var configuredStepNames = new HashSet<string>();
 
             // Get existing types and steps
@@ -232,7 +232,7 @@ public static class DeployCommand
                 var steps = await service.ListStepsForTypeAsync(existingType.Id);
                 foreach (var step in steps)
                 {
-                    existingStepNames.Add(step.Name);
+                    existingStepsMap[step.Name] = step;
                 }
             }
 
@@ -278,7 +278,7 @@ public static class DeployCommand
                         stepConfig.Entity,
                         stepConfig.SecondaryEntity);
 
-                    var isNew = !existingStepNames.Contains(stepName);
+                    var isNew = !existingStepsMap.ContainsKey(stepName);
 
                     Guid stepId;
                     if (whatIf)
@@ -300,8 +300,8 @@ public static class DeployCommand
                         else result.StepsUpdated++;
                     }
 
-                    // Deploy images
-                    var existingImages = isNew ? [] : await service.ListImagesForStepAsync(stepId);
+                    // Deploy images (skip query in what-if mode or for new steps since stepId doesn't exist)
+                    var existingImages = whatIf || isNew ? [] : await service.ListImagesForStepAsync(stepId);
                     var existingImageNames = existingImages.Select(i => i.Name).ToHashSet();
 
                     foreach (var imageConfig in stepConfig.Images)
@@ -332,37 +332,30 @@ public static class DeployCommand
             // Handle orphan cleanup if requested
             if (clean)
             {
-                var orphanedSteps = existingStepNames.Except(configuredStepNames).ToList();
+                var orphanedStepNames = existingStepsMap.Keys.Except(configuredStepNames).ToList();
 
-                if (orphanedSteps.Count > 0)
+                if (orphanedStepNames.Count > 0)
                 {
                     if (!json)
-                        Console.WriteLine($"  Cleaning {orphanedSteps.Count} orphaned step(s)...");
+                        Console.WriteLine($"  Cleaning {orphanedStepNames.Count} orphaned step(s)...");
 
-                    foreach (var orphanName in orphanedSteps)
+                    foreach (var orphanName in orphanedStepNames)
                     {
-                        // Find the step to delete
-                        foreach (var existingType in existingTypes)
+                        // Use dictionary lookup instead of re-querying
+                        if (existingStepsMap.TryGetValue(orphanName, out var orphanStep))
                         {
-                            var steps = await service.ListStepsForTypeAsync(existingType.Id);
-                            var orphanStep = steps.FirstOrDefault(s => s.Name == orphanName);
-
-                            if (orphanStep != null)
+                            if (whatIf)
                             {
-                                if (whatIf)
-                                {
-                                    if (!json)
-                                        Console.WriteLine($"    [What-If] Would delete step: {orphanName}");
-                                    result.StepsDeleted++;
-                                }
-                                else
-                                {
-                                    await service.DeleteStepAsync(orphanStep.Id);
-                                    if (!json)
-                                        Console.WriteLine($"    Deleted step: {orphanName}");
-                                    result.StepsDeleted++;
-                                }
-                                break;
+                                if (!json)
+                                    Console.WriteLine($"    [What-If] Would delete step: {orphanName}");
+                                result.StepsDeleted++;
+                            }
+                            else
+                            {
+                                await service.DeleteStepAsync(orphanStep.Id);
+                                if (!json)
+                                    Console.WriteLine($"    Deleted step: {orphanName}");
+                                result.StepsDeleted++;
                             }
                         }
                     }

@@ -202,7 +202,6 @@ public static class DiffCommand
 
         // Get all types for this assembly
         var existingTypes = await service.ListTypesForAssemblyAsync(assembly.Id);
-        var existingTypeMap = existingTypes.ToDictionary(t => t.TypeName, t => t);
 
         // Build a map of all configured steps
         var configuredSteps = new Dictionary<string, (PluginTypeConfig Type, PluginStepConfig Step)>();
