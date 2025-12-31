@@ -23,7 +23,12 @@ public static class ListCommand
     {
         var assemblyOption = new Option<string?>("--assembly", "-a")
         {
-            Description = "Filter by assembly name"
+            Description = "Filter by assembly name (classic DLL plugins)"
+        };
+
+        var packageOption = new Option<string?>("--package", "-pkg")
+        {
+            Description = "Filter by package name or unique name (NuGet plugin packages)"
         };
 
         var command = new Command("list", "List registered plugins in the environment")
@@ -31,6 +36,7 @@ public static class ListCommand
             PluginsCommandGroup.ProfileOption,
             PluginsCommandGroup.EnvironmentOption,
             assemblyOption,
+            packageOption,
             PluginsCommandGroup.JsonOption
         };
 
@@ -39,9 +45,10 @@ public static class ListCommand
             var profile = parseResult.GetValue(PluginsCommandGroup.ProfileOption);
             var environment = parseResult.GetValue(PluginsCommandGroup.EnvironmentOption);
             var assembly = parseResult.GetValue(assemblyOption);
+            var package = parseResult.GetValue(packageOption);
             var json = parseResult.GetValue(PluginsCommandGroup.JsonOption);
 
-            return await ExecuteAsync(profile, environment, assembly, json, cancellationToken);
+            return await ExecuteAsync(profile, environment, assembly, package, json, cancellationToken);
         });
 
         return command;
@@ -51,6 +58,7 @@ public static class ListCommand
         string? profile,
         string? environment,
         string? assemblyFilter,
+        string? packageFilter,
         bool json,
         CancellationToken cancellationToken)
     {
@@ -75,79 +83,68 @@ public static class ListCommand
                 Console.WriteLine();
             }
 
-            var assemblies = await registrationService.ListAssembliesAsync(assemblyFilter);
+            var output = new ListOutput();
 
-            if (assemblies.Count == 0)
+            // Get assemblies (unless package filter is specified, which means we only want packages)
+            if (string.IsNullOrEmpty(packageFilter))
+            {
+                var assemblies = await registrationService.ListAssembliesAsync(assemblyFilter);
+
+                foreach (var assembly in assemblies)
+                {
+                    var assemblyOutput = new AssemblyOutput
+                    {
+                        Name = assembly.Name,
+                        Version = assembly.Version,
+                        PublicKeyToken = assembly.PublicKeyToken,
+                        Type = "Assembly",
+                        Types = []
+                    };
+
+                    var types = await registrationService.ListTypesForAssemblyAsync(assembly.Id);
+                    await PopulateTypesAsync(registrationService, types, assemblyOutput.Types);
+
+                    output.Assemblies.Add(assemblyOutput);
+                }
+            }
+
+            // Get packages (unless assembly filter is specified, which means we only want assemblies)
+            if (string.IsNullOrEmpty(assemblyFilter))
+            {
+                var packages = await registrationService.ListPackagesAsync(packageFilter);
+
+                foreach (var package in packages)
+                {
+                    var packageOutput = new AssemblyOutput
+                    {
+                        Name = package.Name,
+                        UniqueName = package.UniqueName,
+                        Version = package.Version,
+                        Type = "Package",
+                        Types = []
+                    };
+
+                    var types = await registrationService.ListTypesForPackageAsync(package.Id);
+                    await PopulateTypesAsync(registrationService, types, packageOutput.Types);
+
+                    output.Packages.Add(packageOutput);
+                }
+            }
+
+            var totalAssemblies = output.Assemblies.Count;
+            var totalPackages = output.Packages.Count;
+
+            if (totalAssemblies == 0 && totalPackages == 0)
             {
                 if (json)
                 {
-                    Console.WriteLine("[]");
+                    Console.WriteLine(JsonSerializer.Serialize(output, JsonOptions));
                 }
                 else
                 {
-                    Console.WriteLine("No plugin assemblies found.");
+                    Console.WriteLine("No plugin assemblies or packages found.");
                 }
                 return ExitCodes.Success;
-            }
-
-            var output = new List<AssemblyOutput>();
-
-            foreach (var assembly in assemblies)
-            {
-                var assemblyOutput = new AssemblyOutput
-                {
-                    Name = assembly.Name,
-                    Version = assembly.Version,
-                    PublicKeyToken = assembly.PublicKeyToken,
-                    Types = []
-                };
-
-                var types = await registrationService.ListTypesForAssemblyAsync(assembly.Id);
-
-                foreach (var type in types)
-                {
-                    var typeOutput = new TypeOutput
-                    {
-                        TypeName = type.TypeName,
-                        Steps = []
-                    };
-
-                    var steps = await registrationService.ListStepsForTypeAsync(type.Id);
-
-                    foreach (var step in steps)
-                    {
-                        var stepOutput = new StepOutput
-                        {
-                            Name = step.Name,
-                            Message = step.Message,
-                            Entity = step.PrimaryEntity,
-                            Stage = step.Stage,
-                            Mode = step.Mode,
-                            ExecutionOrder = step.ExecutionOrder,
-                            FilteringAttributes = step.FilteringAttributes,
-                            IsEnabled = step.IsEnabled,
-                            Images = []
-                        };
-
-                        var images = await registrationService.ListImagesForStepAsync(step.Id);
-
-                        foreach (var image in images)
-                        {
-                            stepOutput.Images.Add(new ImageOutput
-                            {
-                                Name = image.Name,
-                                ImageType = image.ImageType,
-                                Attributes = image.Attributes
-                            });
-                        }
-
-                        typeOutput.Steps.Add(stepOutput);
-                    }
-
-                    assemblyOutput.Types.Add(typeOutput);
-                }
-
-                output.Add(assemblyOutput);
             }
 
             if (json)
@@ -156,38 +153,26 @@ public static class ListCommand
             }
             else
             {
-                foreach (var assembly in output)
+                // Print assemblies
+                foreach (var assembly in output.Assemblies)
                 {
                     Console.WriteLine($"Assembly: {assembly.Name} (v{assembly.Version})");
-
-                    foreach (var type in assembly.Types)
-                    {
-                        Console.WriteLine($"  Type: {type.TypeName}");
-
-                        foreach (var step in type.Steps)
-                        {
-                            var status = step.IsEnabled ? "" : " [DISABLED]";
-                            Console.WriteLine($"    Step: {step.Name}{status}");
-                            Console.WriteLine($"      {step.Message} on {step.Entity} ({step.Stage}, {step.Mode})");
-
-                            if (!string.IsNullOrEmpty(step.FilteringAttributes))
-                            {
-                                Console.WriteLine($"      Filtering: {step.FilteringAttributes}");
-                            }
-
-                            foreach (var image in step.Images)
-                            {
-                                var attrs = string.IsNullOrEmpty(image.Attributes) ? "all" : image.Attributes;
-                                Console.WriteLine($"      Image: {image.Name} ({image.ImageType}) - {attrs}");
-                            }
-                        }
-                    }
-
+                    PrintTypes(assembly.Types);
                     Console.WriteLine();
                 }
 
-                var totalSteps = output.Sum(a => a.Types.Sum(t => t.Steps.Count));
-                Console.WriteLine($"Total: {output.Count} assembly(ies), {totalSteps} step(s)");
+                // Print packages
+                foreach (var package in output.Packages)
+                {
+                    var uniqueName = package.UniqueName != package.Name ? $" [{package.UniqueName}]" : "";
+                    Console.WriteLine($"Package: {package.Name}{uniqueName} (v{package.Version})");
+                    PrintTypes(package.Types);
+                    Console.WriteLine();
+                }
+
+                var totalAssemblySteps = output.Assemblies.Sum(a => a.Types.Sum(t => t.Steps.Count));
+                var totalPackageSteps = output.Packages.Sum(p => p.Types.Sum(t => t.Steps.Count));
+                Console.WriteLine($"Total: {totalAssemblies} assembly(ies), {totalPackages} package(s), {totalAssemblySteps + totalPackageSteps} step(s)");
             }
 
             return ExitCodes.Success;
@@ -199,18 +184,108 @@ public static class ListCommand
         }
     }
 
+    private static async Task PopulateTypesAsync(
+        PluginRegistrationService registrationService,
+        List<PluginTypeInfo> types,
+        List<TypeOutput> typeOutputs)
+    {
+        foreach (var type in types)
+        {
+            var typeOutput = new TypeOutput
+            {
+                TypeName = type.TypeName,
+                Steps = []
+            };
+
+            var steps = await registrationService.ListStepsForTypeAsync(type.Id);
+
+            foreach (var step in steps)
+            {
+                var stepOutput = new StepOutput
+                {
+                    Name = step.Name,
+                    Message = step.Message,
+                    Entity = step.PrimaryEntity,
+                    Stage = step.Stage,
+                    Mode = step.Mode,
+                    ExecutionOrder = step.ExecutionOrder,
+                    FilteringAttributes = step.FilteringAttributes,
+                    IsEnabled = step.IsEnabled,
+                    Images = []
+                };
+
+                var images = await registrationService.ListImagesForStepAsync(step.Id);
+
+                foreach (var image in images)
+                {
+                    stepOutput.Images.Add(new ImageOutput
+                    {
+                        Name = image.Name,
+                        ImageType = image.ImageType,
+                        Attributes = image.Attributes
+                    });
+                }
+
+                typeOutput.Steps.Add(stepOutput);
+            }
+
+            typeOutputs.Add(typeOutput);
+        }
+    }
+
+    private static void PrintTypes(List<TypeOutput> types)
+    {
+        foreach (var type in types)
+        {
+            Console.WriteLine($"  Type: {type.TypeName}");
+
+            foreach (var step in type.Steps)
+            {
+                var status = step.IsEnabled ? "" : " [DISABLED]";
+                Console.WriteLine($"    Step: {step.Name}{status}");
+                Console.WriteLine($"      {step.Message} on {step.Entity} ({step.Stage}, {step.Mode})");
+
+                if (!string.IsNullOrEmpty(step.FilteringAttributes))
+                {
+                    Console.WriteLine($"      Filtering: {step.FilteringAttributes}");
+                }
+
+                foreach (var image in step.Images)
+                {
+                    var attrs = string.IsNullOrEmpty(image.Attributes) ? "all" : image.Attributes;
+                    Console.WriteLine($"      Image: {image.Name} ({image.ImageType}) - {attrs}");
+                }
+            }
+        }
+    }
+
     #region Output Models
+
+    private sealed class ListOutput
+    {
+        [JsonPropertyName("assemblies")]
+        public List<AssemblyOutput> Assemblies { get; set; } = [];
+
+        [JsonPropertyName("packages")]
+        public List<AssemblyOutput> Packages { get; set; } = [];
+    }
 
     private sealed class AssemblyOutput
     {
         [JsonPropertyName("name")]
         public string Name { get; set; } = string.Empty;
 
+        [JsonPropertyName("uniqueName")]
+        public string? UniqueName { get; set; }
+
         [JsonPropertyName("version")]
         public string? Version { get; set; }
 
         [JsonPropertyName("publicKeyToken")]
         public string? PublicKeyToken { get; set; }
+
+        [JsonPropertyName("type")]
+        public string Type { get; set; } = "Assembly";
 
         [JsonPropertyName("types")]
         public List<TypeOutput> Types { get; set; } = [];

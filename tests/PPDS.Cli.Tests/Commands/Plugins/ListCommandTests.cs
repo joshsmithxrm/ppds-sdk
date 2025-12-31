@@ -53,6 +53,15 @@ public class ListCommandTests
     }
 
     [Fact]
+    public void Create_HasOptionalPackageOption()
+    {
+        var option = _command.Options.FirstOrDefault(o => o.Name == "--package");
+        Assert.NotNull(option);
+        Assert.False(option.Required);
+        Assert.Contains("-pkg", option.Aliases);
+    }
+
+    [Fact]
     public void Create_HasOptionalJsonOption()
     {
         var option = _command.Options.FirstOrDefault(o => o.Name == "--json");
@@ -89,6 +98,20 @@ public class ListCommandTests
     public void Parse_WithOptionalAssembly_Succeeds()
     {
         var result = _command.Parse("--assembly MyPlugins");
+        Assert.Empty(result.Errors);
+    }
+
+    [Fact]
+    public void Parse_WithOptionalPackage_Succeeds()
+    {
+        var result = _command.Parse("--package MyPackage");
+        Assert.Empty(result.Errors);
+    }
+
+    [Fact]
+    public void Parse_WithPackageShortAlias_Succeeds()
+    {
+        var result = _command.Parse("-pkg MyPackage");
         Assert.Empty(result.Errors);
     }
 

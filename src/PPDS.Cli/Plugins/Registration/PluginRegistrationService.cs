@@ -58,6 +58,80 @@ public sealed class PluginRegistrationService
     }
 
     /// <summary>
+    /// Lists all plugin packages in the environment.
+    /// </summary>
+    /// <param name="packageNameFilter">Optional filter by package name or unique name.</param>
+    public async Task<List<PluginPackageInfo>> ListPackagesAsync(string? packageNameFilter = null)
+    {
+        var query = new QueryExpression("pluginpackage")
+        {
+            ColumnSet = new ColumnSet("name", "uniquename", "version"),
+            Orders = { new OrderExpression("name", OrderType.Ascending) }
+        };
+
+        if (!string.IsNullOrEmpty(packageNameFilter))
+        {
+            // Filter by name or uniquename
+            query.Criteria = new FilterExpression(LogicalOperator.Or)
+            {
+                Conditions =
+                {
+                    new ConditionExpression("name", ConditionOperator.Equal, packageNameFilter),
+                    new ConditionExpression("uniquename", ConditionOperator.Equal, packageNameFilter)
+                }
+            };
+        }
+
+        var results = await Task.Run(() => _service.RetrieveMultiple(query));
+
+        return results.Entities.Select(e => new PluginPackageInfo
+        {
+            Id = e.Id,
+            Name = e.GetAttributeValue<string>("name") ?? string.Empty,
+            UniqueName = e.GetAttributeValue<string>("uniquename"),
+            Version = e.GetAttributeValue<string>("version")
+        }).ToList();
+    }
+
+    /// <summary>
+    /// Lists all plugin types for a package by querying through the package's assemblies.
+    /// </summary>
+    public async Task<List<PluginTypeInfo>> ListTypesForPackageAsync(Guid packageId)
+    {
+        // Plugin packages contain assemblies, and assemblies contain types.
+        // We need to query: pluginpackage -> pluginassembly (via packageid) -> plugintype (via pluginassemblyid)
+
+        // First, get all assemblies for this package
+        var assemblyQuery = new QueryExpression("pluginassembly")
+        {
+            ColumnSet = new ColumnSet("pluginassemblyid"),
+            Criteria = new FilterExpression
+            {
+                Conditions =
+                {
+                    new ConditionExpression("packageid", ConditionOperator.Equal, packageId)
+                }
+            }
+        };
+
+        var assemblyResults = await Task.Run(() => _service.RetrieveMultiple(assemblyQuery));
+        var assemblyIds = assemblyResults.Entities.Select(e => e.Id).ToList();
+
+        if (assemblyIds.Count == 0)
+            return [];
+
+        // Now get all types for those assemblies
+        var allTypes = new List<PluginTypeInfo>();
+        foreach (var assemblyId in assemblyIds)
+        {
+            var types = await ListTypesForAssemblyAsync(assemblyId);
+            allTypes.AddRange(types);
+        }
+
+        return allTypes;
+    }
+
+    /// <summary>
     /// Lists all plugin types for an assembly.
     /// </summary>
     public async Task<List<PluginTypeInfo>> ListTypesForAssemblyAsync(Guid assemblyId)
@@ -559,6 +633,17 @@ public sealed class PluginAssemblyInfo
     public string? Version { get; set; }
     public string? PublicKeyToken { get; set; }
     public int IsolationMode { get; set; }
+}
+
+/// <summary>
+/// Information about a plugin package (NuGet) in Dataverse.
+/// </summary>
+public sealed class PluginPackageInfo
+{
+    public Guid Id { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public string? UniqueName { get; set; }
+    public string? Version { get; set; }
 }
 
 /// <summary>
