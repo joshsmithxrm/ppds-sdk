@@ -403,7 +403,7 @@ public sealed class PluginRegistrationService
     /// <returns>The package ID.</returns>
     public async Task<Guid> UpsertPackageAsync(string packageName, byte[] nupkgContent, string? solutionName = null)
     {
-        // packageName comes from .nuspec <id> (parsed from filename)
+        // packageName comes from .nuspec <id> (parsed from .nuspec)
         // Dataverse extracts uniquename from the nupkg content, so we use packageName for lookup
         var existing = await GetPackageByNameAsync(packageName);
 
