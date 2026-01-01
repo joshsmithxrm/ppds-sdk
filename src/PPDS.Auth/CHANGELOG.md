@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Cross-tenant token cache issue** - Fixed bug where `ppds env list` would return environments from wrong tenant when user had profiles for multiple tenants. Root cause was MSAL account lookup using `FirstOrDefault()` instead of filtering by tenant. Now uses `HomeAccountId` for precise account lookup with tenant filtering fallback. ([#59](https://github.com/joshsmithxrm/ppds-sdk/issues/59))
+
+### Added
+
+- `HomeAccountId` property on `AuthProfile` and `ICredentialProvider` to track MSAL account identity across sessions
+
 ## [1.0.0-beta.1] - 2025-12-29
 
 ### Added
