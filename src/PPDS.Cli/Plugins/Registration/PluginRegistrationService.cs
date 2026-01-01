@@ -397,17 +397,19 @@ public sealed class PluginRegistrationService
     /// <summary>
     /// Creates or updates a plugin package (for NuGet packages).
     /// </summary>
-    /// <param name="name">The package name from config (assembly name without prefix).</param>
+    /// <param name="packageName">The package name from .nuspec (e.g., "ppds_MyPlugin"). This is what Dataverse uses as uniquename.</param>
     /// <param name="nupkgContent">The raw .nupkg file content.</param>
-    /// <param name="solutionName">Solution to add the package to (required for new packages to get publisher prefix).</param>
+    /// <param name="solutionName">Solution to add the package to.</param>
     /// <returns>The package ID.</returns>
-    public async Task<Guid> UpsertPackageAsync(string name, byte[] nupkgContent, string? solutionName = null)
+    public async Task<Guid> UpsertPackageAsync(string packageName, byte[] nupkgContent, string? solutionName = null)
     {
-        var existing = await GetPackageByNameAsync(name);
+        // packageName comes from .nuspec <id> (parsed from filename)
+        // Dataverse extracts uniquename from the nupkg content, so we use packageName for lookup
+        var existing = await GetPackageByNameAsync(packageName);
 
         if (existing != null)
         {
-            // UPDATE: Only update content, preserve existing name/uniquename
+            // UPDATE: Only update content
             var updateEntity = new Entity("pluginpackage", existing.Id)
             {
                 ["content"] = Convert.ToBase64String(nupkgContent)
@@ -416,24 +418,13 @@ public sealed class PluginRegistrationService
             return existing.Id;
         }
 
-        // CREATE: name = uniquename = {prefix}_{name} (must be identical per Plugin Registration Tool behavior)
-        var prefix = await GetPublisherPrefixAsync(solutionName);
-        if (string.IsNullOrEmpty(prefix))
-        {
-            throw new InvalidOperationException(
-                "Cannot create plugin package without a solution. The --solution option is required for new package deployments " +
-                "to determine the publisher prefix for the name and uniquename.");
-        }
-
-        var prefixedName = $"{prefix}_{name}";
+        // CREATE: Set name and content only - Dataverse extracts uniquename from .nuspec <id> inside nupkg
         var entity = new Entity("pluginpackage")
         {
-            ["name"] = prefixedName,
-            ["uniquename"] = prefixedName,
+            ["name"] = packageName,
             ["content"] = Convert.ToBase64String(nupkgContent)
         };
 
-        // Use CreateRequest with SolutionUniqueName for atomic solution association
         return await CreateWithSolutionHeaderAsync(entity, solutionName);
     }
 
@@ -691,55 +682,6 @@ public sealed class PluginRegistrationService
     #endregion
 
     #region Private Helpers
-
-    /// <summary>
-    /// Gets the publisher customization prefix for a solution.
-    /// </summary>
-    private async Task<string?> GetPublisherPrefixAsync(string? solutionName)
-    {
-        if (string.IsNullOrEmpty(solutionName))
-            return null;
-
-        // Query solution to get publisher reference
-        var solutionQuery = new QueryExpression("solution")
-        {
-            ColumnSet = new ColumnSet("publisherid"),
-            Criteria = new FilterExpression
-            {
-                Conditions =
-                {
-                    new ConditionExpression("uniquename", ConditionOperator.Equal, solutionName)
-                }
-            }
-        };
-
-        var solutionResult = await RetrieveMultipleAsync(solutionQuery);
-        var solution = solutionResult.Entities.FirstOrDefault();
-        if (solution == null)
-            return null;
-
-        var publisherRef = solution.GetAttributeValue<EntityReference>("publisherid");
-        if (publisherRef == null)
-            return null;
-
-        // Query publisher to get customization prefix
-        var publisherQuery = new QueryExpression("publisher")
-        {
-            ColumnSet = new ColumnSet("customizationprefix"),
-            Criteria = new FilterExpression
-            {
-                Conditions =
-                {
-                    new ConditionExpression("publisherid", ConditionOperator.Equal, publisherRef.Id)
-                }
-            }
-        };
-
-        var publisherResult = await RetrieveMultipleAsync(publisherQuery);
-        var publisher = publisherResult.Entities.FirstOrDefault();
-
-        return publisher?.GetAttributeValue<string>("customizationprefix");
-    }
 
     /// <summary>
     /// Gets the solution component type code for an entity.

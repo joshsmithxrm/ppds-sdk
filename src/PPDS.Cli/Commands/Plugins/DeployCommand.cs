@@ -1,6 +1,7 @@
 using System.CommandLine;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Text.RegularExpressions;
 using Microsoft.Extensions.DependencyInjection;
 using PPDS.Cli.Infrastructure;
 using PPDS.Cli.Plugins.Models;
@@ -195,25 +196,30 @@ public static class DeployCommand
             Guid assemblyId;
             if (assemblyConfig.Type == "Nuget")
             {
+                // Parse package name from .nupkg filename (e.g., "ppds_MyPlugin.1.0.0.nupkg" -> "ppds_MyPlugin")
+                // This matches the <id> in .nuspec, which Dataverse uses as uniquename
+                var packageName = ParsePackageNameFromPath(assemblyPath);
+
                 // For NuGet packages, upload the entire .nupkg to pluginpackage entity
                 var packageBytes = await File.ReadAllBytesAsync(assemblyPath, cancellationToken);
 
                 Guid packageId;
                 if (whatIf)
                 {
-                    var existingPkg = await service.GetPackageByNameAsync(assemblyConfig.Name);
+                    var existingPkg = await service.GetPackageByNameAsync(packageName);
                     packageId = existingPkg?.Id ?? Guid.NewGuid();
                     if (!json)
-                        Console.WriteLine($"  [What-If] Would {(existingPkg == null ? "create" : "update")} package");
+                        Console.WriteLine($"  [What-If] Would {(existingPkg == null ? "create" : "update")} package: {packageName}");
                 }
                 else
                 {
-                    packageId = await service.UpsertPackageAsync(assemblyConfig.Name, packageBytes, solution);
+                    packageId = await service.UpsertPackageAsync(packageName, packageBytes, solution);
                     if (!json)
                         Console.WriteLine($"  Package registered: {packageId}");
                 }
 
                 // Get the assembly ID from the package (Dataverse creates it automatically)
+                // Use assemblyConfig.Name here since that's the assembly name inside the package
                 var pkgAssemblyId = await service.GetAssemblyIdForPackageAsync(packageId, assemblyConfig.Name);
                 if (pkgAssemblyId == null)
                 {
@@ -409,6 +415,27 @@ public static class DeployCommand
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// Parses the package name from a .nupkg file path.
+    /// Example: "bin/Debug/ppds_MyPlugin.1.0.0.nupkg" -> "ppds_MyPlugin"
+    /// The package name matches the nuspec &lt;id&gt; which Dataverse uses as uniquename.
+    /// </summary>
+    private static string ParsePackageNameFromPath(string nupkgPath)
+    {
+        var filename = Path.GetFileName(nupkgPath);
+
+        // Remove .nupkg extension
+        var filenameWithoutExt = filename.EndsWith(".nupkg", StringComparison.OrdinalIgnoreCase)
+            ? filename[..^6]
+            : filename;
+
+        // Parse: PackageName.1.0.0 or PackageName.1.0.0-beta1
+        // Version pattern: X.Y.Z optionally followed by prerelease suffix
+        var match = Regex.Match(filenameWithoutExt, @"^(.+?)\.(\d+\.\d+\.\d+.*)$");
+
+        return match.Success ? match.Groups[1].Value : filenameWithoutExt;
     }
 
     #region Result Models
