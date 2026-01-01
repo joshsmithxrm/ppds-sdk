@@ -409,22 +409,18 @@ public sealed class PluginRegistrationService
 
         if (existing != null)
         {
-            // UPDATE: Only update content
+            // UPDATE: Only update content, use solution header for solution association
             var updateEntity = new Entity("pluginpackage", existing.Id)
             {
                 ["content"] = Convert.ToBase64String(nupkgContent)
             };
-            await UpdateAsync(updateEntity);
 
-            // Add to solution if specified (handles case where package exists but isn't in solution)
+            var request = new UpdateRequest { Target = updateEntity };
             if (!string.IsNullOrEmpty(solutionName))
             {
-                var componentType = await GetComponentTypeAsync("pluginpackage");
-                if (componentType > 0)
-                {
-                    await AddToSolutionAsync(existing.Id, componentType, solutionName);
-                }
+                request.Parameters["SolutionUniqueName"] = solutionName;
             }
+            await ExecuteAsync(request);
 
             return existing.Id;
         }
