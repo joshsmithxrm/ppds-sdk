@@ -28,6 +28,7 @@ public sealed class InteractiveBrowserCredentialProvider : ICredentialProvider
     private readonly CloudEnvironment _cloud;
     private readonly string? _tenantId;
     private readonly string? _username;
+    private readonly string? _homeAccountId;
 
     private IPublicClientApplication? _msalClient;
     private MsalCacheHelper? _cacheHelper;
@@ -50,6 +51,9 @@ public sealed class InteractiveBrowserCredentialProvider : ICredentialProvider
     public string? ObjectId => _cachedResult?.UniqueId;
 
     /// <inheritdoc />
+    public string? HomeAccountId => _cachedResult?.Account?.HomeAccountId?.Identifier;
+
+    /// <inheritdoc />
     public string? AccessToken => _cachedResult?.AccessToken;
 
     /// <inheritdoc />
@@ -61,14 +65,17 @@ public sealed class InteractiveBrowserCredentialProvider : ICredentialProvider
     /// <param name="cloud">The cloud environment.</param>
     /// <param name="tenantId">Optional tenant ID (defaults to "organizations" for multi-tenant).</param>
     /// <param name="username">Optional username for silent auth lookup.</param>
+    /// <param name="homeAccountId">Optional MSAL home account identifier for precise account lookup.</param>
     public InteractiveBrowserCredentialProvider(
         CloudEnvironment cloud = CloudEnvironment.Public,
         string? tenantId = null,
-        string? username = null)
+        string? username = null,
+        string? homeAccountId = null)
     {
         _cloud = cloud;
         _tenantId = tenantId;
         _username = username;
+        _homeAccountId = homeAccountId;
     }
 
     /// <summary>
@@ -81,7 +88,8 @@ public sealed class InteractiveBrowserCredentialProvider : ICredentialProvider
         return new InteractiveBrowserCredentialProvider(
             profile.Cloud,
             profile.TenantId,
-            profile.Username);
+            profile.Username,
+            profile.HomeAccountId);
     }
 
     /// <summary>
@@ -176,19 +184,14 @@ public sealed class InteractiveBrowserCredentialProvider : ICredentialProvider
                 return _cachedResult.AccessToken;
             }
 
-            // Try silent acquisition from MSAL cache
-            var accounts = await _msalClient!.GetAccountsAsync().ConfigureAwait(false);
-
-            // Look up by username if we have one, otherwise fall back to first account
-            var account = !string.IsNullOrEmpty(_username)
-                ? accounts.FirstOrDefault(a => string.Equals(a.Username, _username, StringComparison.OrdinalIgnoreCase))
-                : accounts.FirstOrDefault();
+            // Try to find the correct account for silent acquisition
+            var account = await FindAccountAsync().ConfigureAwait(false);
 
             if (account != null)
             {
                 try
                 {
-                    _cachedResult = await _msalClient
+                    _cachedResult = await _msalClient!
                         .AcquireTokenSilent(scopes, account)
                         .ExecuteAsync(cancellationToken)
                         .ConfigureAwait(false);
@@ -223,6 +226,50 @@ public sealed class InteractiveBrowserCredentialProvider : ICredentialProvider
         Console.WriteLine();
 
         return _cachedResult.AccessToken;
+    }
+
+    /// <summary>
+    /// Finds the correct cached account for this profile.
+    /// Uses HomeAccountId for precise lookup, falls back to tenant filtering, then username.
+    /// </summary>
+    private async Task<IAccount?> FindAccountAsync()
+    {
+        // Best case: we have the exact account identifier stored
+        if (!string.IsNullOrEmpty(_homeAccountId))
+        {
+            var account = await _msalClient!.GetAccountAsync(_homeAccountId).ConfigureAwait(false);
+            if (account != null)
+                return account;
+        }
+
+        // Fall back to filtering accounts
+        var accounts = await _msalClient!.GetAccountsAsync().ConfigureAwait(false);
+        var accountList = accounts.ToList();
+
+        if (accountList.Count == 0)
+            return null;
+
+        // If we have a tenant ID, filter by it to avoid cross-tenant token usage
+        if (!string.IsNullOrEmpty(_tenantId))
+        {
+            var tenantAccount = accountList.FirstOrDefault(a =>
+                string.Equals(a.HomeAccountId?.TenantId, _tenantId, StringComparison.OrdinalIgnoreCase));
+            if (tenantAccount != null)
+                return tenantAccount;
+        }
+
+        // Fall back to username match
+        if (!string.IsNullOrEmpty(_username))
+        {
+            var usernameAccount = accountList.FirstOrDefault(a =>
+                string.Equals(a.Username, _username, StringComparison.OrdinalIgnoreCase));
+            if (usernameAccount != null)
+                return usernameAccount;
+        }
+
+        // If we can't find the right account, return null to force re-authentication.
+        // Never silently use a random cached account - that causes cross-tenant issues.
+        return null;
     }
 
     /// <summary>

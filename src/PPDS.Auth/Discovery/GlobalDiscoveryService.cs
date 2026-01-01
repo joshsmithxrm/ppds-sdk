@@ -24,6 +24,7 @@ public sealed class GlobalDiscoveryService : IGlobalDiscoveryService, IDisposabl
 
     private readonly CloudEnvironment _cloud;
     private readonly string? _tenantId;
+    private readonly string? _homeAccountId;
     private readonly AuthMethod? _preferredAuthMethod;
     private readonly Action<DeviceCodeInfo>? _deviceCodeCallback;
 
@@ -36,16 +37,19 @@ public sealed class GlobalDiscoveryService : IGlobalDiscoveryService, IDisposabl
     /// </summary>
     /// <param name="cloud">The cloud environment to use.</param>
     /// <param name="tenantId">Optional tenant ID.</param>
+    /// <param name="homeAccountId">Optional MSAL home account identifier for precise account lookup.</param>
     /// <param name="preferredAuthMethod">Optional preferred auth method from profile.</param>
     /// <param name="deviceCodeCallback">Optional callback for device code display.</param>
     public GlobalDiscoveryService(
         CloudEnvironment cloud = CloudEnvironment.Public,
         string? tenantId = null,
+        string? homeAccountId = null,
         AuthMethod? preferredAuthMethod = null,
         Action<DeviceCodeInfo>? deviceCodeCallback = null)
     {
         _cloud = cloud;
         _tenantId = tenantId;
+        _homeAccountId = homeAccountId;
         _preferredAuthMethod = preferredAuthMethod;
         _deviceCodeCallback = deviceCodeCallback;
     }
@@ -63,6 +67,7 @@ public sealed class GlobalDiscoveryService : IGlobalDiscoveryService, IDisposabl
         return new GlobalDiscoveryService(
             profile.Cloud,
             profile.TenantId,
+            profile.HomeAccountId,
             profile.AuthMethod,
             deviceCodeCallback);
     }
@@ -141,15 +146,14 @@ public sealed class GlobalDiscoveryService : IGlobalDiscoveryService, IDisposabl
         {
             var scopes = new[] { $"{discoveryUri.GetLeftPart(UriPartial.Authority)}/.default" };
 
-            // Try silent acquisition first
-            var accounts = await _msalClient!.GetAccountsAsync().ConfigureAwait(false);
-            var account = accounts.FirstOrDefault();
+            // Try to find the correct account for silent acquisition
+            var account = await FindAccountAsync().ConfigureAwait(false);
 
             if (account != null)
             {
                 try
                 {
-                    var silentResult = await _msalClient
+                    var silentResult = await _msalClient!
                         .AcquireTokenSilent(scopes, account)
                         .ExecuteAsync(cancellationToken)
                         .ConfigureAwait(false);
@@ -173,7 +177,7 @@ public sealed class GlobalDiscoveryService : IGlobalDiscoveryService, IDisposabl
                     Console.WriteLine("Opening browser for authentication...");
                 }
 
-                result = await _msalClient
+                result = await _msalClient!
                     .AcquireTokenInteractive(scopes)
                     .WithUseEmbeddedWebView(false)
                     .ExecuteAsync(cancellationToken)
@@ -182,7 +186,7 @@ public sealed class GlobalDiscoveryService : IGlobalDiscoveryService, IDisposabl
             else
             {
                 // Fall back to device code flow
-                result = await _msalClient
+                result = await _msalClient!
                     .AcquireTokenWithDeviceCode(scopes, deviceCodeResult =>
                     {
                         if (_deviceCodeCallback != null)
@@ -221,6 +225,41 @@ public sealed class GlobalDiscoveryService : IGlobalDiscoveryService, IDisposabl
 
             return result.AccessToken;
         };
+    }
+
+    /// <summary>
+    /// Finds the correct cached account for this profile.
+    /// Uses HomeAccountId for precise lookup, falls back to tenant filtering.
+    /// </summary>
+    private async Task<IAccount?> FindAccountAsync()
+    {
+        // Best case: we have the exact account identifier stored
+        if (!string.IsNullOrEmpty(_homeAccountId))
+        {
+            var account = await _msalClient!.GetAccountAsync(_homeAccountId).ConfigureAwait(false);
+            if (account != null)
+                return account;
+        }
+
+        // Fall back to filtering accounts
+        var accounts = await _msalClient!.GetAccountsAsync().ConfigureAwait(false);
+        var accountList = accounts.ToList();
+
+        if (accountList.Count == 0)
+            return null;
+
+        // If we have a tenant ID, filter by it to avoid cross-tenant token usage
+        if (!string.IsNullOrEmpty(_tenantId))
+        {
+            var tenantAccount = accountList.FirstOrDefault(a =>
+                string.Equals(a.HomeAccountId?.TenantId, _tenantId, StringComparison.OrdinalIgnoreCase));
+            if (tenantAccount != null)
+                return tenantAccount;
+        }
+
+        // If we can't find the right account, return null to force re-authentication.
+        // Never silently use a random cached account - that causes cross-tenant issues.
+        return null;
     }
 
     /// <summary>
