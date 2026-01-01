@@ -191,32 +191,54 @@ public static class DeployCommand
                 throw new FileNotFoundException($"Assembly file not found: {assemblyConfig.Path ?? assemblyConfig.PackagePath}");
             }
 
-            // Read assembly bytes
-            byte[] assemblyBytes;
+            // Deploy assembly or package based on type
+            Guid assemblyId;
             if (assemblyConfig.Type == "Nuget")
             {
-                // For NuGet packages, we need to extract the DLL
-                assemblyBytes = ExtractDllFromNupkg(assemblyPath, assemblyConfig.Name);
-            }
-            else
-            {
-                assemblyBytes = await File.ReadAllBytesAsync(assemblyPath, cancellationToken);
-            }
+                // For NuGet packages, upload the entire .nupkg to pluginpackage entity
+                var packageBytes = await File.ReadAllBytesAsync(assemblyPath, cancellationToken);
 
-            // Upsert assembly
-            Guid assemblyId;
-            if (whatIf)
-            {
-                var existing = await service.GetAssemblyByNameAsync(assemblyConfig.Name);
-                assemblyId = existing?.Id ?? Guid.NewGuid();
-                if (!json)
-                    Console.WriteLine($"  [What-If] Would {(existing == null ? "create" : "update")} assembly");
+                Guid packageId;
+                if (whatIf)
+                {
+                    var existingPkg = await service.GetPackageByNameAsync(assemblyConfig.Name);
+                    packageId = existingPkg?.Id ?? Guid.NewGuid();
+                    if (!json)
+                        Console.WriteLine($"  [What-If] Would {(existingPkg == null ? "create" : "update")} package");
+                }
+                else
+                {
+                    packageId = await service.UpsertPackageAsync(assemblyConfig.Name, packageBytes, solution);
+                    if (!json)
+                        Console.WriteLine($"  Package registered: {packageId}");
+                }
+
+                // Get the assembly ID from the package (Dataverse creates it automatically)
+                var pkgAssemblyId = await service.GetAssemblyIdForPackageAsync(packageId, assemblyConfig.Name);
+                if (pkgAssemblyId == null)
+                {
+                    throw new InvalidOperationException($"Could not find assembly '{assemblyConfig.Name}' in package after deployment");
+                }
+                assemblyId = pkgAssemblyId.Value;
             }
             else
             {
-                assemblyId = await service.UpsertAssemblyAsync(assemblyConfig.Name, assemblyBytes, solution);
-                if (!json)
-                    Console.WriteLine($"  Assembly registered: {assemblyId}");
+                // For classic assemblies, upload the DLL directly
+                var assemblyBytes = await File.ReadAllBytesAsync(assemblyPath, cancellationToken);
+
+                if (whatIf)
+                {
+                    var existing = await service.GetAssemblyByNameAsync(assemblyConfig.Name);
+                    assemblyId = existing?.Id ?? Guid.NewGuid();
+                    if (!json)
+                        Console.WriteLine($"  [What-If] Would {(existing == null ? "create" : "update")} assembly");
+                }
+                else
+                {
+                    assemblyId = await service.UpsertAssemblyAsync(assemblyConfig.Name, assemblyBytes, solution);
+                    if (!json)
+                        Console.WriteLine($"  Assembly registered: {assemblyId}");
+                }
             }
 
             // Track existing steps for orphan detection - use dictionary for O(1) lookup during cleanup
@@ -387,45 +409,6 @@ public static class DeployCommand
         }
 
         return null;
-    }
-
-    private static byte[] ExtractDllFromNupkg(string nupkgPath, string assemblyName)
-    {
-        using var archive = System.IO.Compression.ZipFile.OpenRead(nupkgPath);
-
-        // Look for the DLL in lib/net462 (preferred) or any lib folder
-        var possiblePaths = new[]
-        {
-            $"lib/net462/{assemblyName}.dll",
-            $"lib/net48/{assemblyName}.dll",
-            $"lib/netstandard2.0/{assemblyName}.dll"
-        };
-
-        foreach (var path in possiblePaths)
-        {
-            var entry = archive.GetEntry(path) ?? archive.GetEntry(path.Replace('/', '\\'));
-            if (entry != null)
-            {
-                using var stream = entry.Open();
-                using var ms = new MemoryStream();
-                stream.CopyTo(ms);
-                return ms.ToArray();
-            }
-        }
-
-        // Fallback: find any DLL matching the assembly name
-        var matchingEntry = archive.Entries
-            .FirstOrDefault(e => e.FullName.EndsWith($"{assemblyName}.dll", StringComparison.OrdinalIgnoreCase));
-
-        if (matchingEntry != null)
-        {
-            using var stream = matchingEntry.Open();
-            using var ms = new MemoryStream();
-            stream.CopyTo(ms);
-            return ms.ToArray();
-        }
-
-        throw new InvalidOperationException($"Could not find {assemblyName}.dll in NuGet package");
     }
 
     #region Result Models

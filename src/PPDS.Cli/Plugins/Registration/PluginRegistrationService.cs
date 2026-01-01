@@ -299,6 +299,15 @@ public sealed class PluginRegistrationService
     }
 
     /// <summary>
+    /// Gets a plugin package by name or unique name.
+    /// </summary>
+    public async Task<PluginPackageInfo?> GetPackageByNameAsync(string name)
+    {
+        var packages = await ListPackagesAsync(name);
+        return packages.FirstOrDefault();
+    }
+
+    /// <summary>
     /// Gets the SDK message ID for a message name.
     /// </summary>
     public async Task<Guid?> GetSdkMessageIdAsync(string messageName)
@@ -351,7 +360,8 @@ public sealed class PluginRegistrationService
     #region Create Operations
 
     /// <summary>
-    /// Creates or updates a plugin assembly.
+    /// Creates or updates a plugin assembly (for classic DLL assemblies only).
+    /// For NuGet packages, use <see cref="UpsertPackageAsync"/> instead.
     /// </summary>
     public async Task<Guid> UpsertAssemblyAsync(string name, byte[] content, string? solutionName = null)
     {
@@ -382,6 +392,67 @@ public sealed class PluginRegistrationService
         {
             return await CreateWithSolutionAsync(entity, solutionName);
         }
+    }
+
+    /// <summary>
+    /// Creates or updates a plugin package (for NuGet packages).
+    /// </summary>
+    /// <param name="name">The package name (used as uniquename).</param>
+    /// <param name="nupkgContent">The raw .nupkg file content.</param>
+    /// <param name="solutionName">Optional solution to add the package to.</param>
+    /// <returns>The package ID.</returns>
+    public async Task<Guid> UpsertPackageAsync(string name, byte[] nupkgContent, string? solutionName = null)
+    {
+        var existing = await GetPackageByNameAsync(name);
+
+        var entity = new Entity("pluginpackage")
+        {
+            ["name"] = name,
+            ["uniquename"] = name,
+            ["content"] = Convert.ToBase64String(nupkgContent)
+        };
+
+        if (existing != null)
+        {
+            entity.Id = existing.Id;
+            await UpdateAsync(entity);
+
+            // Add to solution even on update
+            if (!string.IsNullOrEmpty(solutionName))
+            {
+                var componentType = await GetComponentTypeAsync("pluginpackage");
+                if (componentType > 0)
+                {
+                    await AddToSolutionAsync(existing.Id, componentType, solutionName);
+                }
+            }
+
+            return existing.Id;
+        }
+        else
+        {
+            var packageId = await CreateAsync(entity);
+
+            if (!string.IsNullOrEmpty(solutionName))
+            {
+                var componentType = await GetComponentTypeAsync("pluginpackage");
+                if (componentType > 0)
+                {
+                    await AddToSolutionAsync(packageId, componentType, solutionName);
+                }
+            }
+
+            return packageId;
+        }
+    }
+
+    /// <summary>
+    /// Gets the assembly ID for an assembly that is part of a plugin package.
+    /// </summary>
+    public async Task<Guid?> GetAssemblyIdForPackageAsync(Guid packageId, string assemblyName)
+    {
+        var assemblies = await ListAssembliesForPackageAsync(packageId);
+        return assemblies.FirstOrDefault(a => a.Name == assemblyName)?.Id;
     }
 
     /// <summary>
