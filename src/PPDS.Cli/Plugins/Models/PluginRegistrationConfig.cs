@@ -64,6 +64,36 @@ public sealed class PluginRegistrationConfig
     /// </summary>
     [JsonExtensionData]
     public Dictionary<string, JsonElement>? ExtensionData { get; set; }
+
+    /// <summary>
+    /// Validates the configuration and throws if invalid.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">Thrown when configuration is invalid.</exception>
+    public void Validate()
+    {
+        var errors = new List<string>();
+
+        foreach (var assembly in Assemblies)
+        {
+            foreach (var type in assembly.Types)
+            {
+                foreach (var step in type.Steps)
+                {
+                    if (step.ExecutionOrder is < PluginStepConfig.MinExecutionOrder or > PluginStepConfig.MaxExecutionOrder)
+                    {
+                        errors.Add($"Step '{step.Name ?? type.TypeName}' has invalid executionOrder {step.ExecutionOrder}. " +
+                            $"Must be between {PluginStepConfig.MinExecutionOrder} and {PluginStepConfig.MaxExecutionOrder}.");
+                    }
+                }
+            }
+        }
+
+        if (errors.Count > 0)
+        {
+            throw new InvalidOperationException(
+                $"Plugin registration configuration is invalid:\n{string.Join("\n", errors)}");
+        }
+    }
 }
 
 /// <summary>
@@ -151,6 +181,16 @@ public sealed class PluginTypeConfig
 public sealed class PluginStepConfig
 {
     /// <summary>
+    /// Minimum valid execution order value in Dataverse.
+    /// </summary>
+    public const int MinExecutionOrder = 1;
+
+    /// <summary>
+    /// Maximum valid execution order value in Dataverse.
+    /// </summary>
+    public const int MaxExecutionOrder = 999999;
+
+    /// <summary>
     /// Display name for the step.
     /// Auto-generated if not specified: "{TypeName}: {Message} of {Entity}".
     /// </summary>
@@ -189,6 +229,8 @@ public sealed class PluginStepConfig
 
     /// <summary>
     /// Execution order when multiple plugins handle the same event.
+    /// Lower numbers execute first. Must be between 1 and 999999.
+    /// Default: 1.
     /// </summary>
     [JsonPropertyName("executionOrder")]
     public int ExecutionOrder { get; set; } = 1;

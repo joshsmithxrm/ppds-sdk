@@ -41,11 +41,13 @@ namespace PPDS.Dataverse.Client
 
         /// <summary>
         /// Gets the last error message from the service.
+        /// Returns null when no error has occurred or the client is in a healthy state.
         /// </summary>
         string? LastError { get; }
 
         /// <summary>
         /// Gets the last exception from the service.
+        /// Returns null when no exception has occurred or the client is in a healthy state.
         /// </summary>
         Exception? LastException { get; }
 

@@ -82,6 +82,9 @@ public static class CleanCommand
                 return ExitCodes.Failure;
             }
 
+            // Validate configuration
+            config.Validate();
+
             // Connect to Dataverse
             await using var serviceProvider = await ProfileServiceFactory.CreateFromProfilesAsync(
                 profile,

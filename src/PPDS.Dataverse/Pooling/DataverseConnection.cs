@@ -129,9 +129,15 @@ namespace PPDS.Dataverse.Pooling
         /// Initializes a new instance of the <see cref="DataverseConnection"/> class.
         /// </summary>
         /// <param name="name">The unique name for this connection.</param>
+        /// <exception cref="ArgumentException">Thrown when name is null, empty, or whitespace.</exception>
         public DataverseConnection(string name)
         {
-            Name = name ?? throw new ArgumentNullException(nameof(name));
+            if (string.IsNullOrWhiteSpace(name))
+            {
+                throw new ArgumentException("Connection name cannot be null, empty, or whitespace.", nameof(name));
+            }
+
+            Name = name;
         }
 
         /// <summary>

@@ -275,4 +275,35 @@ public sealed class AuthProfile
             throw new InvalidOperationException($"Required field '{fieldName}' is missing or empty.");
         }
     }
+
+    /// <summary>
+    /// Creates a deep copy of this profile.
+    /// </summary>
+    public AuthProfile Clone()
+    {
+        return new AuthProfile
+        {
+            Index = Index,
+            Name = Name,
+            AuthMethod = AuthMethod,
+            Cloud = Cloud,
+            TenantId = TenantId,
+            Username = Username,
+            ObjectId = ObjectId,
+            Password = Password,
+            ApplicationId = ApplicationId,
+            ClientSecret = ClientSecret,
+            CertificatePath = CertificatePath,
+            CertificatePassword = CertificatePassword,
+            CertificateThumbprint = CertificateThumbprint,
+            CertificateStoreName = CertificateStoreName,
+            CertificateStoreLocation = CertificateStoreLocation,
+            Environment = Environment?.Clone(),
+            CreatedAt = CreatedAt,
+            LastUsedAt = LastUsedAt,
+            TokenExpiresOn = TokenExpiresOn,
+            Puid = Puid,
+            HomeAccountId = HomeAccountId
+        };
+    }
 }

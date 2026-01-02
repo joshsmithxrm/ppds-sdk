@@ -63,7 +63,7 @@ namespace PPDS.Plugins
 
         /// <summary>
         /// Gets or sets the execution order when multiple plugins are registered for the same event.
-        /// Lower numbers execute first. Default: 1.
+        /// Lower numbers execute first. Must be between 1 and 999999. Default: 1.
         /// </summary>
         public int ExecutionOrder { get; set; } = 1;
 

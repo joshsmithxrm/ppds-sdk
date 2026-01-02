@@ -171,8 +171,8 @@ namespace PPDS.Migration.Formats
             var isPrimaryKey = ParseBool(element.Attribute("primaryKey")?.Value);
 
             // Parse validity flags - default to true for backwards compatibility
-            var isValidForCreate = ParseBoolWithDefault(element.Attribute("isValidForCreate")?.Value, defaultValue: true);
-            var isValidForUpdate = ParseBoolWithDefault(element.Attribute("isValidForUpdate")?.Value, defaultValue: true);
+            var isValidForCreate = ParseBool(element.Attribute("isValidForCreate")?.Value, defaultValue: true);
+            var isValidForUpdate = ParseBool(element.Attribute("isValidForUpdate")?.Value, defaultValue: true);
 
             return new FieldSchema
             {
@@ -239,19 +239,7 @@ namespace PPDS.Migration.Formats
             };
         }
 
-        private static bool ParseBool(string? value)
-        {
-            if (string.IsNullOrEmpty(value))
-            {
-                return false;
-            }
-
-            return value.Equals("true", StringComparison.OrdinalIgnoreCase) ||
-                   value.Equals("1", StringComparison.Ordinal) ||
-                   value.Equals("yes", StringComparison.OrdinalIgnoreCase);
-        }
-
-        private static bool ParseBoolWithDefault(string? value, bool defaultValue)
+        private static bool ParseBool(string? value, bool defaultValue = false)
         {
             if (string.IsNullOrEmpty(value))
             {
