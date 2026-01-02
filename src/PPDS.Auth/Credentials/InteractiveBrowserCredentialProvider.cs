@@ -157,7 +157,6 @@ public sealed class InteractiveBrowserCredentialProvider : ICredentialProvider
         // ServiceClient uses lazy initialization - properties like ConnectedOrgFriendlyName
         // are only populated when first accessed. The connection pool clones clients before
         // properties are accessed, so clones would have empty metadata.
-        // PAC CLI uses the same pattern: immediately accessing properties after Connect().
         _ = client.ConnectedOrgFriendlyName;
 
         if (!client.IsReady)
