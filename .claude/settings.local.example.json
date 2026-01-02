@@ -92,7 +92,7 @@
       "Bash(gh release list:*)",
       "Bash(gh release view:*)",
       "WebSearch",
-      "Bash(ppds auth list:*)"
+      "Bash(ppds:*)"
     ],
     "deny": [
       "Bash(git push --force:*)",

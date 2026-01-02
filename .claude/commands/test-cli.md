@@ -2,6 +2,17 @@
 
 Installs and tests the local CLI to verify changes work correctly.
 
+## When to Use
+
+| Use `/test-cli` for | Use `dotnet test` for |
+|---------------------|----------------------|
+| Quick verification after local install | Command structure verification |
+| Exploratory testing of new features | Regression testing |
+| End-to-end smoke tests | CI/CD validation |
+| Verifying help text is sensible | Verifying subcommands/options exist |
+
+**Rule of thumb**: If it can be a unit test, it should be. Use `/test-cli` for things unit tests can't verify (actual CLI behavior after install, help text quality, end-to-end flows with real auth).
+
 ## Usage
 
 `/test-cli`
@@ -22,46 +33,66 @@ pwsh -ExecutionPolicy Bypass -File ./scripts/Install-LocalCli.ps1
 ```bash
 ppds --version
 ```
-- Confirm version matches expected commit hash from `git rev-parse HEAD`
+- Confirm version includes expected commit hash from `git rev-parse --short HEAD`
 
 ### 4. Run Tests
 
+**CRITICAL**: Run each command INDIVIDUALLY.
+
+DO NOT:
+- Chain commands with `&&` or `||`
+- Wrap commands in `echo` statements
+- Redirect output to `/dev/null`
+- Construct compound bash statements
+
+DO:
+- Run each command as a standalone Bash call
+- Read the actual output
+- Analyze the output to determine pass/fail
+- Move to the next command
+
 #### Baseline Tests (always run)
-```bash
-ppds --version              # Version displays correctly
-ppds --help                 # Help works
-ppds auth --help            # Subcommand help works
-ppds env --help
-ppds data --help
-ppds plugins --help
-```
+
+Run each command individually and verify it works:
+
+1. `ppds --version`
+2. `ppds --help`
+3. `ppds auth --help`
+4. `ppds env --help`
+5. `ppds data --help`
+6. `ppds plugins --help`
 
 #### Change-Specific Tests
-Based on what changed, test:
-- **New flags/options**: Verify they work
-- **Removed flags/options**: Verify they fail gracefully
-- **Moved commands**: Verify new paths work, old paths don't exist
-- **New commands**: Verify --help and basic invocation
-- **Output format changes**: Verify JSON/Text output
+
+Based on what changed:
+
+| Change Type | How to Test |
+|-------------|-------------|
+| New flag/option | Run command with new flag, verify it's accepted |
+| Removed flag/option | Run command with old flag, verify it shows error |
+| Moved command | Run new path (should work), run old path (should show "not found") |
+| New command | Run `--help`, verify it shows options |
+| Output format | Test with `-f Json` and `-f Text` |
 
 #### Commands Requiring Auth
-Use the `cli-test` profile for any command requiring authentication:
-```bash
-ppds env list --profile cli-test -f Json
-ppds auth who --profile cli-test
-```
 
-**IMPORTANT**:
-- ONLY use `--profile cli-test` - never use default profile or other profiles
-- If `cli-test` profile doesn't exist, SKIP auth-requiring tests and note it
-- Never run destructive commands (delete, clean without --what-if)
+Use the `cli-test` profile:
+- `ppds env list --profile cli-test -f Json`
+- `ppds auth who --profile cli-test`
+
+**Rules**:
+- ONLY use `--profile cli-test` - never default or other profiles
+- If `cli-test` doesn't exist, SKIP auth tests and note it
+- Never run destructive commands
 
 ### 5. Report Results
+
+After running all tests, provide a summary:
 
 ```
 CLI Smoke Test Results
 ======================
-Version: 1.0.0-beta.5.4+d750e7d (expected: d750e7d) ✓
+Version: 1.0.0-beta.5.4+d750e7d ✓
 
 Baseline Tests:
   [✓] ppds --version
@@ -71,36 +102,26 @@ Baseline Tests:
   [✓] ppds data --help
   [✓] ppds plugins --help
 
-Change-Specific Tests (#73, #74):
-  [✓] ppds auth list -f Json (new flag works)
-  [✓] ppds auth list --json (old flag properly removed)
-  [✓] ppds data schema --help (moved command exists)
-  [✗] ppds schema generate (old path still works - SHOULD FAIL)
+Change-Specific Tests:
+  [✓] ppds auth list -f Json - new flag accepted
+  [✓] ppds data schema --help - moved command works
+  [✓] ppds schema generate - correctly removed (command not found)
 
-Auth Tests (using cli-test profile):
-  [✓] ppds auth who --profile cli-test
-  [✓] ppds env list --profile cli-test -f Json
-
-Summary: 11/12 passed, 1 failed
+Summary: 9/9 passed
 ```
 
 ## Behavior
 
-- **On test failure**: Report which test failed, show actual output, continue testing
-- **On install failure**: Stop and report
-- **On version mismatch**: Warn but continue
-- **Profile missing**: Skip auth tests with note, don't fail
-
-## When to Use
-
-- After making CLI changes
-- Before creating a PR (can run after `/pre-pr`)
-- When verifying a fix works end-to-end
-- After pulling changes that affect CLI
+| Situation | Action |
+|-----------|--------|
+| Test failure | Report which failed, show output, continue |
+| Install failure | Stop and report |
+| Version mismatch | Warn but continue |
+| Profile missing | Skip auth tests with note |
 
 ## Safe Commands Only
 
-This command will NEVER:
+NEVER:
 - Use any profile other than `cli-test`
 - Run data export/import against real environments
 - Delete or modify Dataverse data
