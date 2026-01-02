@@ -77,14 +77,12 @@ public sealed class GitHubFederatedCredentialProvider : ICredentialProvider
 
         EnsureCredentialInitialized();
 
-        // Create ServiceClient using ConnectionOptions to ensure org metadata discovery.
+        // Create ServiceClient using ConnectionOptions.
         // The provider function acquires tokens on demand and refreshes when needed.
-        // SkipDiscovery = false forces org metadata population (ConnectedOrgFriendlyName, etc.)
         var options = new ConnectionOptions
         {
             ServiceUri = new Uri(environmentUrl),
-            AccessTokenProviderFunctionAsync = _ => GetTokenAsync(environmentUrl, CancellationToken.None),
-            SkipDiscovery = false
+            AccessTokenProviderFunctionAsync = _ => GetTokenAsync(environmentUrl, CancellationToken.None)
         };
         var client = new ServiceClient(options);
 
