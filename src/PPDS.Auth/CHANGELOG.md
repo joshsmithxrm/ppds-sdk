@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Integration tests for credential providers** - Live tests for `ClientSecretCredentialProvider`, `CertificateFileCredentialProvider`, and `GitHubFederatedCredentialProvider` ([#55](https://github.com/joshsmithxrm/ppds-sdk/issues/55))
+- Manual test procedures documentation for interactive browser and device code authentication
+
+
 ## [1.0.0-beta.3] - 2026-01-02
 
 ### Fixed

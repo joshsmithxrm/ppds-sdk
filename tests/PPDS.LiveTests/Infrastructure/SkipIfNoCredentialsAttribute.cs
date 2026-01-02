@@ -59,3 +59,23 @@ public sealed class SkipIfNoCertificateAttribute : FactAttribute
         }
     }
 }
+
+/// <summary>
+/// Skips the test if GitHub OIDC federated credentials are not configured.
+/// This is only available when running inside GitHub Actions with id-token permission.
+/// </summary>
+public sealed class SkipIfNoGitHubOidcAttribute : FactAttribute
+{
+    private static readonly LiveTestConfiguration Configuration = new();
+
+    /// <summary>
+    /// Initializes a new instance that skips if GitHub OIDC credentials are missing.
+    /// </summary>
+    public SkipIfNoGitHubOidcAttribute()
+    {
+        if (!Configuration.HasGitHubOidcCredentials)
+        {
+            Skip = "GitHub OIDC not available. This test only runs in GitHub Actions with 'id-token: write' permission and federated credential configured in Azure.";
+        }
+    }
+}
