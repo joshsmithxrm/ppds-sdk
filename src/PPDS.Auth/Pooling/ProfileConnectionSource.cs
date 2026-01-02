@@ -21,6 +21,7 @@ public sealed class ProfileConnectionSource : IDisposable
     private ServiceClient? _seedClient;
     private ICredentialProvider? _provider;
     private readonly object _lock = new();
+    private readonly SemaphoreSlim _asyncLock = new(1, 1);
     private bool _disposed;
 
     /// <summary>
@@ -156,27 +157,39 @@ public sealed class ProfileConnectionSource : IDisposable
         if (_disposed)
             throw new ObjectDisposedException(nameof(ProfileConnectionSource));
 
-        // Fast path if already created
+        // Fast path if already created (volatile read)
         if (_seedClient != null)
             return _seedClient;
 
-        // Create credential provider
-        _provider = CredentialProviderFactory.Create(_profile, _deviceCodeCallback);
-
+        await _asyncLock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            _seedClient = await _provider
-                .CreateServiceClientAsync(_environmentUrl, cancellationToken)
-                .ConfigureAwait(false);
+            // Double-check after acquiring lock
+            if (_seedClient != null)
+                return _seedClient;
 
-            return _seedClient;
+            // Create credential provider
+            _provider = CredentialProviderFactory.Create(_profile, _deviceCodeCallback);
+
+            try
+            {
+                _seedClient = await _provider
+                    .CreateServiceClientAsync(_environmentUrl, cancellationToken)
+                    .ConfigureAwait(false);
+
+                return _seedClient;
+            }
+            catch (Exception ex)
+            {
+                _provider?.Dispose();
+                _provider = null;
+                throw new InvalidOperationException(
+                    $"Failed to create connection for profile '{_profile.DisplayIdentifier}': {ex.Message}", ex);
+            }
         }
-        catch (Exception ex)
+        finally
         {
-            _provider?.Dispose();
-            _provider = null;
-            throw new InvalidOperationException(
-                $"Failed to create connection for profile '{_profile.DisplayIdentifier}': {ex.Message}", ex);
+            _asyncLock.Release();
         }
     }
 
@@ -213,6 +226,7 @@ public sealed class ProfileConnectionSource : IDisposable
         {
             _seedClient?.Dispose();
             _provider?.Dispose();
+            _asyncLock.Dispose();
             _disposed = true;
         }
     }
