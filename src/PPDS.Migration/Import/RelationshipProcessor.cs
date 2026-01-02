@@ -51,9 +51,6 @@ namespace PPDS.Migration.Import
             var totalProcessed = 0;
             var failureCount = 0;
 
-            // Build role name-to-ID cache for role lookup (lazy initialized)
-            Dictionary<string, Guid>? roleNameCache = null;
-
             foreach (var (entityName, m2mDataList) in context.Data.RelationshipData)
             {
                 foreach (var m2mData in m2mDataList)
@@ -89,11 +86,10 @@ namespace PPDS.Migration.Import
                         {
                             mappedId = directMappedId;
                         }
-                        // For role entity, try lookup by name
+                        // For role entity, check if same ID exists in target
                         else if (isRoleTarget)
                         {
-                            roleNameCache ??= await BuildRoleNameCacheAsync(cancellationToken).ConfigureAwait(false);
-                            mappedId = await LookupRoleByIdAsync(targetId, roleNameCache, cancellationToken).ConfigureAwait(false);
+                            mappedId = await LookupRoleByIdAsync(targetId, cancellationToken).ConfigureAwait(false);
                         }
 
                         if (mappedId.HasValue)
@@ -163,47 +159,6 @@ namespace PPDS.Migration.Import
         }
 
         /// <summary>
-        /// Builds a cache of role names to IDs from the target environment.
-        /// </summary>
-        private async Task<Dictionary<string, Guid>> BuildRoleNameCacheAsync(CancellationToken cancellationToken)
-        {
-            var cache = new Dictionary<string, Guid>(StringComparer.OrdinalIgnoreCase);
-
-            try
-            {
-                await using var client = await _connectionPool.GetClientAsync(null, cancellationToken: cancellationToken).ConfigureAwait(false);
-
-                var fetchXml = @"<fetch>
-                    <entity name='role'>
-                        <attribute name='roleid' />
-                        <attribute name='name' />
-                    </entity>
-                </fetch>";
-
-                var response = await client.RetrieveMultipleAsync(
-                    new Microsoft.Xrm.Sdk.Query.FetchExpression(fetchXml)).ConfigureAwait(false);
-
-                foreach (var entity in response.Entities)
-                {
-                    var name = entity.GetAttributeValue<string>("name");
-                    var id = entity.Id;
-                    if (!string.IsNullOrEmpty(name) && !cache.ContainsKey(name))
-                    {
-                        cache[name] = id;
-                    }
-                }
-
-                _logger?.LogDebug("Built role name cache with {Count} entries", cache.Count);
-            }
-            catch (Exception ex)
-            {
-                _logger?.LogWarning(ex, "Failed to build role name cache");
-            }
-
-            return cache;
-        }
-
-        /// <summary>
         /// Attempts to find a matching role in the target environment by ID.
         /// </summary>
         /// <remarks>
@@ -219,7 +174,6 @@ namespace PPDS.Migration.Import
         /// </remarks>
         private async Task<Guid?> LookupRoleByIdAsync(
             Guid sourceRoleId,
-            Dictionary<string, Guid> roleNameCache,
             CancellationToken cancellationToken)
         {
             // First, we need to get the role name from source environment

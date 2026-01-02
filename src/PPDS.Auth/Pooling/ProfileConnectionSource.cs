@@ -18,10 +18,9 @@ public sealed class ProfileConnectionSource : IDisposable
     private readonly Action<DeviceCodeInfo>? _deviceCodeCallback;
     private readonly int _maxPoolSize;
 
-    private ServiceClient? _seedClient;
+    private volatile ServiceClient? _seedClient;
     private ICredentialProvider? _provider;
-    private readonly object _lock = new();
-    private readonly SemaphoreSlim _asyncLock = new(1, 1);
+    private readonly SemaphoreSlim _lock = new(1, 1);
     private bool _disposed;
 
     /// <summary>
@@ -118,8 +117,14 @@ public sealed class ProfileConnectionSource : IDisposable
         if (_disposed)
             throw new ObjectDisposedException(nameof(ProfileConnectionSource));
 
-        lock (_lock)
+        // Fast path if already created (volatile read)
+        if (_seedClient != null)
+            return _seedClient;
+
+        _lock.Wait();
+        try
         {
+            // Double-check after acquiring lock
             if (_seedClient != null)
                 return _seedClient;
 
@@ -146,6 +151,10 @@ public sealed class ProfileConnectionSource : IDisposable
                     $"Failed to create connection for profile '{_profile.DisplayIdentifier}': {ex.Message}", ex);
             }
         }
+        finally
+        {
+            _lock.Release();
+        }
     }
 
     /// <summary>
@@ -163,7 +172,7 @@ public sealed class ProfileConnectionSource : IDisposable
         if (_seedClient != null)
             return _seedClient;
 
-        await _asyncLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        await _lock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
             // Double-check after acquiring lock
@@ -191,7 +200,7 @@ public sealed class ProfileConnectionSource : IDisposable
         }
         finally
         {
-            _asyncLock.Release();
+            _lock.Release();
         }
     }
 
@@ -204,7 +213,8 @@ public sealed class ProfileConnectionSource : IDisposable
     /// </remarks>
     public void InvalidateSeed()
     {
-        lock (_lock)
+        _lock.Wait();
+        try
         {
             if (_seedClient == null)
                 return;
@@ -216,6 +226,10 @@ public sealed class ProfileConnectionSource : IDisposable
             _provider?.Dispose();
             _provider = null;
         }
+        finally
+        {
+            _lock.Release();
+        }
     }
 
     /// <inheritdoc />
@@ -224,12 +238,17 @@ public sealed class ProfileConnectionSource : IDisposable
         if (_disposed)
             return;
 
-        lock (_lock)
+        _lock.Wait();
+        try
         {
             _seedClient?.Dispose();
             _provider?.Dispose();
-            _asyncLock.Dispose();
             _disposed = true;
+        }
+        finally
+        {
+            _lock.Release();
+            _lock.Dispose();
         }
     }
 }

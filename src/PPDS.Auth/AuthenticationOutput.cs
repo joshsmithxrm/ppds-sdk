@@ -12,7 +12,7 @@ namespace PPDS.Auth;
 /// </remarks>
 public static class AuthenticationOutput
 {
-    private static Action<string>? _writer = Console.WriteLine;
+    private static volatile Action<string>? _writer = Console.WriteLine;
 
     /// <summary>
     /// Gets or sets the action used to write authentication status messages.
