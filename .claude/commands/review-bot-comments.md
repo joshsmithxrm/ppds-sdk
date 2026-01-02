@@ -13,6 +13,18 @@ Systematically address PR review comments from Copilot, Gemini, and CodeQL.
 gh api repos/joshsmithxrm/ppds-sdk/pulls/[PR]/comments
 ```
 
+### Bot Usernames
+
+Look for comments from these `user.login` values:
+
+| Bot | Username |
+|-----|----------|
+| Gemini | `gemini-code-assist[bot]` |
+| Copilot | `Copilot` |
+| CodeQL/GHAS | `github-advanced-security[bot]` |
+
+**Note:** CodeQL and Copilot frequently report **duplicate findings** (same file, same line, same issue). Group comments by file+line to identify duplicates before triaging.
+
 ### 2. Triage Each Comment
 
 For each bot comment, determine verdict and rationale:
@@ -79,6 +91,7 @@ gh api repos/joshsmithxrm/ppds-sdk/pulls/{pr}/comments \
 | Bot Claim | Why It's Often Wrong |
 |-----------|---------------------|
 | "Use .Where() instead of foreach+if" | Preference, not correctness |
+| "Use .Select() instead of foreach" | Using Select for side effects is an anti-pattern |
 | "Volatile needed with Interlocked" | Interlocked provides barriers |
 | "OR should be AND" | Logic may be intentionally inverted (DeMorgan) |
 | "Static field not thread-safe" | May be set once at startup |
