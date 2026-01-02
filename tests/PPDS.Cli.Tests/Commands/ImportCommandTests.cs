@@ -90,7 +90,7 @@ public class ImportCommandTests : IDisposable
     }
 
     [Fact]
-    public void Create_HasOptionalJsonOption()
+    public void Create_HasOptionalOutputFormatOption()
     {
         var option = _command.Options.FirstOrDefault(o => o.Name == "--output-format");
         Assert.NotNull(option);

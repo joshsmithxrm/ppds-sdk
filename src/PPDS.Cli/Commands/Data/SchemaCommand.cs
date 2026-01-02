@@ -160,8 +160,8 @@ public static class SchemaCommand
         try
         {
             var optionsMsg = new List<string>();
-            if (includeAttributes != null) optionsMsg.Add($"include: {string.Join(",", includeAttributes)}");
-            if (excludeAttributes != null) optionsMsg.Add($"exclude: {string.Join(",", excludeAttributes)}");
+            if (includeAttributes is { Count: > 0 }) optionsMsg.Add($"include: {string.Join(",", includeAttributes)}");
+            if (excludeAttributes is { Count: > 0 }) optionsMsg.Add($"exclude: {string.Join(",", excludeAttributes)}");
 
             await using var serviceProvider = await ProfileServiceFactory.CreateFromProfileAsync(
                 profile,
