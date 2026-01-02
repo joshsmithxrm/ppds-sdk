@@ -55,3 +55,6 @@ nul
 data.zip
 data/
 schema.xml
+
+# Code coverage
+coverage/
