@@ -22,16 +22,16 @@ public sealed class PluginRegistrationService
 
     #region Dataverse Constants
 
-    // Well-known component type codes that are consistent across all environments
-    private static readonly Dictionary<string, int> WellKnownComponentTypes = new()
-    {
-        ["pluginassembly"] = 91,
-        ["sdkmessageprocessingstep"] = 92
-    };
-
     // Solution component type codes (from Microsoft.Crm.Sdk.Messages.ComponentType)
     private const int ComponentTypePluginAssembly = 91;
     private const int ComponentTypeSdkMessageProcessingStep = 92;
+
+    // Well-known component type codes that are consistent across all environments
+    private static readonly Dictionary<string, int> WellKnownComponentTypes = new()
+    {
+        ["pluginassembly"] = ComponentTypePluginAssembly,
+        ["sdkmessageprocessingstep"] = ComponentTypeSdkMessageProcessingStep
+    };
 
     // Pipeline stage values (from SDK Message Processing Step entity)
     private const int StagePreValidation = 10;
