@@ -20,14 +20,15 @@ public class LiveDataverseSmokeTests : LiveTestBase
     public void Configuration_ReportsCredentialStatus()
     {
         // This test always runs and verifies the configuration class works
-        var hasCredentials = Configuration.HasAnyCredentials;
+        var hasAny = Configuration.HasAnyCredentials;
+        var hasSecret = Configuration.HasClientSecretCredentials;
+        var hasCert = Configuration.HasCertificateCredentials;
 
-        // Just verify we can check - the result depends on environment
-        hasCredentials.Should().Be(hasCredentials); // tautology to avoid unused variable warning
+        // Assert that the aggregate property reflects the state of the specific properties
+        hasAny.Should().Be(hasSecret || hasCert);
     }
 
     [SkipIfNoCredentials]
-    [Trait("Category", "Integration")]
     public void WhenCredentialsAvailable_CanConnect()
     {
         // This test only runs when credentials are available
@@ -36,7 +37,6 @@ public class LiveDataverseSmokeTests : LiveTestBase
     }
 
     [SkipIfNoClientSecret]
-    [Trait("Category", "Integration")]
     public void WhenClientSecretAvailable_HasAllRequiredFields()
     {
         Configuration.HasClientSecretCredentials.Should().BeTrue();

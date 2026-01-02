@@ -63,6 +63,7 @@ public abstract class FakeXrmEasyTestsBase : IDisposable
     /// </summary>
     public virtual void Dispose()
     {
+        Context.Dispose();
         GC.SuppressFinalize(this);
     }
 }

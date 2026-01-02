@@ -27,7 +27,6 @@ public class AuthenticationSmokeTests
     }
 
     [Fact]
-    [Trait("Category", "Integration")]
     public void ProfileStore_DefaultPath_IsValid()
     {
         // Arrange & Act
