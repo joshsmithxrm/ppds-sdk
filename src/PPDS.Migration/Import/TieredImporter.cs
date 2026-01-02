@@ -521,7 +521,7 @@ namespace PPDS.Migration.Import
                         Index = i,
                         RecordId = record.Id != Guid.Empty ? record.Id : null,
                         ErrorCode = -1,
-                        Message = ex.Message
+                        Message = ConnectionStringRedactor.RedactExceptionMessage(ex.Message)
                     });
 
                     if (!options.ContinueOnError)
@@ -902,9 +902,10 @@ namespace PPDS.Migration.Import
                     return sourceRoleId;
                 }
             }
-            catch
+            catch (Exception ex)
             {
-                // Role doesn't exist with source ID, which is expected
+                // Role lookup failed - this is expected when source role ID doesn't exist in target
+                _logger?.LogDebug(ex, "Role lookup by ID {RoleId} failed (expected for cross-environment migrations)", sourceRoleId);
             }
 
             // Role doesn't exist with source ID - this is the common case

@@ -94,18 +94,12 @@ public sealed class GlobalDiscoveryService : IGlobalDiscoveryService, IDisposabl
         var environments = new List<DiscoveredEnvironment>();
         foreach (var org in organizations)
         {
-            // Get the web API endpoint from the Endpoints dictionary
-            string apiUrl = string.Empty;
+            // Get the web application URL - used for both API connections and web interface
+            // In Dataverse, the WebApplication endpoint is the base URL (e.g., https://org.crm.dynamics.com)
+            string? baseUrl = null;
             if (org.Endpoints.TryGetValue(Microsoft.Xrm.Sdk.Discovery.EndpointType.WebApplication, out var webAppUrl))
             {
-                apiUrl = webAppUrl;
-            }
-
-            // Get the application URL
-            string? appUrl = null;
-            if (org.Endpoints.TryGetValue(Microsoft.Xrm.Sdk.Discovery.EndpointType.WebApplication, out var webUrl))
-            {
-                appUrl = webUrl;
+                baseUrl = webAppUrl;
             }
 
             // Parse TenantId if present (it may be a string or Guid depending on version)
@@ -122,8 +116,8 @@ public sealed class GlobalDiscoveryService : IGlobalDiscoveryService, IDisposabl
                 FriendlyName = org.FriendlyName,
                 UniqueName = org.UniqueName,
                 UrlName = org.UrlName,
-                ApiUrl = apiUrl,
-                Url = appUrl,
+                ApiUrl = baseUrl ?? string.Empty,
+                Url = baseUrl,
                 State = (int)org.State,
                 Version = org.OrganizationVersion,
                 Region = org.Geo,
