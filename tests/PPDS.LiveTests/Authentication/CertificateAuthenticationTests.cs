@@ -13,26 +13,19 @@ namespace PPDS.LiveTests.Authentication;
 [Trait("Category", "Integration")]
 public class CertificateAuthenticationTests : LiveTestBase, IDisposable
 {
-    private readonly LiveTestConfiguration _config;
-
-    public CertificateAuthenticationTests()
-    {
-        _config = new LiveTestConfiguration();
-    }
-
     [SkipIfNoCertificate]
     public async Task CertificateFileCredentialProvider_CreatesWorkingServiceClient()
     {
         // Arrange
-        var certPath = _config.GetCertificatePath();
+        var certPath = Configuration.GetCertificatePath();
         using var provider = new CertificateFileCredentialProvider(
-            _config.ApplicationId!,
+            Configuration.ApplicationId!,
             certPath,
-            _config.CertificatePassword,
-            _config.TenantId!);
+            Configuration.CertificatePassword,
+            Configuration.TenantId!);
 
         // Act
-        using var client = await provider.CreateServiceClientAsync(_config.DataverseUrl!);
+        using var client = await provider.CreateServiceClientAsync(Configuration.DataverseUrl!);
 
         // Assert
         client.Should().NotBeNull();
@@ -43,14 +36,14 @@ public class CertificateAuthenticationTests : LiveTestBase, IDisposable
     public async Task CertificateFileCredentialProvider_CanExecuteWhoAmI()
     {
         // Arrange
-        var certPath = _config.GetCertificatePath();
+        var certPath = Configuration.GetCertificatePath();
         using var provider = new CertificateFileCredentialProvider(
-            _config.ApplicationId!,
+            Configuration.ApplicationId!,
             certPath,
-            _config.CertificatePassword,
-            _config.TenantId!);
+            Configuration.CertificatePassword,
+            Configuration.TenantId!);
 
-        using var client = await provider.CreateServiceClientAsync(_config.DataverseUrl!);
+        using var client = await provider.CreateServiceClientAsync(Configuration.DataverseUrl!);
 
         // Act
         var response = (Microsoft.Crm.Sdk.Messages.WhoAmIResponse)client.Execute(
@@ -63,15 +56,15 @@ public class CertificateAuthenticationTests : LiveTestBase, IDisposable
     }
 
     [SkipIfNoCertificate]
-    public async Task CertificateFileCredentialProvider_SetsIdentityProperty()
+    public void CertificateFileCredentialProvider_SetsIdentityProperty()
     {
         // Arrange
-        var certPath = _config.GetCertificatePath();
+        var certPath = Configuration.GetCertificatePath();
         using var provider = new CertificateFileCredentialProvider(
-            _config.ApplicationId!,
+            Configuration.ApplicationId!,
             certPath,
-            _config.CertificatePassword,
-            _config.TenantId!);
+            Configuration.CertificatePassword,
+            Configuration.TenantId!);
 
         // Assert - Identity is set before authentication
         provider.Identity.Should().NotBeNullOrWhiteSpace();
@@ -83,18 +76,18 @@ public class CertificateAuthenticationTests : LiveTestBase, IDisposable
     public async Task CertificateFileCredentialProvider_SetsTokenExpirationAfterAuth()
     {
         // Arrange
-        var certPath = _config.GetCertificatePath();
+        var certPath = Configuration.GetCertificatePath();
         using var provider = new CertificateFileCredentialProvider(
-            _config.ApplicationId!,
+            Configuration.ApplicationId!,
             certPath,
-            _config.CertificatePassword,
-            _config.TenantId!);
+            Configuration.CertificatePassword,
+            Configuration.TenantId!);
 
         // Token expiration is null before authentication
         provider.TokenExpiresAt.Should().BeNull();
 
         // Act
-        using var client = await provider.CreateServiceClientAsync(_config.DataverseUrl!);
+        using var client = await provider.CreateServiceClientAsync(Configuration.DataverseUrl!);
 
         // Assert - Token expiration is set after authentication
         provider.TokenExpiresAt.Should().NotBeNull();
@@ -105,7 +98,7 @@ public class CertificateAuthenticationTests : LiveTestBase, IDisposable
     public void LiveTestConfiguration_CanLoadCertificate()
     {
         // Arrange & Act
-        using var cert = _config.LoadCertificate();
+        using var cert = Configuration.LoadCertificate();
 
         // Assert
         cert.Should().NotBeNull();
@@ -144,6 +137,6 @@ public class CertificateAuthenticationTests : LiveTestBase, IDisposable
 
     public void Dispose()
     {
-        _config.Dispose();
+        Configuration.Dispose();
     }
 }

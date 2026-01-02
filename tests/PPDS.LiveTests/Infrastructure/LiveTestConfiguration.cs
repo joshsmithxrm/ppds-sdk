@@ -139,7 +139,12 @@ public sealed class LiveTestConfiguration : IDisposable
     /// <summary>
     /// Loads the certificate from the configured source.
     /// </summary>
-    /// <returns>The loaded certificate.</returns>
+    /// <returns>The loaded certificate. Caller is responsible for disposing.</returns>
+    /// <remarks>
+    /// The returned <see cref="X509Certificate2"/> implements <see cref="IDisposable"/>.
+    /// Callers should use a <c>using</c> statement or call <see cref="X509Certificate2.Dispose"/>
+    /// when the certificate is no longer needed.
+    /// </remarks>
     public X509Certificate2 LoadCertificate()
     {
         var path = GetCertificatePath();

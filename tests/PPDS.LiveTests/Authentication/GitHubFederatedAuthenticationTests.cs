@@ -12,7 +12,7 @@ namespace PPDS.LiveTests.Authentication;
 /// - Federated credential configured in Azure AD App Registration
 /// </summary>
 [Trait("Category", "Integration")]
-public class GitHubFederatedAuthenticationTests : LiveTestBase
+public class GitHubFederatedAuthenticationTests : LiveTestBase, IDisposable
 {
     [SkipIfNoGitHubOidc]
     public async Task GitHubFederatedCredentialProvider_CreatesWorkingServiceClient()
@@ -102,10 +102,16 @@ public class GitHubFederatedAuthenticationTests : LiveTestBase
         // Otherwise it should be false (and tests using SkipIfNoGitHubOidc will skip)
         var tokenUrl = Environment.GetEnvironmentVariable("ACTIONS_ID_TOKEN_REQUEST_URL");
         var expectedHasOidc = !string.IsNullOrWhiteSpace(tokenUrl) &&
+                              !string.IsNullOrWhiteSpace(Configuration.GitHubOidcRequestToken) &&
                               !string.IsNullOrWhiteSpace(Configuration.ApplicationId) &&
                               !string.IsNullOrWhiteSpace(Configuration.TenantId) &&
                               !string.IsNullOrWhiteSpace(Configuration.DataverseUrl);
 
         hasOidc.Should().Be(expectedHasOidc);
+    }
+
+    public void Dispose()
+    {
+        Configuration.Dispose();
     }
 }

@@ -11,7 +11,7 @@ namespace PPDS.LiveTests.Authentication;
 /// authenticate to Dataverse using a client ID and secret.
 /// </summary>
 [Trait("Category", "Integration")]
-public class ClientSecretAuthenticationTests : LiveTestBase
+public class ClientSecretAuthenticationTests : LiveTestBase, IDisposable
 {
     [SkipIfNoClientSecret]
     public async Task ClientSecretCredentialProvider_CreatesWorkingServiceClient()
@@ -52,7 +52,7 @@ public class ClientSecretAuthenticationTests : LiveTestBase
     }
 
     [SkipIfNoClientSecret]
-    public async Task ClientSecretCredentialProvider_SetsIdentityProperty()
+    public void ClientSecretCredentialProvider_SetsIdentityProperty()
     {
         // Arrange
         using var provider = new ClientSecretCredentialProvider(
@@ -111,5 +111,10 @@ public class ClientSecretAuthenticationTests : LiveTestBase
         // Act & Assert
         var act = () => provider.CreateServiceClientAsync("https://fake.crm.dynamics.com");
         await act.Should().ThrowAsync<AuthenticationException>();
+    }
+
+    public void Dispose()
+    {
+        Configuration.Dispose();
     }
 }
