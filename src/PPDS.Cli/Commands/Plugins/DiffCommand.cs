@@ -38,7 +38,7 @@ public static class DiffCommand
             configOption,
             PluginsCommandGroup.ProfileOption,
             PluginsCommandGroup.EnvironmentOption,
-            PluginsCommandGroup.JsonOption
+            PluginsCommandGroup.OutputFormatOption
         };
 
         command.SetAction(async (parseResult, cancellationToken) =>
@@ -46,9 +46,9 @@ public static class DiffCommand
             var config = parseResult.GetValue(configOption)!;
             var profile = parseResult.GetValue(PluginsCommandGroup.ProfileOption);
             var environment = parseResult.GetValue(PluginsCommandGroup.EnvironmentOption);
-            var json = parseResult.GetValue(PluginsCommandGroup.JsonOption);
+            var outputFormat = parseResult.GetValue(PluginsCommandGroup.OutputFormatOption);
 
-            return await ExecuteAsync(config, profile, environment, json, cancellationToken);
+            return await ExecuteAsync(config, profile, environment, outputFormat, cancellationToken);
         });
 
         return command;
@@ -58,7 +58,7 @@ public static class DiffCommand
         FileInfo configFile,
         string? profile,
         string? environment,
-        bool json,
+        OutputFormat outputFormat,
         CancellationToken cancellationToken)
     {
         try
@@ -89,7 +89,7 @@ public static class DiffCommand
             await using var client = await pool.GetClientAsync(cancellationToken: cancellationToken);
             var registrationService = new PluginRegistrationService(client);
 
-            if (!json)
+            if (outputFormat != OutputFormat.Json)
             {
                 var connectionInfo = serviceProvider.GetRequiredService<ResolvedConnectionInfo>();
                 ConsoleHeader.WriteConnectedAs(connectionInfo);
@@ -108,7 +108,7 @@ public static class DiffCommand
                     hasDrift = true;
             }
 
-            if (json)
+            if (outputFormat == OutputFormat.Json)
             {
                 Console.WriteLine(JsonSerializer.Serialize(allDrifts, JsonWriteOptions));
             }

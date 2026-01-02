@@ -95,9 +95,9 @@ public class DeployCommandTests : IDisposable
     }
 
     [Fact]
-    public void Create_HasOptionalJsonOption()
+    public void Create_HasOptionalOutputFormatOption()
     {
-        var option = _command.Options.FirstOrDefault(o => o.Name == "--json");
+        var option = _command.Options.FirstOrDefault(o => o.Name == "--output-format");
         Assert.NotNull(option);
         Assert.False(option.Required);
     }
@@ -165,7 +165,7 @@ public class DeployCommandTests : IDisposable
     [Fact]
     public void Parse_WithOptionalJson_Succeeds()
     {
-        var result = _command.Parse($"-c \"{_tempConfigFile}\" --json");
+        var result = _command.Parse($"-c \"{_tempConfigFile}\" --output-format Json");
         Assert.Empty(result.Errors);
     }
 
@@ -179,7 +179,7 @@ public class DeployCommandTests : IDisposable
             "--solution my_solution " +
             "--clean " +
             "--what-if " +
-            "--json");
+            "--output-format Json");
         Assert.Empty(result.Errors);
     }
 

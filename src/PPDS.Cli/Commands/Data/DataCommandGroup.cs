@@ -30,12 +30,14 @@ public static class DataCommandGroup
     /// </summary>
     public static Command Create()
     {
-        var command = new Command("data", "Data operations: export, import, copy, analyze");
+        var command = new Command("data", "Data operations: export, import, copy, analyze, schema, users");
 
         command.Subcommands.Add(ExportCommand.Create());
         command.Subcommands.Add(ImportCommand.Create());
         command.Subcommands.Add(CopyCommand.Create());
         command.Subcommands.Add(AnalyzeCommand.Create());
+        command.Subcommands.Add(SchemaCommand.Create());
+        command.Subcommands.Add(UsersCommand.Create());
 
         return command;
     }

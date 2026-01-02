@@ -6,7 +6,9 @@ This repository contains multiple packages with independent release cycles.
 
 - [PPDS.Plugins](src/PPDS.Plugins/CHANGELOG.md) - Plugin attributes for Dataverse
 - [PPDS.Dataverse](src/PPDS.Dataverse/CHANGELOG.md) - High-performance Dataverse connectivity
-- [PPDS.Migration](src/PPDS.Migration/CHANGELOG.md) - Migration library and CLI tool
+- [PPDS.Migration](src/PPDS.Migration/CHANGELOG.md) - Data migration library
+- [PPDS.Auth](src/PPDS.Auth/CHANGELOG.md) - Authentication profiles and credentials
+- [PPDS.Cli](src/PPDS.Cli/CHANGELOG.md) - Unified CLI tool (`ppds` command)
 
 ## GitHub Releases
 
@@ -22,7 +24,9 @@ Each package has its own tag prefix:
 |---------|------------|---------|
 | PPDS.Plugins | `Plugins-v{version}` | `Plugins-v1.2.0` |
 | PPDS.Dataverse | `Dataverse-v{version}` | `Dataverse-v1.0.0` |
-| PPDS.Migration + CLI | `Migration-v{version}` | `Migration-v1.0.0` |
+| PPDS.Migration | `Migration-v{version}` | `Migration-v1.0.0` |
+| PPDS.Auth | `Auth-v{version}` | `Auth-v1.0.0` |
+| PPDS.Cli | `Cli-v{version}` | `Cli-v1.0.0` |
 
 Pre-release versions follow SemVer:
 - Alpha: `Dataverse-v1.0.0-alpha.1`

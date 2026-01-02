@@ -527,34 +527,34 @@ public static class AuthCommandGroup
 
     private static Command CreateListCommand()
     {
-        var jsonOption = new Option<bool>("--json", "-j")
+        var outputFormatOption = new Option<OutputFormat>("--output-format", "-f")
         {
-            Description = "Output as JSON",
-            DefaultValueFactory = _ => false
+            Description = "Output format",
+            DefaultValueFactory = _ => OutputFormat.Text
         };
 
         var command = new Command("list", "List all authentication profiles")
         {
-            jsonOption
+            outputFormatOption
         };
 
         command.SetAction(async (parseResult, cancellationToken) =>
         {
-            var json = parseResult.GetValue(jsonOption);
-            return await ExecuteListAsync(json, cancellationToken);
+            var outputFormat = parseResult.GetValue(outputFormatOption);
+            return await ExecuteListAsync(outputFormat, cancellationToken);
         });
 
         return command;
     }
 
-    private static async Task<int> ExecuteListAsync(bool json, CancellationToken cancellationToken)
+    private static async Task<int> ExecuteListAsync(OutputFormat outputFormat, CancellationToken cancellationToken)
     {
         try
         {
             using var store = new ProfileStore();
             var collection = await store.LoadAsync(cancellationToken);
 
-            if (json)
+            if (outputFormat == OutputFormat.Json)
             {
                 WriteProfilesAsJson(collection);
             }
@@ -1092,27 +1092,27 @@ public static class AuthCommandGroup
 
     private static Command CreateWhoCommand()
     {
-        var jsonOption = new Option<bool>("--json", "-j")
+        var outputFormatOption = new Option<OutputFormat>("--output-format", "-f")
         {
-            Description = "Output as JSON",
-            DefaultValueFactory = _ => false
+            Description = "Output format",
+            DefaultValueFactory = _ => OutputFormat.Text
         };
 
         var command = new Command("who", "Show the current active profile")
         {
-            jsonOption
+            outputFormatOption
         };
 
         command.SetAction(async (parseResult, cancellationToken) =>
         {
-            var json = parseResult.GetValue(jsonOption);
-            return await ExecuteWhoAsync(json, cancellationToken);
+            var outputFormat = parseResult.GetValue(outputFormatOption);
+            return await ExecuteWhoAsync(outputFormat, cancellationToken);
         });
 
         return command;
     }
 
-    private static async Task<int> ExecuteWhoAsync(bool json, CancellationToken cancellationToken)
+    private static async Task<int> ExecuteWhoAsync(OutputFormat outputFormat, CancellationToken cancellationToken)
     {
         try
         {
@@ -1122,7 +1122,7 @@ public static class AuthCommandGroup
             var profile = collection.ActiveProfile;
             if (profile == null)
             {
-                if (json)
+                if (outputFormat == OutputFormat.Json)
                 {
                     Console.WriteLine("{\"active\": null}");
                 }
@@ -1138,7 +1138,7 @@ public static class AuthCommandGroup
             // Get token cache type
             var cacheType = TokenCacheDetector.GetCacheType();
 
-            if (json)
+            if (outputFormat == OutputFormat.Json)
             {
                 var output = new
                 {

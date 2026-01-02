@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **BREAKING: Standardized output format flag** - Replaced `--json` / `-j` with `--output-format` / `-f` enum option (values: `Text`, `Json`) across all commands for consistency ([#73](https://github.com/joshsmithxrm/ppds-sdk/issues/73))
+- **BREAKING: Moved schema and users commands to data group** - `ppds schema generate` → `ppds data schema`, `ppds users generate` → `ppds data users` ([#74](https://github.com/joshsmithxrm/ppds-sdk/issues/74))
+
+### Removed
+
+- **BREAKING: Removed `ppds schema list` command** - Entity listing functionality removed as part of command restructuring ([#74](https://github.com/joshsmithxrm/ppds-sdk/issues/74))
+
 ## [1.0.0-beta.5] - 2026-01-02
 
 ### Fixed

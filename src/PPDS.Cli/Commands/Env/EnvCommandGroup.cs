@@ -47,27 +47,27 @@ public static class EnvCommandGroup
 
     private static Command CreateListCommand()
     {
-        var jsonOption = new Option<bool>("--json", "-j")
+        var outputFormatOption = new Option<OutputFormat>("--output-format", "-f")
         {
-            Description = "Output as JSON",
-            DefaultValueFactory = _ => false
+            Description = "Output format",
+            DefaultValueFactory = _ => OutputFormat.Text
         };
 
         var command = new Command("list", "List available environments")
         {
-            jsonOption
+            outputFormatOption
         };
 
         command.SetAction(async (parseResult, cancellationToken) =>
         {
-            var json = parseResult.GetValue(jsonOption);
-            return await ExecuteListAsync(json, cancellationToken);
+            var outputFormat = parseResult.GetValue(outputFormatOption);
+            return await ExecuteListAsync(outputFormat, cancellationToken);
         });
 
         return command;
     }
 
-    private static async Task<int> ExecuteListAsync(bool json, CancellationToken cancellationToken)
+    private static async Task<int> ExecuteListAsync(OutputFormat outputFormat, CancellationToken cancellationToken)
     {
         try
         {
@@ -88,7 +88,7 @@ public static class EnvCommandGroup
             using var gds = GlobalDiscoveryService.FromProfile(profile);
             var environments = await gds.DiscoverEnvironmentsAsync(cancellationToken);
 
-            if (json)
+            if (outputFormat == OutputFormat.Json)
             {
                 WriteEnvironmentsAsJson(environments, profile);
             }
@@ -283,27 +283,27 @@ public static class EnvCommandGroup
 
     private static Command CreateWhoCommand()
     {
-        var jsonOption = new Option<bool>("--json", "-j")
+        var outputFormatOption = new Option<OutputFormat>("--output-format", "-f")
         {
-            Description = "Output as JSON",
-            DefaultValueFactory = _ => false
+            Description = "Output format",
+            DefaultValueFactory = _ => OutputFormat.Text
         };
 
         var command = new Command("who", "Verify connection and show current user info from Dataverse")
         {
-            jsonOption
+            outputFormatOption
         };
 
         command.SetAction(async (parseResult, cancellationToken) =>
         {
-            var json = parseResult.GetValue(jsonOption);
-            return await ExecuteWhoAsync(json, cancellationToken);
+            var outputFormat = parseResult.GetValue(outputFormatOption);
+            return await ExecuteWhoAsync(outputFormat, cancellationToken);
         });
 
         return command;
     }
 
-    private static async Task<int> ExecuteWhoAsync(bool json, CancellationToken cancellationToken)
+    private static async Task<int> ExecuteWhoAsync(OutputFormat outputFormat, CancellationToken cancellationToken)
     {
         try
         {
@@ -313,7 +313,7 @@ public static class EnvCommandGroup
             var profile = collection.ActiveProfile;
             if (profile == null)
             {
-                if (json)
+                if (outputFormat == OutputFormat.Json)
                 {
                     Console.WriteLine("{\"error\": \"No active profile\"}");
                 }
@@ -329,7 +329,7 @@ public static class EnvCommandGroup
             var env = profile.Environment;
             if (env == null)
             {
-                if (json)
+                if (outputFormat == OutputFormat.Json)
                 {
                     Console.WriteLine("{\"error\": \"No environment selected\"}");
                 }
@@ -346,7 +346,7 @@ public static class EnvCommandGroup
                 return ExitCodes.Failure;
             }
 
-            if (!json)
+            if (outputFormat != OutputFormat.Json)
             {
                 ConsoleHeader.WriteConnectedAs(profile, env.DisplayName);
             }
@@ -369,7 +369,7 @@ public static class EnvCommandGroup
             var orgUniqueName = client.ConnectedOrgUniqueName;
             var orgId = client.ConnectedOrgId;
 
-            if (json)
+            if (outputFormat == OutputFormat.Json)
             {
                 var output = new
                 {
@@ -414,7 +414,7 @@ public static class EnvCommandGroup
         }
         catch (Exception ex)
         {
-            if (json)
+            if (outputFormat == OutputFormat.Json)
             {
                 Console.WriteLine(System.Text.Json.JsonSerializer.Serialize(new { error = ex.Message }));
             }

@@ -47,7 +47,7 @@ public static class ExtractCommand
             outputOption,
             solutionOption,
             forceOption,
-            PluginsCommandGroup.JsonOption
+            PluginsCommandGroup.OutputFormatOption
         };
 
         command.SetAction(async (parseResult, cancellationToken) =>
@@ -56,9 +56,9 @@ public static class ExtractCommand
             var output = parseResult.GetValue(outputOption);
             var solution = parseResult.GetValue(solutionOption);
             var force = parseResult.GetValue(forceOption);
-            var json = parseResult.GetValue(PluginsCommandGroup.JsonOption);
+            var outputFormat = parseResult.GetValue(PluginsCommandGroup.OutputFormatOption);
 
-            return await ExecuteAsync(input, output, solution, force, json, cancellationToken);
+            return await ExecuteAsync(input, output, solution, force, outputFormat, cancellationToken);
         });
 
         return command;
@@ -69,7 +69,7 @@ public static class ExtractCommand
         FileInfo? output,
         string? solution,
         bool force,
-        bool json,
+        OutputFormat outputFormat,
         CancellationToken cancellationToken)
     {
         try
@@ -79,14 +79,14 @@ public static class ExtractCommand
 
             if (extension == ".nupkg")
             {
-                if (!json)
+                if (outputFormat != OutputFormat.Json)
                     Console.WriteLine($"Extracting from NuGet package: {input.Name}");
 
                 assemblyConfig = NupkgExtractor.Extract(input.FullName);
             }
             else if (extension == ".dll")
             {
-                if (!json)
+                if (outputFormat != OutputFormat.Json)
                     Console.WriteLine($"Extracting from assembly: {input.Name}");
 
                 using var extractor = AssemblyExtractor.Create(input.FullName);
@@ -127,7 +127,7 @@ public static class ExtractCommand
             PluginRegistrationConfig config;
             var existingFile = new FileInfo(outputPath);
 
-            if (existingFile.Exists && !force && !json)
+            if (existingFile.Exists && !force && outputFormat != OutputFormat.Json)
             {
                 Console.WriteLine($"Merging with existing configuration...");
 
@@ -162,7 +162,7 @@ public static class ExtractCommand
 
             var jsonContent = JsonSerializer.Serialize(config, JsonOptions);
 
-            if (json)
+            if (outputFormat == OutputFormat.Json)
             {
                 // Output to stdout for tool integration
                 Console.WriteLine(jsonContent);

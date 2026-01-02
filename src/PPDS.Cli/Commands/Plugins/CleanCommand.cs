@@ -45,7 +45,7 @@ public static class CleanCommand
             PluginsCommandGroup.ProfileOption,
             PluginsCommandGroup.EnvironmentOption,
             whatIfOption,
-            PluginsCommandGroup.JsonOption
+            PluginsCommandGroup.OutputFormatOption
         };
 
         command.SetAction(async (parseResult, cancellationToken) =>
@@ -54,9 +54,9 @@ public static class CleanCommand
             var profile = parseResult.GetValue(PluginsCommandGroup.ProfileOption);
             var environment = parseResult.GetValue(PluginsCommandGroup.EnvironmentOption);
             var whatIf = parseResult.GetValue(whatIfOption);
-            var json = parseResult.GetValue(PluginsCommandGroup.JsonOption);
+            var outputFormat = parseResult.GetValue(PluginsCommandGroup.OutputFormatOption);
 
-            return await ExecuteAsync(config, profile, environment, whatIf, json, cancellationToken);
+            return await ExecuteAsync(config, profile, environment, whatIf, outputFormat, cancellationToken);
         });
 
         return command;
@@ -67,7 +67,7 @@ public static class CleanCommand
         string? profile,
         string? environment,
         bool whatIf,
-        bool json,
+        OutputFormat outputFormat,
         CancellationToken cancellationToken)
     {
         try
@@ -98,7 +98,7 @@ public static class CleanCommand
             await using var client = await pool.GetClientAsync(cancellationToken: cancellationToken);
             var registrationService = new PluginRegistrationService(client);
 
-            if (!json)
+            if (outputFormat != OutputFormat.Json)
             {
                 var connectionInfo = serviceProvider.GetRequiredService<ResolvedConnectionInfo>();
                 ConsoleHeader.WriteConnectedAs(connectionInfo);
@@ -121,13 +121,13 @@ public static class CleanCommand
                     registrationService,
                     assemblyConfig,
                     whatIf,
-                    json,
+                    outputFormat,
                     cancellationToken);
 
                 results.Add(result);
             }
 
-            if (json)
+            if (outputFormat == OutputFormat.Json)
             {
                 Console.WriteLine(JsonSerializer.Serialize(results, JsonWriteOptions));
             }
@@ -165,7 +165,7 @@ public static class CleanCommand
         PluginRegistrationService service,
         PluginAssemblyConfig assemblyConfig,
         bool whatIf,
-        bool json,
+        OutputFormat outputFormat,
         CancellationToken cancellationToken)
     {
         var result = new CleanResult
@@ -177,12 +177,12 @@ public static class CleanCommand
         var assembly = await service.GetAssemblyByNameAsync(assemblyConfig.Name);
         if (assembly == null)
         {
-            if (!json)
+            if (outputFormat != OutputFormat.Json)
                 Console.WriteLine($"Assembly not found: {assemblyConfig.Name}");
             return result;
         }
 
-        if (!json)
+        if (outputFormat != OutputFormat.Json)
             Console.WriteLine($"Checking assembly: {assemblyConfig.Name}");
 
         // Build set of configured step names
@@ -219,14 +219,14 @@ public static class CleanCommand
 
                 if (whatIf)
                 {
-                    if (!json)
+                    if (outputFormat != OutputFormat.Json)
                         Console.WriteLine($"  [What-If] Would delete step: {step.Name}");
                 }
                 else
                 {
                     await service.DeleteStepAsync(step.Id);
                     result.StepsDeleted++;
-                    if (!json)
+                    if (outputFormat != OutputFormat.Json)
                         Console.WriteLine($"  Deleted step: {step.Name}");
                 }
             }
@@ -252,7 +252,7 @@ public static class CleanCommand
 
                     if (whatIf)
                     {
-                        if (!json)
+                        if (outputFormat != OutputFormat.Json)
                             Console.WriteLine($"  [What-If] Would delete orphaned type: {existingType.TypeName}");
                     }
                     else
@@ -261,12 +261,12 @@ public static class CleanCommand
                         {
                             await service.DeletePluginTypeAsync(existingType.Id);
                             result.TypesDeleted++;
-                            if (!json)
+                            if (outputFormat != OutputFormat.Json)
                                 Console.WriteLine($"  Deleted orphaned type: {existingType.TypeName}");
                         }
                         catch (Exception ex)
                         {
-                            if (!json)
+                            if (outputFormat != OutputFormat.Json)
                                 Console.WriteLine($"  Warning: Could not delete type {existingType.TypeName}: {ex.Message}");
                         }
                     }

@@ -32,12 +32,12 @@ public static class PluginsCommandGroup
     };
 
     /// <summary>
-    /// JSON output option for tool integration.
+    /// Output format option for tool integration.
     /// </summary>
-    public static readonly Option<bool> JsonOption = new("--json", "-j")
+    public static readonly Option<OutputFormat> OutputFormatOption = new("--output-format", "-f")
     {
-        Description = "Output as JSON (for tool integration)",
-        DefaultValueFactory = _ => false
+        Description = "Output format",
+        DefaultValueFactory = _ => OutputFormat.Text
     };
 
     /// <summary>

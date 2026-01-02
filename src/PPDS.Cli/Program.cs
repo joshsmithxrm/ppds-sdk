@@ -1,5 +1,4 @@
 using System.CommandLine;
-using PPDS.Cli.Commands;
 using PPDS.Cli.Commands.Auth;
 using PPDS.Cli.Commands.Data;
 using PPDS.Cli.Commands.Env;
@@ -23,8 +22,6 @@ public static class Program
         rootCommand.Subcommands.Add(EnvCommandGroup.CreateOrgAlias()); // 'org' alias for 'env'
         rootCommand.Subcommands.Add(DataCommandGroup.Create());
         rootCommand.Subcommands.Add(PluginsCommandGroup.Create());
-        rootCommand.Subcommands.Add(SchemaCommand.Create());
-        rootCommand.Subcommands.Add(UsersCommand.Create());
 
         // Prepend [Required] to required option descriptions for scannability
         HelpCustomization.ApplyRequiredOptionStyle(rootCommand);

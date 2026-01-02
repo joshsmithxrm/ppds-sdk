@@ -31,9 +31,8 @@ ppds data export --schema schema.xml --output data.zip
 ppds
 ├── auth      Authentication profile management
 ├── env       Environment discovery and selection
-├── data      Data operations (export, import, copy, analyze)
-├── schema    Schema generation and entity listing
-└── users     User mapping for cross-environment migrations
+├── data      Data operations (export, import, copy, analyze, schema, users)
+└── plugins   Plugin registration management
 ```
 
 ---
@@ -138,6 +137,8 @@ Data migration operations.
 | `ppds data import` | Import data from a ZIP file |
 | `ppds data copy` | Export + import in one operation |
 | `ppds data analyze` | Analyze schema (offline, no connection) |
+| `ppds data schema` | Generate migration schema from metadata |
+| `ppds data users` | Generate user mapping for cross-environment migrations |
 
 #### Export
 
@@ -152,7 +153,7 @@ Options:
 - `--environment`, `-env` - Override environment URL
 - `--parallel` - Max concurrent entity exports (default: CPU * 2)
 - `--batch-size` - Records per API request (default: 5000)
-- `--json`, `-j` - JSON output for tool integration
+- `--output-format`, `-f` - Output format (Text or Json)
 - `--verbose`, `-v` - Verbose logging
 - `--debug` - Diagnostic logging
 
@@ -173,7 +174,7 @@ Options:
 - `--bypass-plugins` - Bypass plugins: sync, async, or all
 - `--bypass-flows` - Bypass Power Automate flows
 - `--continue-on-error` - Continue on individual record failures
-- `--json`, `-j` - JSON output for tool integration
+- `--output-format`, `-f` - Output format (Text or Json)
 - `--verbose`, `-v` - Verbose logging
 - `--debug` - Diagnostic logging
 
@@ -196,19 +197,12 @@ Analyze schema offline (no connection required):
 ppds data analyze --schema schema.xml
 ```
 
-### `ppds schema`
+#### Schema
 
-Schema generation and entity discovery.
-
-| Command | Description |
-|---------|-------------|
-| `ppds schema generate` | Generate migration schema from metadata |
-| `ppds schema list` | List available entities |
-
-#### Generate
+Generate migration schema from Dataverse metadata.
 
 ```bash
-ppds schema generate --entities account,contact --output schema.xml
+ppds data schema --entities account,contact --output schema.xml
 ```
 
 Options:
@@ -218,29 +212,14 @@ Options:
 - `--disable-plugins` - Set disableplugins=true on all entities
 - `--include-attributes`, `-a` - Whitelist specific attributes
 - `--exclude-attributes` - Blacklist specific attributes
+- `--output-format`, `-f` - Output format (Text or Json)
 
-#### List
+#### Users
 
-```bash
-# List all entities
-ppds schema list
-
-# Filter by pattern
-ppds schema list --filter "account*"
-
-# Custom entities only
-ppds schema list --custom-only
-
-# Show detailed field info for an entity
-ppds schema list --entity account
-```
-
-### `ppds users`
-
-User mapping for cross-environment migrations.
+Generate user mapping for cross-environment migrations.
 
 ```bash
-ppds users generate \
+ppds data users \
   --source-env "Dev" \
   --target-env "QA" \
   --output user-mapping.xml
@@ -253,6 +232,7 @@ Options:
 - `--source-profile`, `-sp` - Profile for source (default: active)
 - `--target-profile`, `-tp` - Profile for target (default: active)
 - `--analyze` - Preview without generating file
+- `--output-format`, `-f` - Output format (Text or Json)
 
 Use the mapping file with import:
 ```bash
@@ -328,10 +308,10 @@ Each Application User gets 6,000 requests per 5-minute window. Three users = 18,
 
 ## JSON Output
 
-The `--json` flag enables structured JSON output for tool integration:
+The `--output-format Json` option enables structured JSON output for tool integration:
 
 ```bash
-ppds data export --schema schema.xml --output data.zip --json
+ppds data export --schema schema.xml --output data.zip --output-format Json
 ```
 
 Output format (one JSON object per line):

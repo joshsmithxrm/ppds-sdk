@@ -53,7 +53,7 @@ Thumbs.db
 tmp/
 nul
 data.zip
-data/
+/data/
 schema.xml
 
 # Code coverage
