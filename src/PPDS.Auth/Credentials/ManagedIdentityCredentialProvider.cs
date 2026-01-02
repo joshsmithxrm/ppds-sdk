@@ -30,7 +30,7 @@ public sealed class ManagedIdentityCredentialProvider : ICredentialProvider
     /// <inheritdoc />
     public string? Identity => string.IsNullOrEmpty(_clientId)
         ? "(system-assigned)"
-        : $"app:{_clientId[..Math.Min(8, _clientId.Length)]}...";
+        : _clientId;
 
     /// <inheritdoc />
     public DateTimeOffset? TokenExpiresAt => _cachedToken?.ExpiresOn;

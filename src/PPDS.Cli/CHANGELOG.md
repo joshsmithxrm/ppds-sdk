@@ -11,6 +11,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Environment resolution for service principals** - `ppds env select` now works with full URLs for service principals by trying direct Dataverse connection first, before falling back to Global Discovery (which requires user auth). ([#89](https://github.com/joshsmithxrm/ppds-sdk/issues/89))
 - **`auth update --environment` now validates and resolves** - Previously only parsed the URL string without connecting. Now performs full resolution with org metadata population. ([#88](https://github.com/joshsmithxrm/ppds-sdk/issues/88))
+- **`env select` validates connection before saving** - Now performs actual WhoAmI request to verify user has access before saving environment selection. Previously resolved metadata but didn't validate access. ([#91](https://github.com/joshsmithxrm/ppds-sdk/issues/91))
+- **`auth clear` now clears MSAL caches** - Clears platform-specific secure storage (macOS Keychain, Linux keyring) in addition to file-based token cache. Previously only deleted profile data. ([#90](https://github.com/joshsmithxrm/ppds-sdk/issues/90))
+- **`auth who` shows expired token warning** - Token expiry line now shows `(EXPIRED)` in yellow when token is past expiry. JSON output includes `tokenStatus` field with values `"valid"` or `"expired"`. ([#94](https://github.com/joshsmithxrm/ppds-sdk/issues/94))
+- **Missing Environment ID for service principal profiles** - `ppds auth create` with service principal now populates `EnvironmentId` from `ServiceClient.EnvironmentId`. ([#101](https://github.com/joshsmithxrm/ppds-sdk/issues/101))
+- **Interactive auth fails with RefreshInstanceDetails error** - Fixed regression from [#98](https://github.com/joshsmithxrm/ppds-sdk/pull/98) where org metadata discovery failed when connecting to globaldisco.crm.dynamics.com (the discovery service, not an actual org). Now skips eager property access for discovery URLs.
+- **`auth create --environment` validates access before saving** - For interactive auth with `--environment`, now validates actual connection to the resolved environment before saving the profile. Previously resolved via Global Discovery but didn't verify access.
+- **Profile name validation** - Profile names for `auth create`, `auth update`, and `auth name` now enforce character restrictions: must start with letter/number and contain only letters, numbers, spaces, hyphens, or underscores.
+
+### Added
+
+- **`env list --filter` option** - Filter environments by name, URL, or ID (case-insensitive). Aliases: `-fl`. ([#92](https://github.com/joshsmithxrm/ppds-sdk/issues/92))
+- **`env who --environment` option** - Query a specific environment without changing the saved default. Supports ID, URL, unique name, or partial name. Aliases: `-env`. ([#93](https://github.com/joshsmithxrm/ppds-sdk/issues/93))
 
 ### Changed
 

@@ -1,4 +1,6 @@
 using System.CommandLine;
+using System.Text.RegularExpressions;
+using Microsoft.Crm.Sdk.Messages;
 using PPDS.Auth.Cloud;
 using PPDS.Auth.Credentials;
 using PPDS.Auth.Discovery;
@@ -12,6 +14,13 @@ namespace PPDS.Cli.Commands.Auth;
 /// </summary>
 public static class AuthCommandGroup
 {
+    /// <summary>
+    /// Pattern for valid profile names: starts with letter/number, contains only letters, numbers, spaces, hyphens, or underscores.
+    /// </summary>
+    private static readonly Regex ProfileNamePattern = new(
+        @"^[a-zA-Z0-9][a-zA-Z0-9 _-]*$",
+        RegexOptions.Compiled);
+
     /// <summary>
     /// Creates the 'auth' command group with all subcommands.
     /// </summary>
@@ -39,12 +48,7 @@ public static class AuthCommandGroup
         {
             Description = "The name you want to give to this authentication profile (maximum 30 characters)"
         };
-        nameOption.Validators.Add(result =>
-        {
-            var name = result.GetValue(nameOption);
-            if (name?.Length > 30)
-                result.AddError("Profile name cannot exceed 30 characters");
-        });
+        AddProfileNameValidator(nameOption);
 
         var environmentOption = new Option<string?>("--environment", "-env")
         {
@@ -312,7 +316,8 @@ public static class AuthCommandGroup
                             Url = targetUrl.TrimEnd('/'),
                             DisplayName = client.ConnectedOrgFriendlyName ?? ExtractEnvironmentName(targetUrl),
                             UniqueName = client.ConnectedOrgUniqueName,
-                            OrganizationId = client.ConnectedOrgId.ToString()
+                            OrganizationId = client.ConnectedOrgId.ToString(),
+                            EnvironmentId = client.EnvironmentId
                         };
                     }
                     else
@@ -340,6 +345,23 @@ public static class AuthCommandGroup
                                 Console.Error.WriteLine($"Error: Environment '{options.Environment}' not found.");
                                 Console.Error.WriteLine();
                                 Console.Error.WriteLine("Use 'ppds env list' to see available environments.");
+                                return ExitCodes.Failure;
+                            }
+
+                            // Validate we can actually connect to this environment before saving
+                            Console.WriteLine($"Validating access to {resolved.FriendlyName}...");
+                            try
+                            {
+                                // forceInteractive=false uses cached MSAL token from initial auth
+                                using var validationClient = await provider.CreateServiceClientAsync(
+                                    resolved.ApiUrl, cancellationToken, forceInteractive: false);
+                                await validationClient.ExecuteAsync(new WhoAmIRequest(), cancellationToken);
+                            }
+                            catch (Exception validationEx)
+                            {
+                                Console.Error.WriteLine($"Error: Cannot access environment '{resolved.FriendlyName}': {validationEx.Message}");
+                                Console.Error.WriteLine();
+                                Console.Error.WriteLine("Profile was NOT created. Verify you have access to this environment.");
                                 return ExitCodes.Failure;
                             }
 
@@ -870,12 +892,7 @@ public static class AuthCommandGroup
         {
             Description = "The name to give this profile (max 30 characters)"
         };
-        nameOption.Validators.Add(result =>
-        {
-            var name = result.GetValue(nameOption);
-            if (name?.Length > 30)
-                result.AddError("Profile name cannot exceed 30 characters");
-        });
+        AddProfileNameValidator(nameOption);
 
         var envOption = new Option<string?>("--environment", "-env")
         {
@@ -990,8 +1007,16 @@ public static class AuthCommandGroup
         nameOption.Validators.Add(result =>
         {
             var name = result.GetValue(nameOption);
-            if (name?.Length > 30)
+            if (string.IsNullOrEmpty(name)) return;
+
+            if (name.Length > 30)
+            {
                 result.AddError("Profile name cannot exceed 30 characters");
+            }
+            else if (!ProfileNamePattern.IsMatch(name))
+            {
+                result.AddError("Profile name must start with a letter or number and contain only letters, numbers, spaces, hyphens, or underscores");
+            }
         });
 
         var command = new Command("name", "Name or rename an existing authentication profile")
@@ -1076,15 +1101,10 @@ public static class AuthCommandGroup
                 return ExitCodes.Success;
             }
 
-            var count = collection.Count;
             store.Delete();
 
-            // Also clear the token cache
-            var tokenCachePath = ProfilePaths.TokenCacheFile;
-            if (File.Exists(tokenCachePath))
-            {
-                File.Delete(tokenCachePath);
-            }
+            // Clear all MSAL token caches (file + platform-specific secure storage)
+            await TokenCacheManager.ClearAllCachesAsync();
 
             Console.WriteLine("Authentication profiles and token cache removed");
 
@@ -1151,6 +1171,13 @@ public static class AuthCommandGroup
 
             if (outputFormat == OutputFormat.Json)
             {
+                // Determine token status
+                string? tokenStatus = null;
+                if (profile.TokenExpiresOn.HasValue)
+                {
+                    tokenStatus = profile.TokenExpiresOn.Value < DateTimeOffset.UtcNow ? "expired" : "valid";
+                }
+
                 var output = new
                 {
                     active = new
@@ -1167,6 +1194,7 @@ public static class AuthCommandGroup
                         applicationId = profile.ApplicationId,
                         authority = CloudEndpoints.GetAuthorityUrl(profile.Cloud, profile.TenantId),
                         tokenExpires = profile.TokenExpiresOn,
+                        tokenStatus,
                         environment = profile.Environment != null ? new
                         {
                             url = profile.Environment.Url,
@@ -1237,7 +1265,17 @@ public static class AuthCommandGroup
 
                 if (profile.TokenExpiresOn.HasValue)
                 {
-                    Console.WriteLine($"Token Expires:               {profile.TokenExpiresOn.Value:yyyy-MM-dd HH:mm:ss zzz}");
+                    var isExpired = profile.TokenExpiresOn.Value < DateTimeOffset.UtcNow;
+                    if (isExpired)
+                    {
+                        Console.ForegroundColor = ConsoleColor.Yellow;
+                        Console.WriteLine($"Token Expires:               {profile.TokenExpiresOn.Value:yyyy-MM-dd HH:mm:ss zzz} (EXPIRED)");
+                        Console.ResetColor();
+                    }
+                    else
+                    {
+                        Console.WriteLine($"Token Expires:               {profile.TokenExpiresOn.Value:yyyy-MM-dd HH:mm:ss zzz}");
+                    }
                 }
 
                 // Environment section
@@ -1295,6 +1333,27 @@ public static class AuthCommandGroup
     #endregion
 
     #region Helpers
+
+    /// <summary>
+    /// Adds standard profile name validation to an option.
+    /// </summary>
+    private static void AddProfileNameValidator(Option<string?> nameOption)
+    {
+        nameOption.Validators.Add(result =>
+        {
+            var name = result.GetValue(nameOption);
+            if (string.IsNullOrEmpty(name)) return;
+
+            if (name.Length > 30)
+            {
+                result.AddError("Profile name cannot exceed 30 characters");
+            }
+            else if (!ProfileNamePattern.IsMatch(name))
+            {
+                result.AddError("Profile name must start with a letter or number and contain only letters, numbers, spaces, hyphens, or underscores");
+            }
+        });
+    }
 
     private static string ExtractEnvironmentName(string url)
     {

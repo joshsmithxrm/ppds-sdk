@@ -157,7 +157,11 @@ public sealed class InteractiveBrowserCredentialProvider : ICredentialProvider
         // ServiceClient uses lazy initialization - properties like ConnectedOrgFriendlyName
         // are only populated when first accessed. The connection pool clones clients before
         // properties are accessed, so clones would have empty metadata.
-        _ = client.ConnectedOrgFriendlyName;
+        // Skip for globaldisco - it's the discovery service, not an actual org.
+        if (!environmentUrl.Contains("globaldisco", StringComparison.OrdinalIgnoreCase))
+        {
+            _ = client.ConnectedOrgFriendlyName;
+        }
 
         if (!client.IsReady)
         {

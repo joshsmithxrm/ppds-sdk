@@ -24,7 +24,7 @@ public sealed class ClientSecretCredentialProvider : ICredentialProvider
     public AuthMethod AuthMethod => AuthMethod.ClientSecret;
 
     /// <inheritdoc />
-    public string? Identity => $"app:{_applicationId[..Math.Min(8, _applicationId.Length)]}...";
+    public string? Identity => _applicationId;
 
     /// <inheritdoc />
     public DateTimeOffset? TokenExpiresAt => _tokenExpiresAt;
