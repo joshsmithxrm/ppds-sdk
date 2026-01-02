@@ -39,20 +39,21 @@ def main():
         print(build_result.stderr or build_result.stdout, file=sys.stderr)
         sys.exit(2)  # Block commit
 
-    # Run dotnet test
+    # Run dotnet test (unit tests only - integration tests run on PR)
     test_result = subprocess.run(
-        ["dotnet", "test", "--no-build", "-c", "Release", "--nologo", "-v", "q"],
+        ["dotnet", "test", "--no-build", "-c", "Release", "--nologo", "-v", "q",
+         "--filter", "Category!=Integration"],
         cwd=project_dir,
         capture_output=True,
         text=True
     )
 
     if test_result.returncode != 0:
-        print("❌ Tests failed. Fix tests before committing:", file=sys.stderr)
+        print("❌ Unit tests failed. Fix before committing:", file=sys.stderr)
         print(test_result.stderr or test_result.stdout, file=sys.stderr)
         sys.exit(2)  # Block commit
 
-    print("✅ Build and tests passed", file=sys.stderr)
+    print("✅ Build and unit tests passed", file=sys.stderr)
     sys.exit(0)  # Allow commit
 
 if __name__ == "__main__":

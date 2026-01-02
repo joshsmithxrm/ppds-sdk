@@ -388,7 +388,11 @@ See [CLI README](src/PPDS.Cli/README.md) for full documentation.
 **Rules:**
 - New public class → must have corresponding test class
 - New public method → must have test coverage
-- Run `/pre-pr` before committing (includes `dotnet test`)
+- Mark integration tests with `[Trait("Category", "Integration")]`
+
+**Test filtering:**
+- **Commits:** Unit tests only (`--filter Category!=Integration`)
+- **PRs:** All tests including integration
 
 ---
 
@@ -421,9 +425,9 @@ PRs get reviewed by Copilot, Gemini, and CodeQL. **Not all findings are valid.**
 
 | Hook | Trigger | Action |
 |------|---------|--------|
-| `pre-commit-validate.py` | `git commit` | Runs `dotnet build` + `dotnet test`, blocks if failed |
+| `pre-commit-validate.py` | `git commit` | Build + unit tests (skips integration), blocks if failed |
 
-Hooks are configured in `.claude/settings.json`. The pre-commit hook ensures broken code never gets committed.
+Hooks in `.claude/settings.json`. Pre-commit runs ~10s, keeps broken code out of commits.
 
 ---
 
