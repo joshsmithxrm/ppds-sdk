@@ -1,28 +1,18 @@
 using System.CommandLine;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using PPDS.Cli.Commands.Data;
 using PPDS.Cli.Infrastructure;
 using PPDS.Dataverse.Pooling;
 using PPDS.Migration.UserMapping;
 
-namespace PPDS.Cli.Commands;
+namespace PPDS.Cli.Commands.Data;
 
 /// <summary>
-/// User management commands for migration.
+/// User mapping command for cross-environment data migration.
 /// </summary>
 public static class UsersCommand
 {
     public static Command Create()
-    {
-        var command = new Command("users", "User mapping commands for cross-environment migration");
-
-        command.Subcommands.Add(CreateGenerateCommand());
-
-        return command;
-    }
-
-    private static Command CreateGenerateCommand()
     {
         var sourceProfileOption = new Option<string?>("--source-profile", "-sp")
         {
@@ -64,10 +54,10 @@ public static class UsersCommand
             DefaultValueFactory = _ => false
         };
 
-        var jsonOption = new Option<bool>("--json", "-j")
+        var outputFormatOption = new Option<OutputFormat>("--output-format", "-f")
         {
-            Description = "Output as JSON",
-            DefaultValueFactory = _ => false
+            Description = "Output format",
+            DefaultValueFactory = _ => OutputFormat.Text
         };
 
         var verboseOption = new Option<bool>("--verbose", "-v")
@@ -82,7 +72,7 @@ public static class UsersCommand
             DefaultValueFactory = _ => false
         };
 
-        var command = new Command("generate", "Generate user mapping file from source to target environment")
+        var command = new Command("users", "Generate user mapping file from source to target environment")
         {
             sourceProfileOption,
             targetProfileOption,
@@ -90,7 +80,7 @@ public static class UsersCommand
             targetEnvOption,
             outputOption,
             analyzeOption,
-            jsonOption,
+            outputFormatOption,
             verboseOption,
             debugOption
         };
@@ -103,27 +93,27 @@ public static class UsersCommand
             var targetEnv = parseResult.GetValue(targetEnvOption)!;
             var output = parseResult.GetValue(outputOption)!;
             var analyze = parseResult.GetValue(analyzeOption);
-            var json = parseResult.GetValue(jsonOption);
+            var outputFormat = parseResult.GetValue(outputFormatOption);
             var verbose = parseResult.GetValue(verboseOption);
             var debug = parseResult.GetValue(debugOption);
 
-            return await ExecuteGenerateAsync(
+            return await ExecuteAsync(
                 sourceProfile, targetProfile,
                 sourceEnv, targetEnv, output, analyze,
-                json, verbose, debug, cancellationToken);
+                outputFormat, verbose, debug, cancellationToken);
         });
 
         return command;
     }
 
-    private static async Task<int> ExecuteGenerateAsync(
+    private static async Task<int> ExecuteAsync(
         string? sourceProfileName,
         string? targetProfileName,
         string sourceEnv,
         string targetEnv,
         FileInfo output,
         bool analyzeOnly,
-        bool json,
+        OutputFormat outputFormat,
         bool verbose,
         bool debug,
         CancellationToken cancellationToken)
@@ -147,7 +137,7 @@ public static class UsersCommand
                 ProfileServiceFactory.DefaultDeviceCodeCallback,
                 cancellationToken: cancellationToken);
 
-            if (!json)
+            if (outputFormat != OutputFormat.Json)
             {
                 var sourceConnectionInfo = sourceProvider.GetRequiredService<ResolvedConnectionInfo>();
                 var targetConnectionInfo = targetProvider.GetRequiredService<ResolvedConnectionInfo>();
@@ -165,14 +155,14 @@ public static class UsersCommand
                 ? new UserMappingGenerator(logger)
                 : new UserMappingGenerator();
 
-            if (!json)
+            if (outputFormat != OutputFormat.Json)
             {
                 Console.WriteLine("  Querying users from both environments...");
             }
 
             var result = await generator.GenerateAsync(sourcePool, targetPool, cancellationToken: cancellationToken);
 
-            if (json)
+            if (outputFormat == OutputFormat.Json)
             {
                 OutputJson(result, analyzeOnly, output.FullName);
             }
@@ -205,12 +195,12 @@ public static class UsersCommand
         }
         catch (OperationCanceledException)
         {
-            ConsoleOutput.WriteError("Operation cancelled by user.", json);
+            ConsoleOutput.WriteError("Operation cancelled by user.", outputFormat == OutputFormat.Json);
             return ExitCodes.Failure;
         }
         catch (Exception ex)
         {
-            ConsoleOutput.WriteError($"Failed to generate user mapping: {ex.Message}", json);
+            ConsoleOutput.WriteError($"Failed to generate user mapping: {ex.Message}", outputFormat == OutputFormat.Json);
             if (debug)
             {
                 Console.Error.WriteLine(ex.StackTrace);

@@ -64,7 +64,7 @@ public class ListCommandTests
     [Fact]
     public void Create_HasOptionalJsonOption()
     {
-        var option = _command.Options.FirstOrDefault(o => o.Name == "--json");
+        var option = _command.Options.FirstOrDefault(o => o.Name == "--output-format");
         Assert.NotNull(option);
         Assert.False(option.Required);
     }
@@ -118,7 +118,7 @@ public class ListCommandTests
     [Fact]
     public void Parse_WithOptionalJson_Succeeds()
     {
-        var result = _command.Parse("--json");
+        var result = _command.Parse("--output-format Json");
         Assert.Empty(result.Errors);
     }
 
@@ -129,7 +129,7 @@ public class ListCommandTests
             "--profile dev " +
             "--environment https://org.crm.dynamics.com " +
             "--assembly MyPlugins " +
-            "--json");
+            "--output-format Json");
         Assert.Empty(result.Errors);
     }
 

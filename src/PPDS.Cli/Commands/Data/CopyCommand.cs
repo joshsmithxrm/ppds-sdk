@@ -117,10 +117,10 @@ public static class CopyCommand
                 result.AddError($"User mapping file not found: {file.FullName}");
         });
 
-        var jsonOption = new Option<bool>("--json", "-j")
+        var outputFormatOption = new Option<OutputFormat>("--output-format", "-f")
         {
-            Description = "Output progress as JSON (for tool integration)",
-            DefaultValueFactory = _ => false
+            Description = "Output format",
+            DefaultValueFactory = _ => OutputFormat.Text
         };
 
         var verboseOption = new Option<bool>("--verbose", "-v")
@@ -151,7 +151,7 @@ public static class CopyCommand
             continueOnErrorOption,
             stripOwnerFieldsOption,
             userMappingOption,
-            jsonOption,
+            outputFormatOption,
             verboseOption,
             debugOption
         };
@@ -172,7 +172,7 @@ public static class CopyCommand
             var continueOnError = parseResult.GetValue(continueOnErrorOption);
             var stripOwnerFields = parseResult.GetValue(stripOwnerFieldsOption);
             var userMappingFile = parseResult.GetValue(userMappingOption);
-            var json = parseResult.GetValue(jsonOption);
+            var outputFormat = parseResult.GetValue(outputFormatOption);
             var verbose = parseResult.GetValue(verboseOption);
             var debug = parseResult.GetValue(debugOption);
 
@@ -184,7 +184,7 @@ public static class CopyCommand
                 schema, tempDir, parallel, batchSize,
                 bypassPlugins, bypassFlows, skipMissingColumns,
                 continueOnError, stripOwnerFields, userMappingFile,
-                json, verbose, debug, cancellationToken);
+                outputFormat, verbose, debug, cancellationToken);
         });
 
         return command;
@@ -205,13 +205,13 @@ public static class CopyCommand
         bool continueOnError,
         bool stripOwnerFields,
         FileInfo? userMappingFile,
-        bool json,
+        OutputFormat outputFormat,
         bool verbose,
         bool debug,
         CancellationToken cancellationToken)
     {
         string? tempDataFile = null;
-        var progressReporter = ServiceFactory.CreateProgressReporter(json, "Copy");
+        var progressReporter = ServiceFactory.CreateProgressReporter(outputFormat, "Copy");
 
         try
         {
@@ -233,7 +233,7 @@ public static class CopyCommand
                 ProfileServiceFactory.DefaultDeviceCodeCallback,
                 cancellationToken);
 
-            if (!json)
+            if (outputFormat != OutputFormat.Json)
             {
                 var sourceConnectionInfo = sourceProvider.GetRequiredService<ResolvedConnectionInfo>();
                 ConsoleHeader.WriteConnectedAsLabeled("Source", sourceConnectionInfo);
@@ -275,7 +275,7 @@ public static class CopyCommand
                 ProfileServiceFactory.DefaultDeviceCodeCallback,
                 cancellationToken);
 
-            if (!json)
+            if (outputFormat != OutputFormat.Json)
             {
                 var targetConnectionInfo = targetProvider.GetRequiredService<ResolvedConnectionInfo>();
                 ConsoleHeader.WriteConnectedAsLabeled("Target", targetConnectionInfo);

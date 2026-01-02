@@ -55,7 +55,7 @@ public static class DeployCommand
             PluginsCommandGroup.SolutionOption,
             cleanOption,
             whatIfOption,
-            PluginsCommandGroup.JsonOption
+            PluginsCommandGroup.OutputFormatOption
         };
 
         command.SetAction(async (parseResult, cancellationToken) =>
@@ -66,9 +66,9 @@ public static class DeployCommand
             var solution = parseResult.GetValue(PluginsCommandGroup.SolutionOption);
             var clean = parseResult.GetValue(cleanOption);
             var whatIf = parseResult.GetValue(whatIfOption);
-            var json = parseResult.GetValue(PluginsCommandGroup.JsonOption);
+            var outputFormat = parseResult.GetValue(PluginsCommandGroup.OutputFormatOption);
 
-            return await ExecuteAsync(config, profile, environment, solution, clean, whatIf, json, cancellationToken);
+            return await ExecuteAsync(config, profile, environment, solution, clean, whatIf, outputFormat, cancellationToken);
         });
 
         return command;
@@ -81,7 +81,7 @@ public static class DeployCommand
         string? solutionOverride,
         bool clean,
         bool whatIf,
-        bool json,
+        OutputFormat outputFormat,
         CancellationToken cancellationToken)
     {
         try
@@ -112,7 +112,7 @@ public static class DeployCommand
             await using var client = await pool.GetClientAsync(cancellationToken: cancellationToken);
             var registrationService = new PluginRegistrationService(client);
 
-            if (!json)
+            if (outputFormat != OutputFormat.Json)
             {
                 var connectionInfo = serviceProvider.GetRequiredService<ResolvedConnectionInfo>();
                 ConsoleHeader.WriteConnectedAs(connectionInfo);
@@ -137,13 +137,13 @@ public static class DeployCommand
                     solutionOverride,
                     clean,
                     whatIf,
-                    json,
+                    outputFormat,
                     cancellationToken);
 
                 results.Add(result);
             }
 
-            if (json)
+            if (outputFormat == OutputFormat.Json)
             {
                 Console.WriteLine(JsonSerializer.Serialize(results, JsonWriteOptions));
             }
@@ -173,7 +173,7 @@ public static class DeployCommand
         string? solutionOverride,
         bool clean,
         bool whatIf,
-        bool json,
+        OutputFormat outputFormat,
         CancellationToken cancellationToken)
     {
         var result = new DeploymentResult
@@ -186,7 +186,7 @@ public static class DeployCommand
 
         try
         {
-            if (!json)
+            if (outputFormat != OutputFormat.Json)
                 Console.WriteLine($"Deploying assembly: {assemblyConfig.Name}");
 
             // Resolve assembly path
@@ -211,13 +211,13 @@ public static class DeployCommand
                 {
                     var existingPkg = await service.GetPackageByNameAsync(packageName);
                     packageId = existingPkg?.Id ?? Guid.NewGuid();
-                    if (!json)
+                    if (outputFormat != OutputFormat.Json)
                         Console.WriteLine($"  [What-If] Would {(existingPkg == null ? "create" : "update")} package: {packageName}");
                 }
                 else
                 {
                     packageId = await service.UpsertPackageAsync(packageName, packageBytes, solution);
-                    if (!json)
+                    if (outputFormat != OutputFormat.Json)
                         Console.WriteLine($"  Package registered: {packageId}");
                 }
 
@@ -240,13 +240,13 @@ public static class DeployCommand
                 {
                     var existing = await service.GetAssemblyByNameAsync(assemblyConfig.Name);
                     assemblyId = existing?.Id ?? Guid.NewGuid();
-                    if (!json)
+                    if (outputFormat != OutputFormat.Json)
                         Console.WriteLine($"  [What-If] Would {(existing == null ? "create" : "update")} assembly");
                 }
                 else
                 {
                     assemblyId = await service.UpsertAssemblyAsync(assemblyConfig.Name, assemblyBytes, solution);
-                    if (!json)
+                    if (outputFormat != OutputFormat.Json)
                         Console.WriteLine($"  Assembly registered: {assemblyId}");
                 }
             }
@@ -280,13 +280,13 @@ public static class DeployCommand
                     typeId = existingTypeMap.TryGetValue(typeConfig.TypeName, out var existing)
                         ? existing.Id
                         : Guid.NewGuid();
-                    if (!json)
+                    if (outputFormat != OutputFormat.Json)
                         Console.WriteLine($"  [What-If] Would register type: {typeConfig.TypeName}");
                 }
                 else
                 {
                     typeId = await service.UpsertPluginTypeAsync(assemblyId, typeConfig.TypeName, solution);
-                    if (!json)
+                    if (outputFormat != OutputFormat.Json)
                         Console.WriteLine($"  Type registered: {typeConfig.TypeName}");
                 }
 
@@ -300,7 +300,7 @@ public static class DeployCommand
                     var messageId = await service.GetSdkMessageIdAsync(stepConfig.Message);
                     if (messageId == null)
                     {
-                        if (!json)
+                        if (outputFormat != OutputFormat.Json)
                             Console.WriteLine($"    [Skip] Unknown message: {stepConfig.Message}");
                         continue;
                     }
@@ -316,7 +316,7 @@ public static class DeployCommand
                     if (whatIf)
                     {
                         stepId = Guid.NewGuid();
-                        if (!json)
+                        if (outputFormat != OutputFormat.Json)
                             Console.WriteLine($"    [What-If] Would {(isNew ? "create" : "update")} step: {stepName}");
 
                         if (isNew) result.StepsCreated++;
@@ -325,7 +325,7 @@ public static class DeployCommand
                     else
                     {
                         stepId = await service.UpsertStepAsync(typeId, stepConfig, messageId.Value, filterId, solution);
-                        if (!json)
+                        if (outputFormat != OutputFormat.Json)
                             Console.WriteLine($"    Step {(isNew ? "created" : "updated")}: {stepName}");
 
                         if (isNew) result.StepsCreated++;
@@ -342,7 +342,7 @@ public static class DeployCommand
 
                         if (whatIf)
                         {
-                            if (!json)
+                            if (outputFormat != OutputFormat.Json)
                                 Console.WriteLine($"      [What-If] Would {(imageIsNew ? "create" : "update")} image: {imageConfig.Name}");
 
                             if (imageIsNew) result.ImagesCreated++;
@@ -351,7 +351,7 @@ public static class DeployCommand
                         else
                         {
                             await service.UpsertImageAsync(stepId, imageConfig);
-                            if (!json)
+                            if (outputFormat != OutputFormat.Json)
                                 Console.WriteLine($"      Image {(imageIsNew ? "created" : "updated")}: {imageConfig.Name}");
 
                             if (imageIsNew) result.ImagesCreated++;
@@ -368,7 +368,7 @@ public static class DeployCommand
 
                 if (orphanedStepNames.Count > 0)
                 {
-                    if (!json)
+                    if (outputFormat != OutputFormat.Json)
                         Console.WriteLine($"  Cleaning {orphanedStepNames.Count} orphaned step(s)...");
 
                     foreach (var orphanName in orphanedStepNames)
@@ -378,14 +378,14 @@ public static class DeployCommand
                         {
                             if (whatIf)
                             {
-                                if (!json)
+                                if (outputFormat != OutputFormat.Json)
                                     Console.WriteLine($"    [What-If] Would delete step: {orphanName}");
                                 result.StepsDeleted++;
                             }
                             else
                             {
                                 await service.DeleteStepAsync(orphanStep.Id);
-                                if (!json)
+                                if (outputFormat != OutputFormat.Json)
                                     Console.WriteLine($"    Deleted step: {orphanName}");
                                 result.StepsDeleted++;
                             }
@@ -399,7 +399,7 @@ public static class DeployCommand
             result.Success = false;
             result.Error = ex.Message;
 
-            if (!json)
+            if (outputFormat != OutputFormat.Json)
                 Console.Error.WriteLine($"  Error: {ex.Message}");
         }
 

@@ -107,7 +107,7 @@ public class CopyCommandTests : IDisposable
     [Fact]
     public void Create_HasOptionalJsonOption()
     {
-        var option = _command.Options.FirstOrDefault(o => o.Name == "--json");
+        var option = _command.Options.FirstOrDefault(o => o.Name == "--output-format");
         Assert.NotNull(option);
         Assert.False(option.Required);
     }
@@ -247,7 +247,7 @@ public class CopyCommandTests : IDisposable
     [Fact]
     public void Parse_WithOptionalJson_Succeeds()
     {
-        var result = _command.Parse($"-s \"{_tempSchemaFile}\" --source-env https://dev.crm.dynamics.com --target-env https://qa.crm.dynamics.com --json");
+        var result = _command.Parse($"-s \"{_tempSchemaFile}\" --source-env https://dev.crm.dynamics.com --target-env https://qa.crm.dynamics.com --output-format Json");
         Assert.Empty(result.Errors);
     }
 

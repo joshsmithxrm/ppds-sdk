@@ -73,7 +73,7 @@ public class DiffCommandTests : IDisposable
     [Fact]
     public void Create_HasOptionalJsonOption()
     {
-        var option = _command.Options.FirstOrDefault(o => o.Name == "--json");
+        var option = _command.Options.FirstOrDefault(o => o.Name == "--output-format");
         Assert.NotNull(option);
         Assert.False(option.Required);
     }
@@ -120,7 +120,7 @@ public class DiffCommandTests : IDisposable
     [Fact]
     public void Parse_WithOptionalJson_Succeeds()
     {
-        var result = _command.Parse($"-c \"{_tempConfigFile}\" --json");
+        var result = _command.Parse($"-c \"{_tempConfigFile}\" --output-format Json");
         Assert.Empty(result.Errors);
     }
 
@@ -131,7 +131,7 @@ public class DiffCommandTests : IDisposable
             $"-c \"{_tempConfigFile}\" " +
             "--profile dev " +
             "--environment https://org.crm.dynamics.com " +
-            "--json");
+            "--output-format Json");
         Assert.Empty(result.Errors);
     }
 

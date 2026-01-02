@@ -69,10 +69,10 @@ public static class ImportCommand
             DefaultValueFactory = _ => false
         };
 
-        var jsonOption = new Option<bool>("--json", "-j")
+        var outputFormatOption = new Option<OutputFormat>("--output-format", "-f")
         {
-            Description = "Output progress as JSON (for tool integration)",
-            DefaultValueFactory = _ => false
+            Description = "Output format",
+            DefaultValueFactory = _ => OutputFormat.Text
         };
 
         var verboseOption = new Option<bool>("--verbose", "-v")
@@ -99,7 +99,7 @@ public static class ImportCommand
             userMappingOption,
             stripOwnerFieldsOption,
             skipMissingColumnsOption,
-            jsonOption,
+            outputFormatOption,
             verboseOption,
             debugOption
         };
@@ -116,7 +116,7 @@ public static class ImportCommand
             var userMappingFile = parseResult.GetValue(userMappingOption);
             var stripOwnerFields = parseResult.GetValue(stripOwnerFieldsOption);
             var skipMissingColumns = parseResult.GetValue(skipMissingColumnsOption);
-            var json = parseResult.GetValue(jsonOption);
+            var outputFormat = parseResult.GetValue(outputFormatOption);
             var verbose = parseResult.GetValue(verboseOption);
             var debug = parseResult.GetValue(debugOption);
 
@@ -125,7 +125,7 @@ public static class ImportCommand
             return await ExecuteAsync(
                 profile, environment, data, bypassPlugins, bypassFlows,
                 continueOnError, mode, userMappingFile, stripOwnerFields,
-                skipMissingColumns, json, verbose, debug, cancellationToken);
+                skipMissingColumns, outputFormat, verbose, debug, cancellationToken);
         });
 
         return command;
@@ -142,12 +142,12 @@ public static class ImportCommand
         FileInfo? userMappingFile,
         bool stripOwnerFields,
         bool skipMissingColumns,
-        bool json,
+        OutputFormat outputFormat,
         bool verbose,
         bool debug,
         CancellationToken cancellationToken)
     {
-        var progressReporter = ServiceFactory.CreateProgressReporter(json, "Import");
+        var progressReporter = ServiceFactory.CreateProgressReporter(outputFormat, "Import");
 
         try
         {
@@ -160,7 +160,7 @@ public static class ImportCommand
                 ProfileServiceFactory.DefaultDeviceCodeCallback,
                 cancellationToken);
 
-            if (!json)
+            if (outputFormat != OutputFormat.Json)
             {
                 var connectionInfo = serviceProvider.GetRequiredService<ResolvedConnectionInfo>();
                 ConsoleHeader.WriteConnectedAs(connectionInfo);

@@ -92,7 +92,7 @@ public class ImportCommandTests : IDisposable
     [Fact]
     public void Create_HasOptionalJsonOption()
     {
-        var option = _command.Options.FirstOrDefault(o => o.Name == "--json");
+        var option = _command.Options.FirstOrDefault(o => o.Name == "--output-format");
         Assert.NotNull(option);
         Assert.False(option.Required);
     }

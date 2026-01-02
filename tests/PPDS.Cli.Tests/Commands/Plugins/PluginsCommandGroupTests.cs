@@ -109,15 +109,15 @@ public class PluginsCommandGroupTests
     }
 
     [Fact]
-    public void JsonOption_HasCorrectName()
+    public void OutputFormatOption_HasCorrectName()
     {
-        Assert.Equal("--json", PluginsCommandGroup.JsonOption.Name);
+        Assert.Equal("--output-format", PluginsCommandGroup.OutputFormatOption.Name);
     }
 
     [Fact]
-    public void JsonOption_HasShortAlias()
+    public void OutputFormatOption_HasShortAlias()
     {
-        Assert.Contains("-j", PluginsCommandGroup.JsonOption.Aliases);
+        Assert.Contains("-f", PluginsCommandGroup.OutputFormatOption.Aliases);
     }
 
     #endregion

@@ -13,7 +13,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Microsoft.Xrm.Sdk;
 using Microsoft.Xrm.Sdk.Messages;
-using Newtonsoft.Json;
+using System.Text.Json;
 using PPDS.Dataverse.DependencyInjection;
 using PPDS.Dataverse.Pooling;
 using PPDS.Dataverse.Progress;
@@ -59,6 +59,15 @@ namespace PPDS.Dataverse.BulkOperations
         /// Fallback Retry-After duration when not provided by the server.
         /// </summary>
         private static readonly TimeSpan FallbackRetryAfter = TimeSpan.FromSeconds(30);
+
+        /// <summary>
+        /// JSON serializer options for parsing BulkApiErrorDetails.
+        /// Case-insensitive to match Newtonsoft.Json default behavior.
+        /// </summary>
+        private static readonly JsonSerializerOptions BulkApiErrorDetailJsonOptions = new()
+        {
+            PropertyNameCaseInsensitive = true
+        };
 
         private readonly IDataverseConnectionPool _connectionPool;
         private readonly IThrottleTracker _throttleTracker;
@@ -1305,7 +1314,9 @@ namespace PPDS.Dataverse.BulkOperations
             {
                 try
                 {
-                    var details = JsonConvert.DeserializeObject<List<BulkApiErrorDetail>>(errorDetails.ToString()!);
+                    var details = JsonSerializer.Deserialize<List<BulkApiErrorDetail>>(
+                        errorDetails.ToString()!,
+                        BulkApiErrorDetailJsonOptions);
                     if (details != null)
                     {
                         var failedIndexes = new HashSet<int>(details.Select(d => d.RequestIndex));
@@ -1344,7 +1355,9 @@ namespace PPDS.Dataverse.BulkOperations
             {
                 try
                 {
-                    var details = JsonConvert.DeserializeObject<List<BulkApiErrorDetail>>(errorDetails.ToString()!);
+                    var details = JsonSerializer.Deserialize<List<BulkApiErrorDetail>>(
+                        errorDetails.ToString()!,
+                        BulkApiErrorDetailJsonOptions);
                     if (details != null)
                     {
                         var failedIndexes = new HashSet<int>(details.Select(d => d.RequestIndex));

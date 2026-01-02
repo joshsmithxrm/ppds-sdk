@@ -37,7 +37,7 @@ public static class ListCommand
             PluginsCommandGroup.EnvironmentOption,
             assemblyOption,
             packageOption,
-            PluginsCommandGroup.JsonOption
+            PluginsCommandGroup.OutputFormatOption
         };
 
         command.SetAction(async (parseResult, cancellationToken) =>
@@ -46,9 +46,9 @@ public static class ListCommand
             var environment = parseResult.GetValue(PluginsCommandGroup.EnvironmentOption);
             var assembly = parseResult.GetValue(assemblyOption);
             var package = parseResult.GetValue(packageOption);
-            var json = parseResult.GetValue(PluginsCommandGroup.JsonOption);
+            var outputFormat = parseResult.GetValue(PluginsCommandGroup.OutputFormatOption);
 
-            return await ExecuteAsync(profile, environment, assembly, package, json, cancellationToken);
+            return await ExecuteAsync(profile, environment, assembly, package, outputFormat, cancellationToken);
         });
 
         return command;
@@ -59,7 +59,7 @@ public static class ListCommand
         string? environment,
         string? assemblyFilter,
         string? packageFilter,
-        bool json,
+        OutputFormat outputFormat,
         CancellationToken cancellationToken)
     {
         try
@@ -76,7 +76,7 @@ public static class ListCommand
             await using var client = await pool.GetClientAsync(cancellationToken: cancellationToken);
             var registrationService = new PluginRegistrationService(client);
 
-            if (!json)
+            if (outputFormat != OutputFormat.Json)
             {
                 var connectionInfo = serviceProvider.GetRequiredService<ResolvedConnectionInfo>();
                 ConsoleHeader.WriteConnectedAs(connectionInfo);
@@ -148,7 +148,7 @@ public static class ListCommand
 
             if (totalAssemblies == 0 && totalPackages == 0)
             {
-                if (json)
+                if (outputFormat == OutputFormat.Json)
                 {
                     Console.WriteLine(JsonSerializer.Serialize(output, JsonOptions));
                 }
@@ -159,7 +159,7 @@ public static class ListCommand
                 return ExitCodes.Success;
             }
 
-            if (json)
+            if (outputFormat == OutputFormat.Json)
             {
                 Console.WriteLine(JsonSerializer.Serialize(output, JsonOptions));
             }

@@ -59,10 +59,10 @@ public static class ExportCommand
                 result.AddError("--batch-size cannot exceed 5000 (Dataverse limit)");
         });
 
-        var jsonOption = new Option<bool>("--json", "-j")
+        var outputFormatOption = new Option<OutputFormat>("--output-format", "-f")
         {
-            Description = "Output progress as JSON (for tool integration)",
-            DefaultValueFactory = _ => false
+            Description = "Output format",
+            DefaultValueFactory = _ => OutputFormat.Text
         };
 
         var verboseOption = new Option<bool>("--verbose", "-v")
@@ -85,7 +85,7 @@ public static class ExportCommand
             DataCommandGroup.EnvironmentOption,
             parallelOption,
             batchSizeOption,
-            jsonOption,
+            outputFormatOption,
             verboseOption,
             debugOption
         };
@@ -98,13 +98,13 @@ public static class ExportCommand
             var environment = parseResult.GetValue(DataCommandGroup.EnvironmentOption);
             var parallel = parseResult.GetValue(parallelOption);
             var batchSize = parseResult.GetValue(batchSizeOption);
-            var json = parseResult.GetValue(jsonOption);
+            var outputFormat = parseResult.GetValue(outputFormatOption);
             var verbose = parseResult.GetValue(verboseOption);
             var debug = parseResult.GetValue(debugOption);
 
             return await ExecuteAsync(
                 profile, environment, schema, output, parallel, batchSize,
-                json, verbose, debug, cancellationToken);
+                outputFormat, verbose, debug, cancellationToken);
         });
 
         return command;
@@ -117,12 +117,12 @@ public static class ExportCommand
         FileInfo output,
         int parallel,
         int batchSize,
-        bool json,
+        OutputFormat outputFormat,
         bool verbose,
         bool debug,
         CancellationToken cancellationToken)
     {
-        var progressReporter = ServiceFactory.CreateProgressReporter(json, "Export");
+        var progressReporter = ServiceFactory.CreateProgressReporter(outputFormat, "Export");
 
         try
         {
@@ -134,7 +134,7 @@ public static class ExportCommand
                 ProfileServiceFactory.DefaultDeviceCodeCallback,
                 cancellationToken);
 
-            if (!json)
+            if (outputFormat != OutputFormat.Json)
             {
                 var connectionInfo = serviceProvider.GetRequiredService<ResolvedConnectionInfo>();
                 ConsoleHeader.WriteConnectedAs(connectionInfo);

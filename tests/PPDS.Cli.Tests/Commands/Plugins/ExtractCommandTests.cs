@@ -73,10 +73,10 @@ public class ExtractCommandTests : IDisposable
     [Fact]
     public void Create_HasOptionalJsonOption()
     {
-        var option = _command.Options.FirstOrDefault(o => o.Name == "--json");
+        var option = _command.Options.FirstOrDefault(o => o.Name == "--output-format");
         Assert.NotNull(option);
         Assert.False(option.Required);
-        Assert.Contains("-j", option.Aliases);
+        Assert.Contains("-f", option.Aliases);
     }
 
     #endregion
@@ -122,7 +122,7 @@ public class ExtractCommandTests : IDisposable
     [Fact]
     public void Parse_WithOptionalJson_Succeeds()
     {
-        var result = _command.Parse($"-i \"{_tempDllFile}\" --json");
+        var result = _command.Parse($"-i \"{_tempDllFile}\" --output-format Json");
         Assert.Empty(result.Errors);
     }
 
