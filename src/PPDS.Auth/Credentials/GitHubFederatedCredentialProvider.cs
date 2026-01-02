@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using Azure.Core;
 using Azure.Identity;
 using Microsoft.PowerPlatform.Dataverse.Client;
+using Microsoft.PowerPlatform.Dataverse.Client.Model;
 using PPDS.Auth.Cloud;
 using PPDS.Auth.Profiles;
 
@@ -78,10 +79,13 @@ public sealed class GitHubFederatedCredentialProvider : ICredentialProvider
 
         var token = await GetTokenAsync(environmentUrl, cancellationToken).ConfigureAwait(false);
 
-        var client = new ServiceClient(
-            new Uri(environmentUrl),
-            _ => Task.FromResult(token),
-            useUniqueInstance: true);
+        // Create ServiceClient using ConnectionOptions to ensure org metadata discovery
+        var options = new ConnectionOptions
+        {
+            ServiceUri = new Uri(environmentUrl),
+            AccessTokenProviderFunctionAsync = _ => Task.FromResult(token)
+        };
+        var client = new ServiceClient(options);
 
         if (!client.IsReady)
         {

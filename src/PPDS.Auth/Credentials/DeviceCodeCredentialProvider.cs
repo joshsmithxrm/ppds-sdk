@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using Microsoft.Identity.Client;
 using Microsoft.Identity.Client.Extensions.Msal;
 using Microsoft.PowerPlatform.Dataverse.Client;
+using Microsoft.PowerPlatform.Dataverse.Client.Model;
 using PPDS.Auth.Cloud;
 using PPDS.Auth.Profiles;
 
@@ -110,11 +111,13 @@ public sealed class DeviceCodeCredentialProvider : ICredentialProvider
         // Get token
         var token = await GetTokenAsync(environmentUrl, forceInteractive, cancellationToken).ConfigureAwait(false);
 
-        // Create ServiceClient with token provider
-        var client = new ServiceClient(
-            new Uri(environmentUrl),
-            _ => Task.FromResult(token),
-            useUniqueInstance: true);
+        // Create ServiceClient using ConnectionOptions to ensure org metadata discovery
+        var options = new ConnectionOptions
+        {
+            ServiceUri = new Uri(environmentUrl),
+            AccessTokenProviderFunctionAsync = _ => Task.FromResult(token)
+        };
+        var client = new ServiceClient(options);
 
         if (!client.IsReady)
         {
