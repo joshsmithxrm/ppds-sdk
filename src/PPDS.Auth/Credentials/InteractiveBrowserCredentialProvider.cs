@@ -144,14 +144,12 @@ public sealed class InteractiveBrowserCredentialProvider : ICredentialProvider
         // Get token and prime the cache (may prompt user for interactive auth)
         await GetTokenAsync(environmentUrl, forceInteractive, cancellationToken).ConfigureAwait(false);
 
-        // Create ServiceClient using ConnectionOptions to ensure org metadata discovery.
+        // Create ServiceClient using ConnectionOptions.
         // The provider function uses cached tokens and refreshes silently when needed.
-        // SkipDiscovery = false forces org metadata population (ConnectedOrgFriendlyName, etc.)
         var options = new ConnectionOptions
         {
             ServiceUri = new Uri(environmentUrl),
-            AccessTokenProviderFunctionAsync = _ => GetTokenAsync(environmentUrl, forceInteractive: false, CancellationToken.None),
-            SkipDiscovery = false
+            AccessTokenProviderFunctionAsync = _ => GetTokenAsync(environmentUrl, forceInteractive: false, CancellationToken.None)
         };
         var client = new ServiceClient(options);
 
