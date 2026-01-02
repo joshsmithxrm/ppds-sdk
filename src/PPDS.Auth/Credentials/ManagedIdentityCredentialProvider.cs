@@ -93,13 +93,15 @@ public sealed class ManagedIdentityCredentialProvider : ICredentialProvider
 
         // Create ServiceClient using ConnectionOptions to ensure org metadata discovery.
         // The provider function acquires tokens on demand and refreshes when needed.
+        // SkipDiscovery = false forces org metadata population (ConnectedOrgFriendlyName, etc.)
         ServiceClient client;
         try
         {
             var options = new ConnectionOptions
             {
                 ServiceUri = new Uri(environmentUrl),
-                AccessTokenProviderFunctionAsync = _ => GetTokenAsync(environmentUrl, CancellationToken.None)
+                AccessTokenProviderFunctionAsync = _ => GetTokenAsync(environmentUrl, CancellationToken.None),
+                SkipDiscovery = false
             };
             client = new ServiceClient(options);
         }
