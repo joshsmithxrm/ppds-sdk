@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 using Microsoft.Identity.Client;
 using Microsoft.Identity.Client.Extensions.Msal;
 using Microsoft.PowerPlatform.Dataverse.Client;
+using Microsoft.PowerPlatform.Dataverse.Client.Model;
 using PPDS.Auth.Cloud;
 using PPDS.Auth.Profiles;
 
@@ -140,14 +141,17 @@ public sealed class InteractiveBrowserCredentialProvider : ICredentialProvider
         // Ensure MSAL client is initialized
         await EnsureMsalClientInitializedAsync().ConfigureAwait(false);
 
-        // Get token
-        var token = await GetTokenAsync(environmentUrl, forceInteractive, cancellationToken).ConfigureAwait(false);
+        // Get token and prime the cache (may prompt user for interactive auth)
+        await GetTokenAsync(environmentUrl, forceInteractive, cancellationToken).ConfigureAwait(false);
 
-        // Create ServiceClient with token provider
-        var client = new ServiceClient(
-            new Uri(environmentUrl),
-            _ => Task.FromResult(token),
-            useUniqueInstance: true);
+        // Create ServiceClient using ConnectionOptions to ensure org metadata discovery.
+        // The provider function uses cached tokens and refreshes silently when needed.
+        var options = new ConnectionOptions
+        {
+            ServiceUri = new Uri(environmentUrl),
+            AccessTokenProviderFunctionAsync = _ => GetTokenAsync(environmentUrl, forceInteractive: false, CancellationToken.None)
+        };
+        var client = new ServiceClient(options);
 
         if (!client.IsReady)
         {

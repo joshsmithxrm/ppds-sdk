@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **ServiceClient org metadata not populated** - Credential providers now use `ConnectionOptions` constructor instead of token provider constructor, which triggers org metadata discovery. This populates `ConnectedOrgFriendlyName`, `ConnectedOrgUniqueName`, and `ConnectedOrgId` properties. ([#86](https://github.com/joshsmithxrm/ppds-sdk/issues/86))
+
 ### Added
 
 - **Integration tests for credential providers** - Live tests for `ClientSecretCredentialProvider`, `CertificateFileCredentialProvider`, and `GitHubFederatedCredentialProvider` ([#55](https://github.com/joshsmithxrm/ppds-sdk/issues/55))

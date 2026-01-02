@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using Azure.Core;
 using Azure.Identity;
 using Microsoft.PowerPlatform.Dataverse.Client;
+using Microsoft.PowerPlatform.Dataverse.Client.Model;
 using PPDS.Auth.Profiles;
 
 namespace PPDS.Auth.Credentials;
@@ -90,17 +91,17 @@ public sealed class ManagedIdentityCredentialProvider : ICredentialProvider
         // Normalize URL
         environmentUrl = environmentUrl.TrimEnd('/');
 
-        // Get token
-        var token = await GetTokenAsync(environmentUrl, cancellationToken).ConfigureAwait(false);
-
-        // Create ServiceClient with token provider
+        // Create ServiceClient using ConnectionOptions to ensure org metadata discovery.
+        // The provider function acquires tokens on demand and refreshes when needed.
         ServiceClient client;
         try
         {
-            client = new ServiceClient(
-                new Uri(environmentUrl),
-                _ => Task.FromResult(token),
-                useUniqueInstance: true);
+            var options = new ConnectionOptions
+            {
+                ServiceUri = new Uri(environmentUrl),
+                AccessTokenProviderFunctionAsync = _ => GetTokenAsync(environmentUrl, CancellationToken.None)
+            };
+            client = new ServiceClient(options);
         }
         catch (Exception ex)
         {
