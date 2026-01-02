@@ -159,7 +159,6 @@ public class ConnectionPoolLiveTests : LiveTestBase, IDisposable
 
         // Act - Get a client and dispose it
         var client = await pool.GetClientAsync();
-        var connectionId = client.ConnectionId;
         await client.DisposeAsync();
 
         // Small delay to allow return to pool

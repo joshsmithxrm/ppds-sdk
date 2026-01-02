@@ -38,7 +38,7 @@ public class DopLiveTests : LiveTestBase, IDisposable
             "DOP should be within Microsoft's allowed range (1-52 per user)");
 
         _output.WriteLine($"Discovered DOP: {dop}");
-        _output.WriteLine("Note: Trial environments typically report DOP=4, production can go up to 50");
+        _output.WriteLine("Note: Trial environments typically report DOP=4, production can go up to 52");
     }
 
     [SkipIfNoClientSecret]
@@ -194,7 +194,7 @@ public class DopLiveTests : LiveTestBase, IDisposable
         _output.WriteLine("Reference DOP values by environment type:");
         _output.WriteLine("  Trial/Sandbox: ~4");
         _output.WriteLine("  Production (low load): ~10-20");
-        _output.WriteLine("  Production (high capacity): ~50");
+        _output.WriteLine("  Production (high capacity): up to 52");
 
         dop.Should().BeGreaterThan(0);
     }

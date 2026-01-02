@@ -220,7 +220,7 @@ public class CustomActionTests : FakeXrmEasyTestsBase
     }
 
     [Fact]
-    public void Service_MultipleConcurrentCreates_AllSucceed()
+    public void Service_MultipleSequentialCreates_AllSucceed()
     {
         // Arrange
         var entities = Enumerable.Range(1, 5).Select(i => new Entity("account")

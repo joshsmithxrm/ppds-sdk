@@ -108,7 +108,7 @@ public class BulkOperationLiveTests : LiveTestBase
     public async Task CreateMultiple_ReturnsCreatedIds()
     {
         // Arrange
-        var (pool, executor) = await CreateExecutorAsync();
+        var (_, executor) = await CreateExecutorAsync();
 
         var accounts = new List<Entity>
         {
@@ -244,7 +244,7 @@ public class BulkOperationLiveTests : LiveTestBase
     public async Task CreateMultiple_MeasuresPerformanceBaseline()
     {
         // Arrange
-        var (pool, executor) = await CreateExecutorAsync();
+        var (_, executor) = await CreateExecutorAsync();
 
         var recordCounts = new[] { 10, 25 }; // Small counts for CI
         var results = new List<(int Count, TimeSpan Duration, double RecordsPerSecond)>();
@@ -280,7 +280,7 @@ public class BulkOperationLiveTests : LiveTestBase
     public async Task CreateMultiple_WithBypassPowerAutomateFlows()
     {
         // Arrange
-        var (pool, executor) = await CreateExecutorAsync();
+        var (_, executor) = await CreateExecutorAsync();
 
         var accounts = new List<Entity>
         {
@@ -309,7 +309,7 @@ public class BulkOperationLiveTests : LiveTestBase
     public async Task CreateMultiple_WithTag()
     {
         // Arrange
-        var (pool, executor) = await CreateExecutorAsync();
+        var (_, executor) = await CreateExecutorAsync();
 
         var tagValue = "PPDS-LiveTest-Tag";
         var accounts = new List<Entity>
@@ -338,7 +338,7 @@ public class BulkOperationLiveTests : LiveTestBase
     public async Task CreateMultiple_SequentialWithMaxParallelBatches1()
     {
         // Arrange
-        var (pool, executor) = await CreateExecutorAsync();
+        var (_, executor) = await CreateExecutorAsync();
 
         var accounts = Enumerable.Range(1, 15).Select(i => new Entity("account")
         {
@@ -399,7 +399,7 @@ public class BulkOperationLiveTests : LiveTestBase
             }
         }
 
-        _pool?.Dispose();
+        if (_pool is not null) await _pool.DisposeAsync();
         _source?.Dispose();
         Configuration.Dispose();
     }

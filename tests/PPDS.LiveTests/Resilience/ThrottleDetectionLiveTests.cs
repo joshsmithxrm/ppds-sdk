@@ -23,7 +23,7 @@ namespace PPDS.LiveTests.Resilience;
 /// </list>
 /// </para>
 /// <para>
-/// For manual throttle testing, see MANUAL_TESTING.md in the Authentication folder.
+/// For manual throttle testing, see MANUAL_TESTING.md in the Resilience folder.
 /// </para>
 /// </remarks>
 [Trait("Category", "Integration")]
