@@ -91,17 +91,15 @@ public sealed class ManagedIdentityCredentialProvider : ICredentialProvider
         // Normalize URL
         environmentUrl = environmentUrl.TrimEnd('/');
 
-        // Get token
-        var token = await GetTokenAsync(environmentUrl, cancellationToken).ConfigureAwait(false);
-
-        // Create ServiceClient using ConnectionOptions to ensure org metadata discovery
+        // Create ServiceClient using ConnectionOptions to ensure org metadata discovery.
+        // The provider function acquires tokens on demand and refreshes when needed.
         ServiceClient client;
         try
         {
             var options = new ConnectionOptions
             {
                 ServiceUri = new Uri(environmentUrl),
-                AccessTokenProviderFunctionAsync = _ => Task.FromResult(token)
+                AccessTokenProviderFunctionAsync = _ => GetTokenAsync(environmentUrl, CancellationToken.None)
             };
             client = new ServiceClient(options);
         }

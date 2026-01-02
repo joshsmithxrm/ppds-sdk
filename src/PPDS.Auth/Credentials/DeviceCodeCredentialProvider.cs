@@ -108,14 +108,15 @@ public sealed class DeviceCodeCredentialProvider : ICredentialProvider
         // Ensure MSAL client is initialized
         await EnsureMsalClientInitializedAsync().ConfigureAwait(false);
 
-        // Get token
-        var token = await GetTokenAsync(environmentUrl, forceInteractive, cancellationToken).ConfigureAwait(false);
+        // Get token and prime the cache (may prompt user for device code auth)
+        await GetTokenAsync(environmentUrl, forceInteractive, cancellationToken).ConfigureAwait(false);
 
-        // Create ServiceClient using ConnectionOptions to ensure org metadata discovery
+        // Create ServiceClient using ConnectionOptions to ensure org metadata discovery.
+        // The provider function uses cached tokens and refreshes silently when needed.
         var options = new ConnectionOptions
         {
             ServiceUri = new Uri(environmentUrl),
-            AccessTokenProviderFunctionAsync = _ => Task.FromResult(token)
+            AccessTokenProviderFunctionAsync = _ => GetTokenAsync(environmentUrl, forceInteractive: false, CancellationToken.None)
         };
         var client = new ServiceClient(options);
 
