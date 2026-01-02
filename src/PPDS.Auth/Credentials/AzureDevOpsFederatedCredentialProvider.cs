@@ -88,6 +88,10 @@ public sealed class AzureDevOpsFederatedCredentialProvider : ICredentialProvider
         };
         var client = new ServiceClient(options);
 
+        // Force org metadata discovery before client is cloned by pool.
+        // Discovery is lazy - accessing a property triggers it.
+        _ = client.ConnectedOrgFriendlyName;
+
         if (!client.IsReady)
         {
             var error = client.LastError ?? "Unknown error";
