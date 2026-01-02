@@ -29,5 +29,14 @@ jobs:
     - name: Build
       run: dotnet build --configuration Release --no-restore
 
-    - name: Test (Unit Tests Only)
-      run: dotnet test --configuration Release --no-build --verbosity normal --filter "Category!=Integration"
+    - name: Test with Coverage
+      run: |
+        dotnet test --configuration Release --no-build --verbosity normal --filter "Category!=Integration" --collect:"XPlat Code Coverage" --results-directory ./coverage
+
+    - name: Upload coverage to Codecov
+      uses: codecov/codecov-action@v5
+      with:
+        directory: ./coverage
+        flags: unittests
+        fail_ci_if_error: false  # Don't fail build if upload fails
+        verbose: true
