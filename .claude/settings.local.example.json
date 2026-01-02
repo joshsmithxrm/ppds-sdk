@@ -91,7 +91,8 @@
       "Bash(gh auth status:*)",
       "Bash(gh release list:*)",
       "Bash(gh release view:*)",
-      "WebSearch"
+      "WebSearch",
+      "Bash(ppds auth list:*)"
     ],
     "deny": [
       "Bash(git push --force:*)",
