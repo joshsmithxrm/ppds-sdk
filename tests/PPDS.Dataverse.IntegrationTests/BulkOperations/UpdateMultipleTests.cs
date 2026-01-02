@@ -155,7 +155,7 @@ public class UpdateMultipleTests : BulkOperationExecutorTestsBase
         // Arrange
         var createResult = await Executor.CreateMultipleAsync(EntityName, CreateTestEntities(EntityName, 5));
         var updateEntities = CreateTestEntitiesWithIds(EntityName, createResult.CreatedIds!);
-        var cts = new CancellationTokenSource();
+        using var cts = new CancellationTokenSource();
 
         // Act - verify the method accepts a cancellation token
         var result = await Executor.UpdateMultipleAsync(EntityName, updateEntities, cancellationToken: cts.Token);

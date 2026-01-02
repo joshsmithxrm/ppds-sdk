@@ -117,7 +117,7 @@ public class UpsertMultipleTests : BulkOperationExecutorTestsBase
         // Arrange - Use existing entities
         var createResult = await Executor.CreateMultipleAsync(EntityName, CreateTestEntities(EntityName, 5));
         var upsertEntities = CreateTestEntitiesWithIds(EntityName, createResult.CreatedIds!);
-        var cts = new CancellationTokenSource();
+        using var cts = new CancellationTokenSource();
 
         // Act - verify the method accepts a cancellation token
         var result = await Executor.UpsertMultipleAsync(EntityName, upsertEntities, cancellationToken: cts.Token);

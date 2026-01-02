@@ -36,7 +36,7 @@ public class DeleteMultipleTests : BulkOperationExecutorTestsBase
         // Arrange
         var createResult = await Executor.CreateMultipleAsync(EntityName, CreateTestEntities(EntityName, 3));
         var idsToDelete = createResult.CreatedIds!.ToList();
-        var cts = new CancellationTokenSource();
+        using var cts = new CancellationTokenSource();
 
         // Act - verify the method accepts a cancellation token and processes records
         var result = await Executor.DeleteMultipleAsync(EntityName, idsToDelete, cancellationToken: cts.Token);

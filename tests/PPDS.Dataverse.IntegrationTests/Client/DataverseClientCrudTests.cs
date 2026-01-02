@@ -358,22 +358,5 @@ public class DataverseClientCrudTests : FakeXrmEasyTestsBase
         retrieved.GetAttributeValue<string>("name").Should().Be("Upserted");
     }
 
-    [Fact]
-    public void Execute_UpsertRequest_UpdatesExistingRecord()
-    {
-        // Arrange
-        var id = Service.Create(new Entity(EntityName) { ["name"] = "Original" });
-        var updateEntity = new Entity(EntityName, id) { ["name"] = "Upserted" };
-        var request = new Microsoft.Xrm.Sdk.Messages.UpsertRequest { Target = updateEntity };
-
-        // Act
-        var response = (Microsoft.Xrm.Sdk.Messages.UpsertResponse)Service.Execute(request);
-
-        // Assert
-        response.RecordCreated.Should().BeFalse();
-        var retrieved = Service.Retrieve(EntityName, id, new ColumnSet(true));
-        retrieved.GetAttributeValue<string>("name").Should().Be("Upserted");
-    }
-
     #endregion
 }

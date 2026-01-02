@@ -63,9 +63,9 @@ public class FakeConnectionPool : IDataverseConnectionPool
             onDispose: () => Interlocked.Decrement(ref _activeConnections));
     }
 
-    public Task<IPooledClient?> TryGetClientWithCapacityAsync(CancellationToken cancellationToken = default)
+    public async Task<IPooledClient?> TryGetClientWithCapacityAsync(CancellationToken cancellationToken = default)
     {
-        return GetClientAsync(cancellationToken: cancellationToken)!;
+        return await GetClientAsync(cancellationToken: cancellationToken);
     }
 
     public Task<OrganizationResponse> ExecuteAsync(OrganizationRequest request, CancellationToken cancellationToken = default)

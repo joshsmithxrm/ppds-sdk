@@ -18,11 +18,16 @@ namespace PPDS.Dataverse.IntegrationTests.BulkOperations;
 /// - ContinueOnError option is properly passed
 /// - Error details are captured
 /// </summary>
+/// <remarks>
+/// Uses [Collection] to prevent parallel execution since DeleteMultipleRequestExecutor
+/// uses a static FailurePredicate that could cause test pollution if run in parallel.
+/// </remarks>
+[Collection("FailurePredicate")]
 public class PartialSuccessTests : BulkOperationExecutorTestsBase, IDisposable
 {
     private const string EntityName = "account";
 
-    public new void Dispose()
+    public override void Dispose()
     {
         // Reset any failure predicates after each test
         DeleteMultipleRequestExecutor.ResetFailurePredicate();
@@ -147,20 +152,19 @@ public class PartialSuccessTests : BulkOperationExecutorTestsBase, IDisposable
     #region ContinueOnError Behavior Verification
 
     [Fact]
-    public async Task CreateMultipleAsync_ElasticTable_ContinueOnErrorFalse_IsDefault()
+    public async Task CreateMultipleAsync_ElasticTable_WithDefaultOptions_Succeeds()
     {
         // Arrange
         var entities = CreateTestEntities(EntityName, 5);
         var options = new BulkOperationOptions
         {
             ElasticTable = true
-            // ContinueOnError defaults to true for backward compatibility
         };
 
         // Act
         var result = await Executor.CreateMultipleAsync(EntityName, entities, options);
 
-        // Assert - Should succeed normally
+        // Assert - Should succeed normally with default options
         result.IsSuccess.Should().BeTrue();
     }
 
