@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net;
@@ -17,7 +18,7 @@ public sealed class ServiceClientFactory : IDisposable
 {
     private readonly ProfileStore _profileStore;
     private readonly Action<DeviceCodeInfo>? _deviceCodeCallback;
-    private readonly List<ICredentialProvider> _activeProviders = new();
+    private readonly ConcurrentBag<ICredentialProvider> _activeProviders = new();
     private bool _disposed;
 
     /// <summary>
@@ -258,12 +259,11 @@ public sealed class ServiceClientFactory : IDisposable
         if (_disposed)
             return;
 
-        foreach (var provider in _activeProviders)
+        while (_activeProviders.TryTake(out var provider))
         {
             provider.Dispose();
         }
 
-        _activeProviders.Clear();
         _profileStore.Dispose();
         _disposed = true;
     }
