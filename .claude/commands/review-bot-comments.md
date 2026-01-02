@@ -21,7 +21,10 @@ For each bot comment, determine verdict and rationale:
 |---------|---------|
 | **Valid** | Bot is correct, code should be changed |
 | **False Positive** | Bot is wrong, explain why |
+| **Duplicate** | Same issue reported by another bot - still needs reply |
 | **Unclear** | Need to investigate before deciding |
+
+**IMPORTANT:** Every comment needs a reply, including duplicates. Track all comment IDs to ensure none are missed.
 
 ### 3. Present Summary and WAIT FOR APPROVAL
 
@@ -69,6 +72,7 @@ gh api repos/joshsmithxrm/ppds-sdk/pulls/{pr}/comments \
 | Valid (fixed) | `Fixed in {commit_sha} - {brief description}` |
 | Declined | `Declining - {reason}` |
 | False positive | `False positive - {explanation}` |
+| Duplicate | Same reply as original (reference the fix commit) |
 
 ## Common False Positives
 
@@ -88,6 +92,17 @@ gh api repos/joshsmithxrm/ppds-sdk/pulls/{pr}/comments \
 | Missing null check | Check context |
 | Resource not disposed | Yes - but verify interface first |
 | Generic catch clause | Context-dependent |
+
+### 6. Verify All Comments Addressed
+
+Before completing, verify every comment has a reply:
+
+```bash
+# Count original comments vs replies
+gh api repos/joshsmithxrm/ppds-sdk/pulls/{pr}/comments --jq "length"
+```
+
+If any comments are missing replies, address them before marking complete.
 
 ## When to Use
 
