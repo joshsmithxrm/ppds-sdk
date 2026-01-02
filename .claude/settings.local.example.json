@@ -69,6 +69,7 @@
       "Bash(Get-ChildItem:*)",
       "Bash(Test-Path:*)",
       "Bash(Get-Content:*)",
+      "Bash(Select-String:*)",
       "Bash(Select-Object:*)",
       "Bash(ForEach-Object:*)",
       "Bash(Where-Object:*)",

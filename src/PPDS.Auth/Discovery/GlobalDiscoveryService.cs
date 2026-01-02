@@ -17,11 +17,6 @@ namespace PPDS.Auth.Discovery;
 /// </summary>
 public sealed class GlobalDiscoveryService : IGlobalDiscoveryService, IDisposable
 {
-    /// <summary>
-    /// Microsoft's well-known public client ID for development/prototyping with Dataverse.
-    /// </summary>
-    private const string MicrosoftPublicClientId = "51f81489-12ee-4a9e-aaae-a2591f45987d";
-
     private readonly CloudEnvironment _cloud;
     private readonly string? _tenantId;
     private readonly string? _homeAccountId;
@@ -231,35 +226,11 @@ public sealed class GlobalDiscoveryService : IGlobalDiscoveryService, IDisposabl
         if (_msalClient != null)
             return;
 
-        var cloudInstance = CloudEndpoints.GetAzureCloudInstance(_cloud);
-
         // Always use "organizations" (multi-tenant) authority for discovery.
         // This ensures tokens cached during profile creation (also using "organizations")
         // can be reused. Tenant-specific authority is only needed for environment connections.
-        _msalClient = PublicClientApplicationBuilder
-            .Create(MicrosoftPublicClientId)
-            .WithAuthority(cloudInstance, "organizations")
-            .WithDefaultRedirectUri()
-            .Build();
-
-        // Set up persistent cache
-        try
-        {
-            ProfilePaths.EnsureDirectoryExists();
-
-            var storageProperties = new StorageCreationPropertiesBuilder(
-                    ProfilePaths.TokenCacheFileName,
-                    ProfilePaths.DataDirectory)
-                .WithUnprotectedFile()
-                .Build();
-
-            _cacheHelper = await MsalCacheHelper.CreateAsync(storageProperties).ConfigureAwait(false);
-            _cacheHelper.RegisterCache(_msalClient.UserTokenCache);
-        }
-        catch (MsalCachePersistenceException)
-        {
-            // Continue without persistent cache
-        }
+        _msalClient = MsalClientBuilder.CreateClient(_cloud, tenantId: null, MsalClientBuilder.RedirectUriOption.Default);
+        _cacheHelper = await MsalClientBuilder.CreateAndRegisterCacheAsync(_msalClient, warnOnFailure: false).ConfigureAwait(false);
     }
 
     /// <inheritdoc />
@@ -268,12 +239,7 @@ public sealed class GlobalDiscoveryService : IGlobalDiscoveryService, IDisposabl
         if (_disposed)
             return;
 
-        // Unregister cache helper to release file locks on token cache
-        if (_cacheHelper != null && _msalClient != null)
-        {
-            _cacheHelper.UnregisterCache(_msalClient.UserTokenCache);
-        }
-
+        MsalClientBuilder.UnregisterCache(_cacheHelper, _msalClient);
         _disposed = true;
     }
 }

@@ -213,4 +213,23 @@ public sealed class ProfileCollection
             string.Equals(p.Name, name, StringComparison.OrdinalIgnoreCase) &&
             p.Index != excludeIndex);
     }
+
+    /// <summary>
+    /// Creates a deep copy of this collection with all profiles cloned.
+    /// </summary>
+    public ProfileCollection Clone()
+    {
+        var copy = new ProfileCollection
+        {
+            Version = Version,
+            ActiveIndex = ActiveIndex
+        };
+
+        foreach (var kvp in Profiles)
+        {
+            copy.Profiles[kvp.Key] = kvp.Value.Clone();
+        }
+
+        return copy;
+    }
 }

@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0-beta.3] - 2026-01-02
+
+### Fixed
+
+- **Race condition in ProfileConnectionSource** - Added `SemaphoreSlim` for proper async synchronization instead of mixed lock/async patterns ([#81](https://github.com/joshsmithxrm/ppds-sdk/pull/81))
+- **Memory leaks in credential providers** - Added cache unregistration in `Dispose()` for `DeviceCodeCredentialProvider`, `InteractiveBrowserCredentialProvider`, `UsernamePasswordCredentialProvider`, and `GlobalDiscoveryService` ([#81](https://github.com/joshsmithxrm/ppds-sdk/pull/81))
+- **Sync-over-async deadlock risk** - Wrapped blocking calls in `Task.Run()` to prevent deadlocks in UI/ASP.NET contexts ([#81](https://github.com/joshsmithxrm/ppds-sdk/pull/81))
+- **Copy-paste bug in CertificateStoreCredentialProvider** - Fixed `StoreName=` → `StoreLocation=` parameter ([#81](https://github.com/joshsmithxrm/ppds-sdk/pull/81))
+
+### Added
+
+- `AuthenticationOutput` static class for configurable authentication message output - library consumers can redirect or suppress console messages ([#81](https://github.com/joshsmithxrm/ppds-sdk/pull/81))
+- `Clone()` methods on `AuthProfile`, `EnvironmentInfo`, and `ProfileCollection` for proper deep copying ([#82](https://github.com/joshsmithxrm/ppds-sdk/pull/82))
+- Input validation for required fields in `CredentialProviderFactory` ([#81](https://github.com/joshsmithxrm/ppds-sdk/pull/81))
+
+### Changed
+
+- Extracted common MSAL client setup into `MsalClientBuilder` - reduces code duplication across credential providers ([#82](https://github.com/joshsmithxrm/ppds-sdk/pull/82))
+
 ## [1.0.0-beta.2] - 2026-01-01
 
 ### Fixed
@@ -41,6 +60,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - JWT claims parsing for identity information
 - Targets: `net8.0`, `net10.0`
 
-[Unreleased]: https://github.com/joshsmithxrm/ppds-sdk/compare/Auth-v1.0.0-beta.2...HEAD
+[Unreleased]: https://github.com/joshsmithxrm/ppds-sdk/compare/Auth-v1.0.0-beta.3...HEAD
+[1.0.0-beta.3]: https://github.com/joshsmithxrm/ppds-sdk/compare/Auth-v1.0.0-beta.2...Auth-v1.0.0-beta.3
 [1.0.0-beta.2]: https://github.com/joshsmithxrm/ppds-sdk/compare/Auth-v1.0.0-beta.1...Auth-v1.0.0-beta.2
 [1.0.0-beta.1]: https://github.com/joshsmithxrm/ppds-sdk/releases/tag/Auth-v1.0.0-beta.1

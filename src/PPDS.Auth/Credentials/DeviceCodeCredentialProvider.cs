@@ -17,12 +17,6 @@ namespace PPDS.Auth.Credentials;
 /// </summary>
 public sealed class DeviceCodeCredentialProvider : ICredentialProvider
 {
-    /// <summary>
-    /// Microsoft's well-known public client ID for development/prototyping with Dataverse.
-    /// See: https://learn.microsoft.com/en-us/power-apps/developer/data-platform/xrm-tooling/use-connection-strings-xrm-tooling-connect
-    /// </summary>
-    private const string MicrosoftPublicClientId = "51f81489-12ee-4a9e-aaae-a2591f45987d";
-
     private readonly CloudEnvironment _cloud;
     private readonly string? _tenantId;
     private readonly string? _username;
@@ -222,34 +216,8 @@ public sealed class DeviceCodeCredentialProvider : ICredentialProvider
         if (_msalClient != null)
             return;
 
-        var cloudInstance = CloudEndpoints.GetAzureCloudInstance(_cloud);
-        var tenant = string.IsNullOrWhiteSpace(_tenantId) ? "organizations" : _tenantId;
-
-        _msalClient = PublicClientApplicationBuilder
-            .Create(MicrosoftPublicClientId)
-            .WithAuthority(cloudInstance, tenant)
-            .WithDefaultRedirectUri()
-            .Build();
-
-        // Set up persistent cache
-        try
-        {
-            ProfilePaths.EnsureDirectoryExists();
-
-            var storageProperties = new StorageCreationPropertiesBuilder(
-                    ProfilePaths.TokenCacheFileName,
-                    ProfilePaths.DataDirectory)
-                .WithUnprotectedFile() // Fallback for Linux without libsecret
-                .Build();
-
-            _cacheHelper = await MsalCacheHelper.CreateAsync(storageProperties).ConfigureAwait(false);
-            _cacheHelper.RegisterCache(_msalClient.UserTokenCache);
-        }
-        catch (MsalCachePersistenceException ex)
-        {
-            // Cache persistence failed - continue without persistent cache
-            Console.Error.WriteLine($"Warning: Token cache persistence unavailable ({ex.Message}). You may need to re-authenticate each session.");
-        }
+        _msalClient = MsalClientBuilder.CreateClient(_cloud, _tenantId, MsalClientBuilder.RedirectUriOption.Default);
+        _cacheHelper = await MsalClientBuilder.CreateAndRegisterCacheAsync(_msalClient).ConfigureAwait(false);
     }
 
     /// <inheritdoc />
@@ -258,12 +226,7 @@ public sealed class DeviceCodeCredentialProvider : ICredentialProvider
         if (_disposed)
             return;
 
-        // Unregister cache before disposal to release file locks
-        if (_cacheHelper != null && _msalClient != null)
-        {
-            _cacheHelper.UnregisterCache(_msalClient.UserTokenCache);
-        }
-
+        MsalClientBuilder.UnregisterCache(_cacheHelper, _msalClient);
         _disposed = true;
     }
 }

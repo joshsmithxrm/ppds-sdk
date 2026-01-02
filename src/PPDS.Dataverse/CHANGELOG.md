@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0-beta.2] - 2026-01-02
+
+### Fixed
+
+- **Double-checked locking in ConnectionStringSource** - Added `volatile` modifier to `_client` field for correct multi-threaded behavior ([#81](https://github.com/joshsmithxrm/ppds-sdk/pull/81))
+
+### Changed
+
+- Extracted throttle detection logic into `ThrottleDetector` class for cleaner separation of concerns in `PooledClient` ([#82](https://github.com/joshsmithxrm/ppds-sdk/pull/82))
+- Improved input validation for `DataverseConnection` name parameter ([#82](https://github.com/joshsmithxrm/ppds-sdk/pull/82))
+
 ## [1.0.0-beta.1] - 2025-12-29
 
 ### Added
@@ -34,5 +45,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Removed rate control presets (`Conservative`, `Balanced`, `Aggressive`) in favor of DOP-based parallelism
 - Removed adaptive rate control in favor of server-recommended limits
 
-[Unreleased]: https://github.com/joshsmithxrm/ppds-sdk/compare/Dataverse-v1.0.0-beta.1...HEAD
+[Unreleased]: https://github.com/joshsmithxrm/ppds-sdk/compare/Dataverse-v1.0.0-beta.2...HEAD
+[1.0.0-beta.2]: https://github.com/joshsmithxrm/ppds-sdk/compare/Dataverse-v1.0.0-beta.1...Dataverse-v1.0.0-beta.2
 [1.0.0-beta.1]: https://github.com/joshsmithxrm/ppds-sdk/releases/tag/Dataverse-v1.0.0-beta.1

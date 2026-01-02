@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0-beta.2] - 2026-01-02
+
+### Changed
+
+- **TieredImporter refactored for Single Responsibility Principle** - Reduced from 1,085 to 646 lines by extracting: ([#81](https://github.com/joshsmithxrm/ppds-sdk/pull/81))
+  - `SchemaValidator` / `ISchemaValidator` - Metadata loading and schema mismatch detection
+  - `DeferredFieldProcessor` - Self-referential lookup field updates
+  - `RelationshipProcessor` - M2M relationship association processing
+  - `ImportContext` - Shared context passed between import phases
+  - `IImportPhaseProcessor` / `PhaseResult` - Phase processor abstraction
+
+### Added
+
+- `FieldMetadataCollection` wrapper for convenient field metadata lookup ([#81](https://github.com/joshsmithxrm/ppds-sdk/pull/81))
+- `FieldValidity` record struct for tracking field create/update validity ([#81](https://github.com/joshsmithxrm/ppds-sdk/pull/81))
+- `SchemaMismatchResult` result type with error message builder ([#81](https://github.com/joshsmithxrm/ppds-sdk/pull/81))
+- Input validation for `CmtSchemaReader` entity and field name attributes ([#81](https://github.com/joshsmithxrm/ppds-sdk/pull/81))
+- Validation for `ImportOptions.MaxParallelEntities` property ([#81](https://github.com/joshsmithxrm/ppds-sdk/pull/81))
+
 ## [1.0.0-beta.1] - 2025-12-29
 
 ### Added
@@ -23,5 +42,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - DI integration via `AddDataverseMigration()` extension method
 - Targets: `net8.0`, `net10.0`
 
-[Unreleased]: https://github.com/joshsmithxrm/ppds-sdk/compare/Migration-v1.0.0-beta.1...HEAD
+[Unreleased]: https://github.com/joshsmithxrm/ppds-sdk/compare/Migration-v1.0.0-beta.2...HEAD
+[1.0.0-beta.2]: https://github.com/joshsmithxrm/ppds-sdk/compare/Migration-v1.0.0-beta.1...Migration-v1.0.0-beta.2
 [1.0.0-beta.1]: https://github.com/joshsmithxrm/ppds-sdk/releases/tag/Migration-v1.0.0-beta.1

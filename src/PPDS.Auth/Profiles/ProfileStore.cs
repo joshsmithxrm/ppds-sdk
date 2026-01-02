@@ -217,9 +217,7 @@ public sealed class ProfileStore : IDisposable
     /// </summary>
     private static ProfileCollection CloneWithEncryption(ProfileCollection source)
     {
-        // Serialize and deserialize to create a deep copy
-        var json = JsonSerializer.Serialize(source, JsonOptions);
-        var copy = JsonSerializer.Deserialize<ProfileCollection>(json, JsonOptions)!;
+        var copy = source.Clone();
 
         // Encrypt sensitive fields
         foreach (var profile in copy.All)

@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0-beta.5] - 2026-01-02
+
+### Fixed
+
+- **Thread-safety in PluginRegistrationService** - Changed entity type code cache to `ConcurrentDictionary` ([#81](https://github.com/joshsmithxrm/ppds-sdk/pull/81))
+
+### Added
+
+- `PluginRegistrationConfig.Validate()` method with `executionOrder` range checking (1-999999) - called before plugin deployment ([#82](https://github.com/joshsmithxrm/ppds-sdk/pull/82))
+
+### Changed
+
+- Extracted `ParseBypassPlugins` method to `DataCommandGroup` to eliminate duplication ([#81](https://github.com/joshsmithxrm/ppds-sdk/pull/81))
+- Extracted constants in `PluginRegistrationService` (`ComponentTypePluginAssembly`, `StagePreValidation`, etc.) ([#82](https://github.com/joshsmithxrm/ppds-sdk/pull/82))
+- Removed manual `Ctrl+C` handler - relies on `System.CommandLine` built-in cancellation ([#81](https://github.com/joshsmithxrm/ppds-sdk/pull/81))
+
 ## [1.0.0-beta.4] - 2026-01-01
 
 ### Fixed
@@ -90,7 +106,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Packaged as .NET global tool (`ppds`)
 - Targets: `net10.0`
 
-[Unreleased]: https://github.com/joshsmithxrm/ppds-sdk/compare/Cli-v1.0.0-beta.4...HEAD
+[Unreleased]: https://github.com/joshsmithxrm/ppds-sdk/compare/Cli-v1.0.0-beta.5...HEAD
+[1.0.0-beta.5]: https://github.com/joshsmithxrm/ppds-sdk/compare/Cli-v1.0.0-beta.4...Cli-v1.0.0-beta.5
 [1.0.0-beta.4]: https://github.com/joshsmithxrm/ppds-sdk/compare/Cli-v1.0.0-beta.3...Cli-v1.0.0-beta.4
 [1.0.0-beta.3]: https://github.com/joshsmithxrm/ppds-sdk/compare/Cli-v1.0.0-beta.2...Cli-v1.0.0-beta.3
 [1.0.0-beta.2]: https://github.com/joshsmithxrm/ppds-sdk/compare/Cli-v1.0.0-beta.1...Cli-v1.0.0-beta.2

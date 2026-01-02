@@ -85,4 +85,22 @@ public sealed class EnvironmentInfo
     {
         return $"{DisplayName} ({Url})";
     }
+
+    /// <summary>
+    /// Creates a deep copy of this environment info.
+    /// </summary>
+    public EnvironmentInfo Clone()
+    {
+        return new EnvironmentInfo
+        {
+            Id = Id,
+            Url = Url,
+            DisplayName = DisplayName,
+            UniqueName = UniqueName,
+            OrganizationId = OrganizationId,
+            EnvironmentId = EnvironmentId,
+            Type = Type,
+            Region = Region
+        };
+    }
 }

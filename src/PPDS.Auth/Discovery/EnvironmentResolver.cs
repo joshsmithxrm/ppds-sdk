@@ -131,12 +131,14 @@ public static class EnvironmentResolver
 
 /// <summary>
 /// Exception thrown when multiple environments match a given identifier.
+/// For example, when searching by display name and multiple environments have similar names.
 /// </summary>
 public class AmbiguousMatchException : Exception
 {
     /// <summary>
     /// Creates a new AmbiguousMatchException.
     /// </summary>
+    /// <param name="message">A message describing which environments matched ambiguously.</param>
     public AmbiguousMatchException(string message) : base(message)
     {
     }

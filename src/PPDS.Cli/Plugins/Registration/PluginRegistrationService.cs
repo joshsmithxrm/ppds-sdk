@@ -20,12 +20,26 @@ public sealed class PluginRegistrationService
     // Cache for entity type codes (ETCs) - some like pluginpackage vary by environment
     private readonly ConcurrentDictionary<string, int> _entityTypeCodeCache = new();
 
+    #region Dataverse Constants
+
+    // Solution component type codes (from Microsoft.Crm.Sdk.Messages.ComponentType)
+    private const int ComponentTypePluginAssembly = 91;
+    private const int ComponentTypeSdkMessageProcessingStep = 92;
+
     // Well-known component type codes that are consistent across all environments
     private static readonly Dictionary<string, int> WellKnownComponentTypes = new()
     {
-        ["pluginassembly"] = 91,
-        ["sdkmessageprocessingstep"] = 92
+        ["pluginassembly"] = ComponentTypePluginAssembly,
+        ["sdkmessageprocessingstep"] = ComponentTypeSdkMessageProcessingStep
     };
+
+    // Pipeline stage values (from SDK Message Processing Step entity)
+    private const int StagePreValidation = 10;
+    private const int StagePreOperation = 20;
+    private const int StageMainOperation = 30;
+    private const int StagePostOperation = 40;
+
+    #endregion
 
     public PluginRegistrationService(IOrganizationService service)
     {
@@ -241,7 +255,7 @@ public sealed class PluginRegistrationService
                 Message = e.GetAttributeValue<AliasedValue>("message.name")?.Value?.ToString() ?? string.Empty,
                 PrimaryEntity = e.GetAttributeValue<AliasedValue>("filter.primaryobjecttypecode")?.Value?.ToString() ?? "none",
                 SecondaryEntity = e.GetAttributeValue<AliasedValue>("filter.secondaryobjecttypecode")?.Value?.ToString(),
-                Stage = MapStageFromValue(e.GetAttributeValue<OptionSetValue>("stage")?.Value ?? 40),
+                Stage = MapStageFromValue(e.GetAttributeValue<OptionSetValue>("stage")?.Value ?? StagePostOperation),
                 Mode = MapModeFromValue(e.GetAttributeValue<OptionSetValue>("mode")?.Value ?? 0),
                 ExecutionOrder = e.GetAttributeValue<int>("rank"),
                 FilteringAttributes = e.GetAttributeValue<string>("filteringattributes"),
@@ -384,7 +398,7 @@ public sealed class PluginRegistrationService
             // Add to solution even on update (handles case where component exists but isn't in solution)
             if (!string.IsNullOrEmpty(solutionName))
             {
-                await AddToSolutionAsync(existing.Id, 91, solutionName); // 91 = Plugin Assembly
+                await AddToSolutionAsync(existing.Id, ComponentTypePluginAssembly, solutionName);
             }
 
             return existing.Id;
@@ -566,7 +580,7 @@ public sealed class PluginRegistrationService
             // Add to solution even on update (handles case where component exists but isn't in solution)
             if (!string.IsNullOrEmpty(solutionName))
             {
-                await AddToSolutionAsync(existing.Id, 92, solutionName); // 92 = SDK Message Processing Step
+                await AddToSolutionAsync(existing.Id, ComponentTypeSdkMessageProcessingStep, solutionName);
             }
 
             return existing.Id;
@@ -766,10 +780,10 @@ public sealed class PluginRegistrationService
 
     private static string MapStageFromValue(int value) => value switch
     {
-        10 => "PreValidation",
-        20 => "PreOperation",
-        30 => "MainOperation",
-        40 => "PostOperation",
+        StagePreValidation => "PreValidation",
+        StagePreOperation => "PreOperation",
+        StageMainOperation => "MainOperation",
+        StagePostOperation => "PostOperation",
         _ => value.ToString()
     };
 
@@ -790,11 +804,11 @@ public sealed class PluginRegistrationService
 
     private static int MapStageToValue(string stage) => stage switch
     {
-        "PreValidation" => 10,
-        "PreOperation" => 20,
-        "MainOperation" => 30,
-        "PostOperation" => 40,
-        _ => int.TryParse(stage, out var v) ? v : 40
+        "PreValidation" => StagePreValidation,
+        "PreOperation" => StagePreOperation,
+        "MainOperation" => StageMainOperation,
+        "PostOperation" => StagePostOperation,
+        _ => int.TryParse(stage, out var v) ? v : StagePostOperation
     };
 
     private static int MapModeToValue(string mode) => mode switch

@@ -14,11 +14,6 @@ namespace PPDS.Auth.Credentials;
 /// </summary>
 public sealed class UsernamePasswordCredentialProvider : ICredentialProvider
 {
-    /// <summary>
-    /// Microsoft's well-known public client ID for development/prototyping with Dataverse.
-    /// </summary>
-    private const string MicrosoftPublicClientId = "51f81489-12ee-4a9e-aaae-a2591f45987d";
-
     private readonly CloudEnvironment _cloud;
     private readonly string? _tenantId;
     private readonly string _username;
@@ -131,31 +126,8 @@ public sealed class UsernamePasswordCredentialProvider : ICredentialProvider
         if (_msalClient != null)
             return;
 
-        var cloudInstance = CloudEndpoints.GetAzureCloudInstance(_cloud);
-        var tenant = string.IsNullOrWhiteSpace(_tenantId) ? "organizations" : _tenantId;
-
-        _msalClient = PublicClientApplicationBuilder
-            .Create(MicrosoftPublicClientId)
-            .WithAuthority(cloudInstance, tenant)
-            .Build();
-
-        try
-        {
-            ProfilePaths.EnsureDirectoryExists();
-
-            var storageProperties = new StorageCreationPropertiesBuilder(
-                    ProfilePaths.TokenCacheFileName,
-                    ProfilePaths.DataDirectory)
-                .WithUnprotectedFile()
-                .Build();
-
-            _cacheHelper = await MsalCacheHelper.CreateAsync(storageProperties).ConfigureAwait(false);
-            _cacheHelper.RegisterCache(_msalClient.UserTokenCache);
-        }
-        catch (MsalCachePersistenceException)
-        {
-            // Cache persistence failed - continue without persistent cache
-        }
+        _msalClient = MsalClientBuilder.CreateClient(_cloud, _tenantId, MsalClientBuilder.RedirectUriOption.None);
+        _cacheHelper = await MsalClientBuilder.CreateAndRegisterCacheAsync(_msalClient, warnOnFailure: false).ConfigureAwait(false);
     }
 
     /// <inheritdoc />
@@ -164,12 +136,7 @@ public sealed class UsernamePasswordCredentialProvider : ICredentialProvider
         if (_disposed)
             return;
 
-        // Unregister cache before disposal to release file locks
-        if (_cacheHelper != null && _msalClient != null)
-        {
-            _cacheHelper.UnregisterCache(_msalClient.UserTokenCache);
-        }
-
+        MsalClientBuilder.UnregisterCache(_cacheHelper, _msalClient);
         _disposed = true;
     }
 }
