@@ -1,17 +1,17 @@
 using FluentAssertions;
 using PPDS.LiveTests.Infrastructure;
-using Xunit;
 
 namespace PPDS.LiveTests.Cli;
 
 /// <summary>
 /// E2E tests for ppds auth commands.
+/// Tests only run on .NET 8.0 since CLI is spawned with --framework net8.0.
 /// </summary>
 public class AuthCommandE2ETests : CliE2ETestBase
 {
     #region auth list
 
-    [Fact]
+    [CliE2EFact]
     public async Task AuthList_ReturnsSuccessExitCode()
     {
         // auth list should work even with no profiles
@@ -20,7 +20,7 @@ public class AuthCommandE2ETests : CliE2ETestBase
         result.ExitCode.Should().Be(0);
     }
 
-    [Fact]
+    [CliE2EFact]
     public async Task AuthList_JsonFormat_ReturnsValidJson()
     {
         var result = await RunCliAsync("auth", "list", "--output-format", "json");
@@ -35,7 +35,7 @@ public class AuthCommandE2ETests : CliE2ETestBase
 
     #region auth who
 
-    [Fact]
+    [CliE2EFact]
     public async Task AuthWho_NoActiveProfile_ReturnsSuccessWithMessage()
     {
         // If there's no active profile, auth who should still succeed but indicate no profile
@@ -47,7 +47,7 @@ public class AuthCommandE2ETests : CliE2ETestBase
         (result.StdOut + result.StdErr).Should().NotBeEmpty();
     }
 
-    [Fact]
+    [CliE2EFact]
     public async Task AuthWho_JsonFormat_ReturnsValidJson()
     {
         var result = await RunCliAsync("auth", "who", "--output-format", "json");
@@ -61,7 +61,7 @@ public class AuthCommandE2ETests : CliE2ETestBase
 
     #region auth create with client secret
 
-    [SkipIfNoClientSecret]
+    [CliE2EWithCredentials]
     public async Task AuthCreate_WithClientSecret_CreatesProfile()
     {
         var profileName = GenerateTestProfileName();
@@ -78,7 +78,7 @@ public class AuthCommandE2ETests : CliE2ETestBase
         result.StdOut.Should().Contain("Profile created");
     }
 
-    [SkipIfNoClientSecret]
+    [CliE2EWithCredentials]
     public async Task AuthCreate_DuplicateName_Fails()
     {
         var profileName = GenerateTestProfileName();
@@ -107,7 +107,7 @@ public class AuthCommandE2ETests : CliE2ETestBase
         result2.StdErr.Should().Contain("already in use");
     }
 
-    [Fact]
+    [CliE2EFact]
     public async Task AuthCreate_MissingRequiredArgs_Fails()
     {
         // Client secret auth requires --applicationId, --clientSecret, --tenant, --environment
@@ -123,7 +123,7 @@ public class AuthCommandE2ETests : CliE2ETestBase
 
     #region auth delete
 
-    [SkipIfNoClientSecret]
+    [CliE2EWithCredentials]
     public async Task AuthDelete_ExistingProfile_DeletesSuccessfully()
     {
         var profileName = GenerateTestProfileName();
@@ -149,7 +149,7 @@ public class AuthCommandE2ETests : CliE2ETestBase
         deleteResult.StdOut.Should().Contain("deleted");
     }
 
-    [Fact]
+    [CliE2EFact]
     public async Task AuthDelete_NonExistentProfile_Fails()
     {
         var result = await RunCliAsync("auth", "delete", "--name", "nonexistent-profile-12345");
@@ -158,7 +158,7 @@ public class AuthCommandE2ETests : CliE2ETestBase
         result.StdErr.Should().Contain("not found");
     }
 
-    [Fact]
+    [CliE2EFact]
     public async Task AuthDelete_NoIdentifier_Fails()
     {
         var result = await RunCliAsync("auth", "delete");
@@ -171,7 +171,7 @@ public class AuthCommandE2ETests : CliE2ETestBase
 
     #region auth select
 
-    [SkipIfNoClientSecret]
+    [CliE2EWithCredentials]
     public async Task AuthSelect_ByName_SelectsProfile()
     {
         var profileName = GenerateTestProfileName();
@@ -192,7 +192,7 @@ public class AuthCommandE2ETests : CliE2ETestBase
         result.StdOut.Should().Contain("Active profile");
     }
 
-    [Fact]
+    [CliE2EFact]
     public async Task AuthSelect_NonExistentProfile_Fails()
     {
         var result = await RunCliAsync("auth", "select", "--name", "nonexistent-profile-xyz");
@@ -205,7 +205,7 @@ public class AuthCommandE2ETests : CliE2ETestBase
 
     #region auth clear
 
-    [Fact]
+    [CliE2EFact]
     public async Task AuthClear_NoProfiles_Succeeds()
     {
         // Clear should succeed even when there are no profiles
@@ -219,7 +219,7 @@ public class AuthCommandE2ETests : CliE2ETestBase
 
     #region auth name validation
 
-    [Fact]
+    [CliE2EFact]
     public async Task AuthCreate_InvalidProfileName_TooLong_Fails()
     {
         var longName = new string('a', 35); // > 30 chars
@@ -233,7 +233,7 @@ public class AuthCommandE2ETests : CliE2ETestBase
         (result.StdOut + result.StdErr).Should().Contain("30");
     }
 
-    [Fact]
+    [CliE2EFact]
     public async Task AuthCreate_InvalidProfileName_SpecialChars_Fails()
     {
         var result = await RunCliAsync(

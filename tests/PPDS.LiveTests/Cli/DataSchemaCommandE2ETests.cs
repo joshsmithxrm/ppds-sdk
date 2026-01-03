@@ -1,18 +1,18 @@
 using FluentAssertions;
 using PPDS.LiveTests.Infrastructure;
-using Xunit;
 
 namespace PPDS.LiveTests.Cli;
 
 /// <summary>
 /// E2E tests for ppds data schema command.
 /// Generates CMT-format schema files from Dataverse metadata.
+/// Tests only run on .NET 8.0 since CLI is spawned with --framework net8.0.
 /// </summary>
 public class DataSchemaCommandE2ETests : CliE2ETestBase
 {
     #region data schema
 
-    [SkipIfNoClientSecret]
+    [CliE2EWithCredentials]
     public async Task DataSchema_SingleEntity_GeneratesValidSchema()
     {
         var profileName = GenerateTestProfileName();
@@ -41,7 +41,7 @@ public class DataSchemaCommandE2ETests : CliE2ETestBase
         content.Should().Contain("<entity");
     }
 
-    [SkipIfNoClientSecret]
+    [CliE2EWithCredentials]
     public async Task DataSchema_MultipleEntities_GeneratesSchemaWithAll()
     {
         var profileName = GenerateTestProfileName();
@@ -69,7 +69,7 @@ public class DataSchemaCommandE2ETests : CliE2ETestBase
         content.Should().Contain("contact");
     }
 
-    [SkipIfNoClientSecret]
+    [CliE2EWithCredentials]
     public async Task DataSchema_WithDisablePlugins_SetsFlag()
     {
         var profileName = GenerateTestProfileName();
@@ -97,7 +97,7 @@ public class DataSchemaCommandE2ETests : CliE2ETestBase
         content.Should().Contain("disableplugins");
     }
 
-    [SkipIfNoClientSecret]
+    [CliE2EWithCredentials]
     public async Task DataSchema_WithProfileOption_UsesSpecifiedProfile()
     {
         var profileName = GenerateTestProfileName();
@@ -122,7 +122,7 @@ public class DataSchemaCommandE2ETests : CliE2ETestBase
         File.Exists(outputPath).Should().BeTrue();
     }
 
-    [SkipIfNoClientSecret]
+    [CliE2EWithCredentials]
     public async Task DataSchema_WithEnvironmentOverride_UsesSpecifiedEnvironment()
     {
         var profileName = GenerateTestProfileName();
@@ -150,7 +150,7 @@ public class DataSchemaCommandE2ETests : CliE2ETestBase
 
     #region Validation errors
 
-    [Fact]
+    [CliE2EFact]
     public async Task DataSchema_MissingEntities_Fails()
     {
         var outputPath = GenerateTempFilePath(".xml");
@@ -163,7 +163,7 @@ public class DataSchemaCommandE2ETests : CliE2ETestBase
         (result.StdOut + result.StdErr).Should().ContainAny("--entities", "required");
     }
 
-    [Fact]
+    [CliE2EFact]
     public async Task DataSchema_MissingOutput_Fails()
     {
         var result = await RunCliAsync(
@@ -174,7 +174,7 @@ public class DataSchemaCommandE2ETests : CliE2ETestBase
         (result.StdOut + result.StdErr).Should().ContainAny("--output", "required");
     }
 
-    [SkipIfNoClientSecret]
+    [CliE2EWithCredentials]
     public async Task DataSchema_InvalidEntity_Fails()
     {
         var profileName = GenerateTestProfileName();
@@ -199,7 +199,7 @@ public class DataSchemaCommandE2ETests : CliE2ETestBase
         (result.StdOut + result.StdErr).Should().ContainAny("not found", "does not exist", "Error", "failed");
     }
 
-    [Fact]
+    [CliE2EFact]
     public async Task DataSchema_InvalidOutputDirectory_Fails()
     {
         var result = await RunCliAsync(
@@ -215,7 +215,7 @@ public class DataSchemaCommandE2ETests : CliE2ETestBase
 
     #region JSON output
 
-    [SkipIfNoClientSecret]
+    [CliE2EWithCredentials]
     public async Task DataSchema_JsonFormat_OutputsProgress()
     {
         var profileName = GenerateTestProfileName();

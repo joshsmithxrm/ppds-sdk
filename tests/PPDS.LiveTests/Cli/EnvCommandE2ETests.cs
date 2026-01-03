@@ -1,18 +1,18 @@
 using FluentAssertions;
 using PPDS.LiveTests.Infrastructure;
-using Xunit;
 
 namespace PPDS.LiveTests.Cli;
 
 /// <summary>
 /// E2E tests for ppds env commands.
 /// These tests require valid credentials to interact with Global Discovery.
+/// Tests only run on .NET 8.0 since CLI is spawned with --framework net8.0.
 /// </summary>
 public class EnvCommandE2ETests : CliE2ETestBase
 {
     #region env list
 
-    [SkipIfNoClientSecret]
+    [CliE2EWithCredentials]
     public async Task EnvList_WithActiveProfile_ListsEnvironments()
     {
         // First create a profile
@@ -44,7 +44,7 @@ public class EnvCommandE2ETests : CliE2ETestBase
         }
     }
 
-    [Fact]
+    [CliE2EFact]
     public async Task EnvList_NoActiveProfile_Fails()
     {
         // Clear any existing profiles first
@@ -59,14 +59,14 @@ public class EnvCommandE2ETests : CliE2ETestBase
     // Skip: Global Discovery Service does not support service principal authentication.
     // The test would hang/timeout waiting for a response that will never come.
     // This is a known platform limitation documented by Microsoft.
-    // [SkipIfNoClientSecret]
+    // [CliE2EWithCredentials]
     // public async Task EnvList_JsonFormat_ReturnsValidJson() { ... }
 
     #endregion
 
     #region env who
 
-    [SkipIfNoClientSecret]
+    [CliE2EWithCredentials]
     public async Task EnvWho_WithEnvironmentSet_ShowsOrgInfo()
     {
         var profileName = GenerateTestProfileName();
@@ -87,7 +87,7 @@ public class EnvCommandE2ETests : CliE2ETestBase
         result.StdOut.Should().ContainAny("Organization", "Org ID", "User ID");
     }
 
-    [SkipIfNoClientSecret]
+    [CliE2EWithCredentials]
     public async Task EnvWho_WithEnvironmentOverride_QueriesSpecificEnvironment()
     {
         var profileName = GenerateTestProfileName();
@@ -108,7 +108,7 @@ public class EnvCommandE2ETests : CliE2ETestBase
         result.StdOut.Should().ContainAny("Organization", "Org ID");
     }
 
-    [SkipIfNoClientSecret]
+    [CliE2EWithCredentials]
     public async Task EnvWho_JsonFormat_ReturnsValidJson()
     {
         var profileName = GenerateTestProfileName();
@@ -129,7 +129,7 @@ public class EnvCommandE2ETests : CliE2ETestBase
         result.StdOut.Should().ContainAny("\"userId\"", "\"organizationId\"");
     }
 
-    [Fact]
+    [CliE2EFact]
     public async Task EnvWho_NoActiveProfile_Fails()
     {
         await RunCliAsync("auth", "clear");
@@ -144,7 +144,7 @@ public class EnvCommandE2ETests : CliE2ETestBase
 
     #region env select
 
-    [SkipIfNoClientSecret]
+    [CliE2EWithCredentials]
     public async Task EnvSelect_ValidUrl_SelectsEnvironment()
     {
         var profileName = GenerateTestProfileName();
@@ -164,7 +164,7 @@ public class EnvCommandE2ETests : CliE2ETestBase
         result.StdOut.Should().ContainAny("Connected", "selected", "Environment");
     }
 
-    [SkipIfNoClientSecret]
+    [CliE2EWithCredentials]
     public async Task EnvSelect_InvalidUrl_Fails()
     {
         var profileName = GenerateTestProfileName();
@@ -184,7 +184,7 @@ public class EnvCommandE2ETests : CliE2ETestBase
         (result.StdOut + result.StdErr).Should().ContainAny("Error", "failed", "could not");
     }
 
-    [Fact]
+    [CliE2EFact]
     public async Task EnvSelect_MissingEnvironment_Fails()
     {
         var result = await RunCliAsync("env", "select");
@@ -197,7 +197,7 @@ public class EnvCommandE2ETests : CliE2ETestBase
 
     #region org alias
 
-    [Fact]
+    [CliE2EFact]
     public async Task OrgList_IsAliasForEnvList()
     {
         // org should work as alias for env
