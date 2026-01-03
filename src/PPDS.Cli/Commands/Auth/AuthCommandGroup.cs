@@ -125,6 +125,15 @@ public static class AuthCommandGroup
             DefaultValueFactory = _ => false
         };
 
+        var acceptCleartextOption = new Option<bool>("--accept-cleartext-caching")
+        {
+            Description = "Accept cleartext credential storage on Linux when secure storage (libsecret) is unavailable",
+            DefaultValueFactory = _ => false,
+            // Only show this option on Linux where it's relevant
+            Hidden = !System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(
+                System.Runtime.InteropServices.OSPlatform.Linux)
+        };
+
         var command = new Command("create", "Create and store authentication profiles on this computer")
         {
             nameOption,
@@ -141,7 +150,8 @@ public static class AuthCommandGroup
             usernameOption,
             passwordOption,
             githubFederatedOption,
-            azureDevOpsFederatedOption
+            azureDevOpsFederatedOption,
+            acceptCleartextOption
         };
 
         command.SetAction(async (parseResult, cancellationToken) =>
@@ -162,7 +172,8 @@ public static class AuthCommandGroup
                 Username = parseResult.GetValue(usernameOption),
                 Password = parseResult.GetValue(passwordOption),
                 GitHubFederated = parseResult.GetValue(githubFederatedOption),
-                AzureDevOpsFederated = parseResult.GetValue(azureDevOpsFederatedOption)
+                AzureDevOpsFederated = parseResult.GetValue(azureDevOpsFederatedOption),
+                AcceptCleartextCaching = parseResult.GetValue(acceptCleartextOption)
             };
 
             return await ExecuteCreateAsync(options, cancellationToken);
@@ -188,6 +199,7 @@ public static class AuthCommandGroup
         public string? Password { get; set; }
         public bool GitHubFederated { get; set; }
         public bool AzureDevOpsFederated { get; set; }
+        public bool AcceptCleartextCaching { get; set; }
     }
 
     private static async Task<int> ExecuteCreateAsync(CreateOptions options, CancellationToken cancellationToken)
@@ -223,7 +235,17 @@ public static class AuthCommandGroup
             };
 
             // Store secrets in secure credential store (not in profile)
-            using var credentialStore = new SecureCredentialStore();
+            using var credentialStore = new SecureCredentialStore(allowCleartextFallback: options.AcceptCleartextCaching);
+
+            // Warn if using cleartext storage on Linux
+            if (credentialStore.IsCleartextCachingEnabled)
+            {
+                Console.ForegroundColor = ConsoleColor.Yellow;
+                Console.Error.WriteLine("Warning: Secure storage (libsecret) is unavailable. Credentials will be stored in cleartext.");
+                Console.Error.WriteLine("         Install libsecret and a keyring (gnome-keyring or kwallet) for secure storage.");
+                Console.ResetColor();
+            }
+
             if (!string.IsNullOrWhiteSpace(options.ApplicationId))
             {
                 var storedCredential = new StoredCredential
@@ -879,6 +901,24 @@ public static class AuthCommandGroup
                 }
             }
 
+            // Clean up stored credentials for this profile
+            string? credentialKey = null;
+            if (!string.IsNullOrWhiteSpace(profile.ApplicationId))
+            {
+                credentialKey = profile.ApplicationId;
+            }
+            else if (profile.AuthMethod == AuthMethod.UsernamePassword && !string.IsNullOrWhiteSpace(profile.Username))
+            {
+                // For username/password auth, credentials are keyed by username
+                credentialKey = profile.Username;
+            }
+
+            if (credentialKey != null)
+            {
+                using var credentialStore = new SecureCredentialStore();
+                await credentialStore.RemoveAsync(credentialKey, cancellationToken);
+            }
+
             collection.RemoveByIndex(profile.Index);
             await store.SaveAsync(collection, cancellationToken);
 
@@ -1134,7 +1174,11 @@ public static class AuthCommandGroup
             // Clear all MSAL token caches (file + platform-specific secure storage)
             await TokenCacheManager.ClearAllCachesAsync();
 
-            Console.WriteLine("Authentication profiles and token cache removed");
+            // Clear secure credential store
+            using var credentialStore = new SecureCredentialStore();
+            await credentialStore.ClearAsync(cancellationToken);
+
+            Console.WriteLine("Authentication profiles, token cache, and stored credentials removed");
 
             return ExitCodes.Success;
         }
