@@ -8,7 +8,9 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
 
-    <!-- Self-Contained Publish Configuration (applies when PublishSingleFile=true) -->
+    <!-- Self-Contained Publish Configuration
+         These are defaults for normal builds. CI/release workflows override
+         PublishSingleFile and SelfContained via -p: command-line parameters. -->
     <PublishSingleFile>false</PublishSingleFile>
     <SelfContained>false</SelfContained>
     <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>

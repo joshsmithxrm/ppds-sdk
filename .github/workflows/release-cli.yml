@@ -59,7 +59,7 @@ jobs:
         shell: bash
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: ${{ matrix.artifact }}
           path: ./publish/${{ matrix.artifact }}
@@ -83,6 +83,17 @@ jobs:
           # Move all binaries to release folder (artifacts are in subdirectories)
           find ./artifacts -type f -name "ppds-*" -exec mv {} ./release/ \;
           ls -la ./release/
+
+      - name: Validate all binaries present
+        run: |
+          EXPECTED="ppds-win-x64.exe ppds-win-arm64.exe ppds-osx-x64 ppds-osx-arm64 ppds-linux-x64"
+          for binary in $EXPECTED; do
+            if [ ! -f "./release/$binary" ]; then
+              echo "ERROR: Missing expected binary: $binary"
+              exit 1
+            fi
+          done
+          echo "All 5 platform binaries present"
 
       - name: Generate checksums
         working-directory: ./release
