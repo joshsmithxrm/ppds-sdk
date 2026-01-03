@@ -115,13 +115,13 @@ public static class AuthCommandGroup
 
         var githubFederatedOption = new Option<bool>("--githubFederated", "-ghf")
         {
-            Description = "(Preview) Use GitHub Federation for Service Principal Auth; requires --tenant and --applicationId arguments",
+            Description = "Use GitHub Federation for Service Principal Auth; requires --tenant and --applicationId arguments",
             DefaultValueFactory = _ => false
         };
 
         var azureDevOpsFederatedOption = new Option<bool>("--azureDevOpsFederated", "-adof")
         {
-            Description = "(Preview) Use Azure DevOps Federation for Service Principal Auth; requires --tenant and --applicationId arguments",
+            Description = "Use Azure DevOps Federation for Service Principal Auth; requires --tenant and --applicationId arguments",
             DefaultValueFactory = _ => false
         };
 
@@ -1219,7 +1219,6 @@ public static class AuthCommandGroup
             }
             else
             {
-                // Show "Connected as" header like PAC
                 var identity = !string.IsNullOrEmpty(profile.Username)
                     ? profile.Username
                     : !string.IsNullOrEmpty(profile.ApplicationId)

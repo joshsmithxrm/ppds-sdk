@@ -15,7 +15,6 @@ internal static class MsalClientBuilder
 {
     /// <summary>
     /// Microsoft's well-known public client ID for first-party apps.
-    /// This is the same client ID used by Azure CLI, PowerShell, and PAC CLI.
     /// </summary>
     public const string MicrosoftPublicClientId = "51f81489-12ee-4a9e-aaae-a2591f45987d";
 
