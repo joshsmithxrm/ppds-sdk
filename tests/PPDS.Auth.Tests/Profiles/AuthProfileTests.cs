@@ -167,11 +167,11 @@ public class AuthProfileTests
     [Fact]
     public void Validate_ClientSecret_WithAllFields_DoesNotThrow()
     {
+        // ClientSecret is now in secure store, profile only needs ApplicationId and TenantId
         var profile = new AuthProfile
         {
             AuthMethod = AuthMethod.ClientSecret,
             ApplicationId = "app-id",
-            ClientSecret = "secret",
             TenantId = "tenant-id"
         };
 
@@ -186,7 +186,6 @@ public class AuthProfileTests
         var profile = new AuthProfile
         {
             AuthMethod = AuthMethod.ClientSecret,
-            ClientSecret = "secret",
             TenantId = "tenant-id"
         };
 
@@ -197,29 +196,12 @@ public class AuthProfileTests
     }
 
     [Fact]
-    public void Validate_ClientSecret_MissingClientSecret_Throws()
-    {
-        var profile = new AuthProfile
-        {
-            AuthMethod = AuthMethod.ClientSecret,
-            ApplicationId = "app-id",
-            TenantId = "tenant-id"
-        };
-
-        var act = () => profile.Validate();
-
-        act.Should().Throw<InvalidOperationException>()
-            .WithMessage("*ClientSecret*");
-    }
-
-    [Fact]
     public void Validate_ClientSecret_MissingTenantId_Throws()
     {
         var profile = new AuthProfile
         {
             AuthMethod = AuthMethod.ClientSecret,
-            ApplicationId = "app-id",
-            ClientSecret = "secret"
+            ApplicationId = "app-id"
         };
 
         var act = () => profile.Validate();
@@ -350,11 +332,11 @@ public class AuthProfileTests
     [Fact]
     public void Validate_UsernamePassword_WithAllFields_DoesNotThrow()
     {
+        // Password is now in secure store, profile only needs Username
         var profile = new AuthProfile
         {
             AuthMethod = AuthMethod.UsernamePassword,
-            Username = "user@example.com",
-            Password = "password"
+            Username = "user@example.com"
         };
 
         var act = () => profile.Validate();
@@ -367,29 +349,13 @@ public class AuthProfileTests
     {
         var profile = new AuthProfile
         {
-            AuthMethod = AuthMethod.UsernamePassword,
-            Password = "password"
+            AuthMethod = AuthMethod.UsernamePassword
         };
 
         var act = () => profile.Validate();
 
         act.Should().Throw<InvalidOperationException>()
             .WithMessage("*Username*");
-    }
-
-    [Fact]
-    public void Validate_UsernamePassword_MissingPassword_Throws()
-    {
-        var profile = new AuthProfile
-        {
-            AuthMethod = AuthMethod.UsernamePassword,
-            Username = "user@example.com"
-        };
-
-        var act = () => profile.Validate();
-
-        act.Should().Throw<InvalidOperationException>()
-            .WithMessage("*Password*");
     }
 
     [Fact]
@@ -404,9 +370,10 @@ public class AuthProfileTests
             TenantId = "tenant",
             Username = "user",
             ObjectId = "obj-id",
-            Password = "pass",
             ApplicationId = "app-id",
-            ClientSecret = "secret",
+            Authority = "https://login.microsoftonline.com/tenant",
+            UserCountry = "US",
+            TenantCountry = "GB",
             Environment = EnvironmentInfo.Create("env-id", "https://test.crm.dynamics.com", "Test"),
             CreatedAt = DateTimeOffset.Parse("2024-01-01T00:00:00Z"),
             LastUsedAt = DateTimeOffset.Parse("2024-01-02T00:00:00Z"),
@@ -425,9 +392,10 @@ public class AuthProfileTests
         clone.TenantId.Should().Be("tenant");
         clone.Username.Should().Be("user");
         clone.ObjectId.Should().Be("obj-id");
-        clone.Password.Should().Be("pass");
         clone.ApplicationId.Should().Be("app-id");
-        clone.ClientSecret.Should().Be("secret");
+        clone.Authority.Should().Be("https://login.microsoftonline.com/tenant");
+        clone.UserCountry.Should().Be("US");
+        clone.TenantCountry.Should().Be("GB");
         clone.Environment.Should().NotBeSameAs(profile.Environment);
         clone.Environment!.Id.Should().Be("env-id");
         clone.CreatedAt.Should().Be(profile.CreatedAt);

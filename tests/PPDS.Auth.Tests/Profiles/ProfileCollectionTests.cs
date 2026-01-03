@@ -15,7 +15,7 @@ public class ProfileCollectionTests
         collection.Add(profile);
 
         collection.ActiveProfile.Should().Be(profile);
-        collection.ActiveIndex.Should().Be(profile.Index);
+        collection.ActiveProfileName.Should().Be(profile.Name);
     }
 
     [Fact]
@@ -239,7 +239,7 @@ public class ProfileCollectionTests
 
         collection.RemoveByIndex(profile.Index);
 
-        collection.ActiveIndex.Should().BeNull();
+        collection.ActiveProfileName.Should().BeNull();
         collection.ActiveProfile.Should().BeNull();
     }
 
@@ -255,7 +255,7 @@ public class ProfileCollectionTests
         collection.RemoveByIndex(5);
 
         collection.ActiveProfile.Should().Be(profile2);
-        collection.ActiveIndex.Should().Be(10);
+        collection.ActiveProfileName.Should().Be("second");
     }
 
     [Fact]
@@ -365,7 +365,7 @@ public class ProfileCollectionTests
         collection.Clear();
 
         collection.Count.Should().Be(0);
-        collection.ActiveIndex.Should().BeNull();
+        collection.ActiveProfileName.Should().BeNull();
         collection.ActiveProfile.Should().BeNull();
     }
 
@@ -437,7 +437,7 @@ public class ProfileCollectionTests
 
         clone.Should().NotBeSameAs(collection);
         clone.Count.Should().Be(1);
-        clone.ActiveIndex.Should().Be(collection.ActiveIndex);
+        clone.ActiveProfileName.Should().Be(collection.ActiveProfileName);
         clone.All.First().Should().NotBeSameAs(profile);
         clone.All.First().Name.Should().Be("test");
     }
@@ -482,20 +482,22 @@ public class ProfileCollectionTests
     }
 
     [Fact]
-    public void ActiveProfile_InvalidActiveIndex_ReturnsNull()
+    public void ActiveProfile_InvalidActiveProfileName_ReturnsFirstProfile()
     {
         var collection = new ProfileCollection();
-        collection.Add(new AuthProfile { Index = 1 });
-        collection.ActiveIndex = 999;
+        collection.Add(new AuthProfile { Index = 1, Name = "test" });
+        collection.ActiveProfileName = "nonexistent";
 
-        collection.ActiveProfile.Should().BeNull();
+        // Falls back to first profile when active name doesn't match
+        collection.ActiveProfile.Should().NotBeNull();
+        collection.ActiveProfile!.Name.Should().Be("test");
     }
 
     [Fact]
-    public void Version_DefaultsTo1()
+    public void Version_DefaultsTo2()
     {
         var collection = new ProfileCollection();
 
-        collection.Version.Should().Be(1);
+        collection.Version.Should().Be(2);
     }
 }

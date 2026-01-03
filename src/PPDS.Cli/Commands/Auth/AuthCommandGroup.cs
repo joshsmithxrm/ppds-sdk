@@ -218,11 +218,33 @@ public static class AuthCommandGroup
                 Cloud = options.Cloud,
                 TenantId = options.Tenant,
                 ApplicationId = options.ApplicationId,
-                ClientSecret = options.ClientSecret,
                 CertificatePath = options.CertificatePath,
-                CertificatePassword = options.CertificatePassword,
                 CertificateThumbprint = options.CertificateThumbprint
             };
+
+            // Store secrets in secure credential store (not in profile)
+            using var credentialStore = new SecureCredentialStore();
+            if (!string.IsNullOrWhiteSpace(options.ApplicationId))
+            {
+                var storedCredential = new StoredCredential
+                {
+                    ApplicationId = options.ApplicationId,
+                    ClientSecret = options.ClientSecret,
+                    CertificatePath = options.CertificatePath,
+                    CertificatePassword = options.CertificatePassword
+                };
+                await credentialStore.StoreAsync(storedCredential, cancellationToken);
+            }
+            else if (!string.IsNullOrWhiteSpace(options.Username) && !string.IsNullOrWhiteSpace(options.Password))
+            {
+                // For username/password auth, key by username
+                var storedCredential = new StoredCredential
+                {
+                    ApplicationId = options.Username,
+                    Password = options.Password
+                };
+                await credentialStore.StoreAsync(storedCredential, cancellationToken);
+            }
 
             // For service principals, we must authenticate directly to the environment URL
             // Global discovery doesn't work with client credentials flow
@@ -298,10 +320,18 @@ public static class AuthCommandGroup
                     profile.TenantId = provider.TenantId;
                 }
 
+                // Store the full authority URL
+                if (!string.IsNullOrEmpty(profile.TenantId))
+                {
+                    profile.Authority = CloudEndpoints.GetAuthorityUrl(profile.Cloud, profile.TenantId);
+                }
+
                 var claims = JwtClaimsParser.Parse(provider.IdTokenClaims, provider.AccessToken);
                 if (claims != null)
                 {
                     profile.Puid = claims.Puid;
+                    profile.UserCountry = claims.UserCountry;
+                    profile.TenantCountry = claims.TenantCountry;
                 }
 
                 // Resolve environment if specified (must happen before client disposal)
@@ -417,7 +447,7 @@ public static class AuthCommandGroup
                 Console.WriteLine($"  Environment: (none - use 'ppds env select' to set)");
             }
 
-            if (collection.ActiveIndex == profile.Index)
+            if (collection.ActiveProfile?.Index == profile.Index)
             {
                 Console.WriteLine();
                 Console.WriteLine("This profile is now active.");
@@ -607,7 +637,7 @@ public static class AuthCommandGroup
         var rows = collection.All.Select(p => new
         {
             Index = $"[{p.Index}]",
-            Active = collection.ActiveIndex == p.Index ? "*" : "",
+            Active = collection.ActiveProfile?.Index == p.Index ? "*" : "",
             Method = p.AuthMethod.ToString(),
             Name = p.Name ?? "",
             User = p.IdentityDisplay,
@@ -657,7 +687,7 @@ public static class AuthCommandGroup
     {
         var output = new
         {
-            activeIndex = collection.ActiveIndex,
+            activeProfile = collection.ActiveProfileName,
             profiles = collection.All.Select(p => new
             {
                 index = p.Index,
@@ -670,7 +700,7 @@ public static class AuthCommandGroup
                     url = p.Environment.Url,
                     displayName = p.Environment.DisplayName
                 } : null,
-                isActive = collection.ActiveIndex == p.Index,
+                isActive = collection.ActiveProfile?.Index == p.Index,
                 createdAt = p.CreatedAt,
                 lastUsedAt = p.LastUsedAt
             })

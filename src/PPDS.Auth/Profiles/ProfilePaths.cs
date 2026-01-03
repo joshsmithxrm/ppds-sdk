@@ -29,6 +29,11 @@ public static class ProfilePaths
     public const string TokenCacheFileName = "msal_token_cache.bin";
 
     /// <summary>
+    /// Secure credential cache file name.
+    /// </summary>
+    public const string CredentialCacheFileName = "ppds.credentials.dat";
+
+    /// <summary>
     /// Gets the PPDS data directory for the current platform.
     /// </summary>
     /// <remarks>
@@ -69,6 +74,11 @@ public static class ProfilePaths
     /// Gets the full path to the MSAL token cache file.
     /// </summary>
     public static string TokenCacheFile => Path.Combine(DataDirectory, TokenCacheFileName);
+
+    /// <summary>
+    /// Gets the full path to the secure credential cache file.
+    /// </summary>
+    public static string CredentialCacheFile => Path.Combine(DataDirectory, CredentialCacheFileName);
 
     /// <summary>
     /// Ensures the data directory exists.

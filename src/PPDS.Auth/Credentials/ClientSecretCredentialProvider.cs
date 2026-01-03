@@ -64,11 +64,12 @@ public sealed class ClientSecretCredentialProvider : ICredentialProvider
     }
 
     /// <summary>
-    /// Creates a provider from an auth profile.
+    /// Creates a provider from an auth profile and credential from secure store.
     /// </summary>
     /// <param name="profile">The auth profile.</param>
+    /// <param name="credential">The credential containing the client secret.</param>
     /// <returns>A new provider instance.</returns>
-    public static ClientSecretCredentialProvider FromProfile(AuthProfile profile)
+    public static ClientSecretCredentialProvider FromProfile(AuthProfile profile, StoredCredential credential)
     {
         if (profile.AuthMethod != AuthMethod.ClientSecret)
             throw new ArgumentException($"Profile auth method must be ClientSecret, got {profile.AuthMethod}", nameof(profile));
@@ -76,15 +77,45 @@ public sealed class ClientSecretCredentialProvider : ICredentialProvider
         if (string.IsNullOrWhiteSpace(profile.ApplicationId))
             throw new ArgumentException("Profile ApplicationId is required", nameof(profile));
 
-        if (string.IsNullOrWhiteSpace(profile.ClientSecret))
-            throw new ArgumentException("Profile ClientSecret is required", nameof(profile));
+        if (string.IsNullOrWhiteSpace(profile.TenantId))
+            throw new ArgumentException("Profile TenantId is required", nameof(profile));
+
+        if (credential == null)
+            throw new ArgumentNullException(nameof(credential));
+
+        if (string.IsNullOrWhiteSpace(credential.ClientSecret))
+            throw new ArgumentException("Credential ClientSecret is required", nameof(credential));
+
+        return new ClientSecretCredentialProvider(
+            profile.ApplicationId,
+            credential.ClientSecret,
+            profile.TenantId,
+            profile.Cloud);
+    }
+
+    /// <summary>
+    /// Creates a provider from an auth profile using an environment variable secret.
+    /// </summary>
+    /// <param name="profile">The auth profile.</param>
+    /// <param name="clientSecret">The client secret (e.g., from PPDS_SPN_SECRET env var).</param>
+    /// <returns>A new provider instance.</returns>
+    public static ClientSecretCredentialProvider FromProfileWithSecret(AuthProfile profile, string clientSecret)
+    {
+        if (profile.AuthMethod != AuthMethod.ClientSecret)
+            throw new ArgumentException($"Profile auth method must be ClientSecret, got {profile.AuthMethod}", nameof(profile));
+
+        if (string.IsNullOrWhiteSpace(profile.ApplicationId))
+            throw new ArgumentException("Profile ApplicationId is required", nameof(profile));
 
         if (string.IsNullOrWhiteSpace(profile.TenantId))
             throw new ArgumentException("Profile TenantId is required", nameof(profile));
 
+        if (string.IsNullOrWhiteSpace(clientSecret))
+            throw new ArgumentException("Client secret is required", nameof(clientSecret));
+
         return new ClientSecretCredentialProvider(
             profile.ApplicationId,
-            profile.ClientSecret,
+            clientSecret,
             profile.TenantId,
             profile.Cloud);
     }
