@@ -16,6 +16,7 @@ public sealed class ProfileConnectionSource : IDisposable
     private readonly string _environmentUrl;
     private readonly string? _environmentDisplayName;
     private readonly Action<DeviceCodeInfo>? _deviceCodeCallback;
+    private readonly ISecureCredentialStore? _credentialStore;
     private readonly int _maxPoolSize;
 
     private volatile ServiceClient? _seedClient;
@@ -52,12 +53,14 @@ public sealed class ProfileConnectionSource : IDisposable
     /// <param name="maxPoolSize">Maximum pool size (default: 52 per Microsoft recommendations).</param>
     /// <param name="deviceCodeCallback">Optional callback for device code display.</param>
     /// <param name="environmentDisplayName">Optional environment display name for connection naming.</param>
+    /// <param name="credentialStore">Optional secure credential store for looking up secrets.</param>
     public ProfileConnectionSource(
         AuthProfile profile,
         string environmentUrl,
         int maxPoolSize = 52,
         Action<DeviceCodeInfo>? deviceCodeCallback = null,
-        string? environmentDisplayName = null)
+        string? environmentDisplayName = null,
+        ISecureCredentialStore? credentialStore = null)
     {
         _profile = profile ?? throw new ArgumentNullException(nameof(profile));
 
@@ -68,6 +71,7 @@ public sealed class ProfileConnectionSource : IDisposable
         _maxPoolSize = maxPoolSize;
         _deviceCodeCallback = deviceCodeCallback;
         _environmentDisplayName = environmentDisplayName;
+        _credentialStore = credentialStore;
 
         // Format: "identity@environment" when environment name is available
         // Token-provider-based auth doesn't populate ConnectedOrgFriendlyName,
@@ -83,12 +87,14 @@ public sealed class ProfileConnectionSource : IDisposable
     /// <param name="profile">The authentication profile (must have environment set).</param>
     /// <param name="maxPoolSize">Maximum pool size.</param>
     /// <param name="deviceCodeCallback">Optional callback for device code display.</param>
+    /// <param name="credentialStore">Optional secure credential store for looking up secrets.</param>
     /// <returns>A new connection source.</returns>
     /// <exception cref="InvalidOperationException">If the profile has no environment.</exception>
     public static ProfileConnectionSource FromProfile(
         AuthProfile profile,
         int maxPoolSize = 52,
-        Action<DeviceCodeInfo>? deviceCodeCallback = null)
+        Action<DeviceCodeInfo>? deviceCodeCallback = null,
+        ISecureCredentialStore? credentialStore = null)
     {
         if (profile == null)
             throw new ArgumentNullException(nameof(profile));
@@ -105,7 +111,8 @@ public sealed class ProfileConnectionSource : IDisposable
             profile.Environment!.Url,
             maxPoolSize,
             deviceCodeCallback,
-            profile.Environment.DisplayName);
+            profile.Environment.DisplayName,
+            credentialStore);
     }
 
     /// <summary>
@@ -128,14 +135,17 @@ public sealed class ProfileConnectionSource : IDisposable
             if (_seedClient != null)
                 return _seedClient;
 
-            // Create credential provider
-            _provider = CredentialProviderFactory.Create(_profile, _deviceCodeCallback);
+            // Create credential provider using async factory (supports secure store lookups).
+            // Wrap in Task.Run to avoid deadlock in sync contexts (UI/ASP.NET)
+            // by running async code on threadpool which has no sync context.
+            _provider = System.Threading.Tasks.Task.Run(() =>
+                CredentialProviderFactory.CreateAsync(_profile, _credentialStore, _deviceCodeCallback, CancellationToken.None))
+                .GetAwaiter()
+                .GetResult();
 
             try
             {
                 // Create ServiceClient synchronously (pool expects sync method).
-                // Wrap in Task.Run to avoid deadlock in sync contexts (UI/ASP.NET)
-                // by running async code on threadpool which has no sync context.
                 _seedClient = System.Threading.Tasks.Task.Run(() =>
                     _provider.CreateServiceClientAsync(_environmentUrl, CancellationToken.None))
                     .GetAwaiter()
@@ -179,8 +189,10 @@ public sealed class ProfileConnectionSource : IDisposable
             if (_seedClient != null)
                 return _seedClient;
 
-            // Create credential provider
-            _provider = CredentialProviderFactory.Create(_profile, _deviceCodeCallback);
+            // Create credential provider using async factory (supports secure store lookups)
+            _provider = await CredentialProviderFactory.CreateAsync(
+                _profile, _credentialStore, _deviceCodeCallback, cancellationToken)
+                .ConfigureAwait(false);
 
             try
             {

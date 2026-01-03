@@ -16,6 +16,7 @@ public sealed class ConnectionResolver : IDisposable
 {
     private readonly ProfileStore _store;
     private readonly Action<DeviceCodeInfo>? _deviceCodeCallback;
+    private readonly ISecureCredentialStore? _credentialStore;
     private readonly List<ProfileConnectionSource> _sources = new();
     private bool _disposed;
 
@@ -24,12 +25,15 @@ public sealed class ConnectionResolver : IDisposable
     /// </summary>
     /// <param name="store">The profile store (optional, uses default if null).</param>
     /// <param name="deviceCodeCallback">Optional callback for device code display.</param>
+    /// <param name="credentialStore">Optional secure credential store for looking up secrets.</param>
     public ConnectionResolver(
         ProfileStore? store = null,
-        Action<DeviceCodeInfo>? deviceCodeCallback = null)
+        Action<DeviceCodeInfo>? deviceCodeCallback = null,
+        ISecureCredentialStore? credentialStore = null)
     {
         _store = store ?? new ProfileStore();
         _deviceCodeCallback = deviceCodeCallback;
+        _credentialStore = credentialStore;
     }
 
     /// <summary>
@@ -139,7 +143,8 @@ public sealed class ConnectionResolver : IDisposable
                 envUrl,
                 maxPoolSizePerProfile,
                 _deviceCodeCallback,
-                envDisplayName);
+                envDisplayName,
+                _credentialStore);
 
             sources.Add(source);
             // Note: NOT tracking for disposal - caller takes ownership of returned sources
@@ -201,8 +206,11 @@ public sealed class ConnectionResolver : IDisposable
                 "  2. Specify on command: --environment <url>");
         }
 
-        // Create credential provider and get client
-        using var provider = CredentialProviderFactory.Create(profile, _deviceCodeCallback);
+        // Create credential provider using async factory (supports secure store lookups)
+        using var provider = await CredentialProviderFactory.CreateAsync(
+            profile, _credentialStore, _deviceCodeCallback, cancellationToken)
+            .ConfigureAwait(false);
+
         return await provider.CreateServiceClientAsync(envUrl, cancellationToken)
             .ConfigureAwait(false);
     }

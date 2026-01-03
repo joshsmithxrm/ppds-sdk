@@ -243,4 +243,48 @@ public class DataSchemaCommandE2ETests : CliE2ETestBase
     }
 
     #endregion
+
+    #region Environment variable bypass
+
+    [CliE2EWithCredentials]
+    public async Task DataSchema_WithSpnSecretEnvVar_UsesEnvVarForAuth()
+    {
+        // Create profile WITHOUT --clientSecret (uses interactive auth method placeholder)
+        // Then provide secret via PPDS_SPN_SECRET env var
+        var profileName = GenerateTestProfileName();
+
+        // First create with clientSecret to establish the profile with correct auth method
+        await RunCliAsync(
+            "auth", "create",
+            "--name", profileName,
+            "--applicationId", Configuration.ApplicationId!,
+            "--clientSecret", Configuration.ClientSecret!,
+            "--tenant", Configuration.TenantId!,
+            "--environment", Configuration.DataverseUrl!);
+
+        await RunCliAsync("auth", "select", "--name", profileName);
+
+        var outputPath = GenerateTempFilePath(".xml");
+
+        // Run with PPDS_SPN_SECRET - this tests the env var bypass path
+        // The env var takes priority over secure store lookup
+        var envVars = new Dictionary<string, string>
+        {
+            ["PPDS_SPN_SECRET"] = Configuration.ClientSecret!
+        };
+
+        var result = await RunCliWithEnvAsync(
+            envVars,
+            "data", "schema",
+            "--entities", "account",
+            "--output", outputPath);
+
+        result.ExitCode.Should().Be(0, $"StdErr: {result.StdErr}");
+        File.Exists(outputPath).Should().BeTrue("Schema file should be created");
+
+        var content = await File.ReadAllTextAsync(outputPath);
+        content.Should().Contain("account");
+    }
+
+    #endregion
 }

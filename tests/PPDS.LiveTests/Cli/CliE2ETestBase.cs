@@ -86,7 +86,18 @@ public abstract class CliE2ETestBase : IAsyncLifetime
     /// </summary>
     /// <param name="args">Command arguments (e.g., "auth", "list").</param>
     /// <returns>The CLI execution result.</returns>
-    protected async Task<CliResult> RunCliAsync(params string[] args)
+    protected Task<CliResult> RunCliAsync(params string[] args)
+        => RunCliWithEnvAsync(null, args);
+
+    /// <summary>
+    /// Runs a CLI command with additional environment variables.
+    /// </summary>
+    /// <param name="envVars">Additional environment variables to set.</param>
+    /// <param name="args">Command arguments (e.g., "auth", "list").</param>
+    /// <returns>The CLI execution result.</returns>
+    protected async Task<CliResult> RunCliWithEnvAsync(
+        IDictionary<string, string>? envVars,
+        params string[] args)
     {
         var startInfo = new ProcessStartInfo
         {
@@ -100,6 +111,15 @@ public abstract class CliE2ETestBase : IAsyncLifetime
 
         // Set isolated config directory to avoid race conditions between parallel test runs
         startInfo.Environment["PPDS_CONFIG_DIR"] = IsolatedConfigDir;
+
+        // Set additional environment variables
+        if (envVars != null)
+        {
+            foreach (var (key, value) in envVars)
+            {
+                startInfo.Environment[key] = value;
+            }
+        }
 
         // Build argument list: run --project <path> --configuration Release --framework net8.0 --no-build -- <args>
         // Use net8.0 (LTS) since CLI behavior is framework-agnostic and libraries
