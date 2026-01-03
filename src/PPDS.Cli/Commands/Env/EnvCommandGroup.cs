@@ -7,6 +7,7 @@ using PPDS.Auth.Discovery;
 using PPDS.Auth.Profiles;
 using PPDS.Cli.Commands;
 using PPDS.Cli.Infrastructure;
+using PPDS.Cli.Infrastructure.Errors;
 using PPDS.Dataverse.Pooling;
 
 namespace PPDS.Cli.Commands.Env;
@@ -93,8 +94,8 @@ public static class EnvCommandGroup
             }
 
             ConsoleHeader.WriteConnectedAs(profile);
-            Console.WriteLine("Discovering environments...");
-            Console.WriteLine();
+            Console.Error.WriteLine("Discovering environments...");
+            Console.Error.WriteLine();
 
             using var gds = GlobalDiscoveryService.FromProfile(profile);
             var environments = await gds.DiscoverEnvironmentsAsync(cancellationToken);
@@ -138,13 +139,13 @@ public static class EnvCommandGroup
         {
             if (!string.IsNullOrWhiteSpace(filter))
             {
-                Console.WriteLine($"No environments matching '{filter}'.");
+                Console.Error.WriteLine($"No environments matching '{filter}'.");
             }
             else
             {
-                Console.WriteLine("No environments found.");
-                Console.WriteLine();
-                Console.WriteLine("This may indicate the user has no access to any environments.");
+                Console.Error.WriteLine("No environments found.");
+                Console.Error.WriteLine();
+                Console.Error.WriteLine("This may indicate the user has no access to any environments.");
             }
             return;
         }
@@ -259,7 +260,7 @@ public static class EnvCommandGroup
             }
 
             ConsoleHeader.WriteConnectedAs(profile);
-            Console.WriteLine($"Resolving environment '{environmentIdentifier}'...");
+            Console.Error.WriteLine($"Resolving environment '{environmentIdentifier}'...");
 
             // Use multi-layer resolution: direct connection first for URLs, Global Discovery for names
             using var credentialStore = new SecureCredentialStore();
@@ -275,7 +276,7 @@ public static class EnvCommandGroup
             var resolved = result.Environment!;
 
             // Validate connection before saving - ensures user has actual access to the environment
-            Console.WriteLine("Validating connection...");
+            Console.Error.WriteLine("Validating connection...");
 
             await using var serviceProvider = await ProfileServiceFactory.CreateFromProfileAsync(
                 profile.Name, resolved.Url,
@@ -295,7 +296,7 @@ public static class EnvCommandGroup
                 : " (via Global Discovery)";
 
             Console.ForegroundColor = ConsoleColor.Green;
-            Console.WriteLine($"Connected to {resolved.DisplayName}{methodNote}");
+            Console.Error.WriteLine($"Connected to {resolved.DisplayName}{methodNote}");
             Console.ResetColor();
 
             return ExitCodes.Success;
@@ -359,9 +360,9 @@ public static class EnvCommandGroup
                 }
                 else
                 {
-                    Console.WriteLine("No active profile.");
-                    Console.WriteLine();
-                    Console.WriteLine("Use 'ppds auth create' to create a profile.");
+                    Console.Error.WriteLine("No active profile.");
+                    Console.Error.WriteLine();
+                    Console.Error.WriteLine("Use 'ppds auth create' to create a profile.");
                 }
                 return ExitCodes.Failure;
             }
@@ -377,7 +378,7 @@ public static class EnvCommandGroup
                 if (outputFormat != OutputFormat.Json)
                 {
                     ConsoleHeader.WriteConnectedAs(profile);
-                    Console.WriteLine($"Resolving environment '{environmentOverride}'...");
+                    Console.Error.WriteLine($"Resolving environment '{environmentOverride}'...");
                 }
 
                 using var credentialStore = new SecureCredentialStore();
@@ -414,13 +415,13 @@ public static class EnvCommandGroup
                     }
                     else
                     {
-                        Console.WriteLine($"Profile: {profile.DisplayIdentifier}");
-                        Console.WriteLine();
+                        Console.Error.WriteLine($"Profile: {profile.DisplayIdentifier}");
+                        Console.Error.WriteLine();
                         Console.ForegroundColor = ConsoleColor.Yellow;
-                        Console.WriteLine("No environment selected.");
+                        Console.Error.WriteLine("No environment selected.");
                         Console.ResetColor();
-                        Console.WriteLine();
-                        Console.WriteLine("Use 'ppds env select <environment>' to select one.");
+                        Console.Error.WriteLine();
+                        Console.Error.WriteLine("Use 'ppds env select <environment>' to select one.");
                     }
                     return ExitCodes.Failure;
                 }
