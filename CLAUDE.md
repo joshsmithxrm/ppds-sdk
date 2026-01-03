@@ -73,9 +73,14 @@ ppds-sdk/
 │   ├── PPDS.Auth/               # Authentication profiles and credentials
 │   └── PPDS.Cli/                # Unified CLI tool (ppds command)
 ├── tests/
-│   ├── PPDS.Plugins.Tests/
-│   ├── PPDS.Dataverse.Tests/
-│   └── PPDS.Cli.Tests/
+│   ├── PPDS.Plugins.Tests/          # Unit tests
+│   ├── PPDS.Dataverse.Tests/        # Unit tests
+│   ├── PPDS.Cli.Tests/              # Unit tests
+│   ├── PPDS.Auth.Tests/             # Unit tests
+│   ├── PPDS.Migration.Tests/        # Unit tests
+│   ├── PPDS.Auth.IntegrationTests/  # Auth smoke tests
+│   ├── PPDS.Dataverse.IntegrationTests/  # FakeXrmEasy mocked tests
+│   └── PPDS.LiveTests/              # Live Dataverse + CLI E2E tests
 ├── docs/
 │   ├── adr/                     # Architecture Decision Records
 │   └── architecture/            # Pattern documentation
@@ -377,13 +382,24 @@ See [CLI README](src/PPDS.Cli/README.md) for full documentation.
 
 ## 🧪 Testing Requirements
 
-| Package | Test Project | Status |
-|---------|--------------|--------|
-| PPDS.Plugins | PPDS.Plugins.Tests | ✅ |
-| PPDS.Dataverse | PPDS.Dataverse.Tests | ✅ |
-| PPDS.Cli | PPDS.Cli.Tests | ✅ |
-| PPDS.Auth | **Needs test project** | ❌ |
-| PPDS.Migration | **Needs test project** | ❌ |
+### Test Projects
+
+| Package | Unit Tests | Integration Tests | Status |
+|---------|------------|-------------------|--------|
+| PPDS.Plugins | PPDS.Plugins.Tests | - | ✅ |
+| PPDS.Dataverse | PPDS.Dataverse.Tests | PPDS.Dataverse.IntegrationTests (FakeXrmEasy) | ✅ |
+| PPDS.Cli | PPDS.Cli.Tests | PPDS.LiveTests/Cli (E2E) | ✅ |
+| PPDS.Auth | PPDS.Auth.Tests | PPDS.LiveTests/Authentication | ✅ |
+| PPDS.Migration | PPDS.Migration.Tests | - | ✅ |
+
+### Live Tests (PPDS.LiveTests)
+
+Live integration tests against real Dataverse environment:
+- `Authentication/` - Client secret, certificate, GitHub OIDC, Azure DevOps OIDC
+- `Pooling/` - Connection pool, DOP detection
+- `Resilience/` - Throttle detection
+- `BulkOperations/` - Live bulk operation execution
+- `Cli/` - CLI E2E tests (auth, env, data schema commands)
 
 **Rules:**
 - New public class → must have corresponding test class
@@ -393,6 +409,31 @@ See [CLI README](src/PPDS.Cli/README.md) for full documentation.
 **Test filtering:**
 - **Commits:** Unit tests only (`--filter Category!=Integration`)
 - **PRs:** All tests including integration
+
+### Local Integration Test Setup
+
+Integration tests require Dataverse credentials. Setup:
+
+1. **Copy environment template:**
+   ```powershell
+   Copy-Item .env.example .env.local
+   ```
+
+2. **Edit `.env.local`** with your values:
+   ```
+   DATAVERSE_URL=https://yourorg.crm.dynamics.com
+   PPDS_TEST_APP_ID=your-app-id
+   PPDS_TEST_CLIENT_SECRET=your-secret
+   PPDS_TEST_TENANT_ID=your-tenant-id
+   ```
+
+3. **Load into session and run tests:**
+   ```powershell
+   . .\scripts\Load-TestEnv.ps1
+   dotnet test --filter "Category=Integration"
+   ```
+
+**Note:** `.env.local` is gitignored. Tests skip gracefully when credentials are missing.
 
 ---
 

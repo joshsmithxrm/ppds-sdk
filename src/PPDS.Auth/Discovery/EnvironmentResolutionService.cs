@@ -245,17 +245,10 @@ public sealed class EnvironmentResolutionService : IDisposable
 
     /// <summary>
     /// Checks if the auth method can use Global Discovery Service.
+    /// Delegates to <see cref="GlobalDiscoveryService.SupportsGlobalDiscovery"/> for consistency.
     /// </summary>
-    /// <remarks>
-    /// Global Discovery requires user authentication (delegated permissions).
-    /// Service principals cannot access Global Discovery.
-    /// </remarks>
     private static bool CanUseGlobalDiscovery(AuthMethod authMethod)
-    {
-        // Global Discovery requires user authentication (delegated permissions).
-        // Service principals cannot access Global Discovery.
-        return authMethod is AuthMethod.InteractiveBrowser or AuthMethod.DeviceCode or AuthMethod.UsernamePassword;
-    }
+        => GlobalDiscoveryService.SupportsGlobalDiscovery(authMethod);
 
     /// <inheritdoc />
     public void Dispose()

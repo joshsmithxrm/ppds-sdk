@@ -55,16 +55,48 @@ public sealed class GlobalDiscoveryService : IGlobalDiscoveryService, IDisposabl
     /// <param name="profile">The auth profile.</param>
     /// <param name="deviceCodeCallback">Optional callback for device code display.</param>
     /// <returns>A new service instance.</returns>
+    /// <exception cref="NotSupportedException">
+    /// Thrown when the profile uses an authentication method that is not supported by Global Discovery.
+    /// Global Discovery requires delegated user authentication (InteractiveBrowser, DeviceCode, or UsernamePassword).
+    /// Service principals, managed identities, and federated credentials are not supported.
+    /// </exception>
     public static GlobalDiscoveryService FromProfile(
         AuthProfile profile,
         Action<DeviceCodeInfo>? deviceCodeCallback = null)
     {
+        // Global Discovery Service uses MSAL public client which only supports delegated user auth.
+        // Service principals, managed identities, and federated credentials use confidential clients
+        // which are not supported by Global Discovery.
+        if (!SupportsGlobalDiscovery(profile.AuthMethod))
+        {
+            var authMethodName = profile.AuthMethod.ToString();
+            throw new NotSupportedException(
+                $"Global Discovery Service requires interactive user authentication. " +
+                $"The profile '{profile.DisplayIdentifier}' uses {authMethodName} which is not supported. " +
+                $"Use 'ppds env select --environment <url>' to connect directly to an environment, " +
+                $"or create an interactive profile with 'ppds auth create'.");
+        }
+
         return new GlobalDiscoveryService(
             profile.Cloud,
             profile.TenantId,
             profile.HomeAccountId,
             profile.AuthMethod,
             deviceCodeCallback);
+    }
+
+    /// <summary>
+    /// Checks if an authentication method supports Global Discovery.
+    /// </summary>
+    /// <param name="authMethod">The authentication method to check.</param>
+    /// <returns>True if the method can be used with Global Discovery; otherwise false.</returns>
+    /// <remarks>
+    /// Global Discovery requires delegated user authentication via MSAL public client.
+    /// Only InteractiveBrowser and DeviceCode are supported.
+    /// </remarks>
+    public static bool SupportsGlobalDiscovery(AuthMethod authMethod)
+    {
+        return authMethod is AuthMethod.InteractiveBrowser or AuthMethod.DeviceCode;
     }
 
     /// <inheritdoc />
@@ -154,27 +186,13 @@ public sealed class GlobalDiscoveryService : IGlobalDiscoveryService, IDisposabl
                 }
             }
 
-            // Fall back to interactive or device code based on profile's auth method
+            // Use the explicit auth method - no automatic fallback.
+            // The profile's auth method determines which flow to use.
             AuthenticationResult result;
 
-            // Honor the profile's preferred auth method if it's interactive and available
-            if (_preferredAuthMethod == AuthMethod.InteractiveBrowser &&
-                InteractiveBrowserCredentialProvider.IsAvailable())
+            if (_preferredAuthMethod == AuthMethod.DeviceCode)
             {
-                if (_deviceCodeCallback == null)
-                {
-                    AuthenticationOutput.WriteLine("Opening browser for authentication...");
-                }
-
-                result = await _msalClient!
-                    .AcquireTokenInteractive(scopes)
-                    .WithUseEmbeddedWebView(false)
-                    .ExecuteAsync(cancellationToken)
-                    .ConfigureAwait(false);
-            }
-            else
-            {
-                // Fall back to device code flow
+                // Device code flow - user explicitly requested this
                 result = await _msalClient!
                     .AcquireTokenWithDeviceCode(scopes, deviceCodeResult =>
                     {
@@ -200,6 +218,37 @@ public sealed class GlobalDiscoveryService : IGlobalDiscoveryService, IDisposabl
                     })
                     .ExecuteAsync(cancellationToken)
                     .ConfigureAwait(false);
+            }
+            else if (_preferredAuthMethod == AuthMethod.InteractiveBrowser)
+            {
+                // Interactive browser flow
+                if (!InteractiveBrowserCredentialProvider.IsAvailable())
+                {
+                    throw new InvalidOperationException(
+                        "Interactive browser authentication is not available in this environment " +
+                        "(SSH session, CI/CD, container, or no display). " +
+                        "Create a profile with device code authentication using 'ppds auth create --deviceCode'.");
+                }
+
+                if (_deviceCodeCallback == null)
+                {
+                    AuthenticationOutput.WriteLine("Opening browser for authentication...");
+                }
+
+                result = await _msalClient!
+                    .AcquireTokenInteractive(scopes)
+                    .WithUseEmbeddedWebView(false)
+                    .ExecuteAsync(cancellationToken)
+                    .ConfigureAwait(false);
+            }
+            else
+            {
+                // No valid interactive auth method configured
+                // This shouldn't happen if FromProfile() validation is working, but be defensive
+                throw new InvalidOperationException(
+                    $"No valid authentication method configured for Global Discovery. " +
+                    $"Auth method '{_preferredAuthMethod}' is not supported. " +
+                    $"Use InteractiveBrowser or DeviceCode authentication.");
             }
 
             if (_deviceCodeCallback == null)
