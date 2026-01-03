@@ -11,11 +11,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Self-contained binary publishing** - CLI can now be published as self-contained single-file executables for Windows, macOS, and Linux (x64 and ARM64) ([#53](https://github.com/joshsmithxrm/ppds-sdk/issues/53))
 - **Automated release workflow** - GitHub Actions workflow builds and publishes platform binaries with SHA256 checksums to GitHub Releases on `Cli-v*` tags ([#54](https://github.com/joshsmithxrm/ppds-sdk/issues/54))
+- **`auth create --accept-cleartext-caching` option** - Linux-only flag to allow cleartext credential storage when libsecret is unavailable. Displays warning when cleartext storage is used. ([#107](https://github.com/joshsmithxrm/ppds-sdk/issues/107))
+- **`env list --filter` option** - Filter environments by name, URL, or ID (case-insensitive). Aliases: `-fl`. ([#92](https://github.com/joshsmithxrm/ppds-sdk/issues/92))
+- **`env who --environment` option** - Query a specific environment without changing the saved default. Supports ID, URL, unique name, or partial name. Aliases: `-env`. ([#93](https://github.com/joshsmithxrm/ppds-sdk/issues/93))
 
 ### Changed
 
+- **BREAKING: Profile storage schema v2** - Profiles now use schema v2 with array storage and name-based active profile. Existing v1 profiles are automatically deleted on first load. Secrets stored in platform-native secure storage. ([#107](https://github.com/joshsmithxrm/ppds-sdk/issues/107))
+- **`auth who` output ordering** - Reordered output fields to match PAC CLI format. ([#107](https://github.com/joshsmithxrm/ppds-sdk/issues/107))
 - **PluginRegistrationService refactored to use early-bound entities** - Replaced all magic string attribute access with strongly-typed `PPDS.Dataverse.Generated` classes (`PluginAssembly`, `PluginPackage`, `PluginType`, `SdkMessageProcessingStep`, `SdkMessageProcessingStepImage`, `SdkMessage`, `SdkMessageFilter`, `SystemUser`). Provides compile-time type safety and IntelliSense for all Dataverse entity operations. ([#56](https://github.com/joshsmithxrm/ppds-sdk/issues/56))
 - **`PluginRegistrationService` now requires logger** - Constructor now requires `ILogger<PluginRegistrationService>` for diagnostic output. ([#61](https://github.com/joshsmithxrm/ppds-sdk/issues/61))
+- **BREAKING: Standardized output format flag** - Replaced `--json` / `-j` with `--output-format` / `-f` enum option (values: `Text`, `Json`) across all commands for consistency ([#73](https://github.com/joshsmithxrm/ppds-sdk/issues/73))
+- **BREAKING: Moved schema and users commands to data group** - `ppds schema generate` → `ppds data schema`, `ppds users generate` → `ppds data users` ([#74](https://github.com/joshsmithxrm/ppds-sdk/issues/74))
 
 ### Fixed
 
@@ -23,22 +30,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Environment resolution for service principals** - `ppds env select` now works with full URLs for service principals by trying direct Dataverse connection first, before falling back to Global Discovery (which requires user auth). ([#89](https://github.com/joshsmithxrm/ppds-sdk/issues/89))
 - **`auth update --environment` now validates and resolves** - Previously only parsed the URL string without connecting. Now performs full resolution with org metadata population. ([#88](https://github.com/joshsmithxrm/ppds-sdk/issues/88))
 - **`env select` validates connection before saving** - Now performs actual WhoAmI request to verify user has access before saving environment selection. Previously resolved metadata but didn't validate access. ([#91](https://github.com/joshsmithxrm/ppds-sdk/issues/91))
-- **`auth clear` now clears MSAL caches** - Clears the MSAL file-based token cache in addition to profile data. Previously only deleted profile data. ([#90](https://github.com/joshsmithxrm/ppds-sdk/issues/90))
+- **`auth clear` now clears all caches** - Clears MSAL token caches and secure credential store in addition to profile data. ([#90](https://github.com/joshsmithxrm/ppds-sdk/issues/90), [#107](https://github.com/joshsmithxrm/ppds-sdk/issues/107))
+- **`auth delete` now removes stored credentials** - Deleting a profile also removes associated credentials from secure storage. ([#107](https://github.com/joshsmithxrm/ppds-sdk/issues/107))
 - **`auth who` shows expired token warning** - Token expiry line now shows `(EXPIRED)` in yellow when token is past expiry. JSON output includes `tokenStatus` field with values `"valid"` or `"expired"`. ([#94](https://github.com/joshsmithxrm/ppds-sdk/issues/94))
 - **Missing Environment ID for service principal profiles** - `ppds auth create` with service principal now populates `EnvironmentId` from `ServiceClient.EnvironmentId`. ([#101](https://github.com/joshsmithxrm/ppds-sdk/issues/101))
 - **Interactive auth fails with RefreshInstanceDetails error** - Fixed regression from [#98](https://github.com/joshsmithxrm/ppds-sdk/pull/98) where org metadata discovery failed when connecting to globaldisco.crm.dynamics.com (the discovery service, not an actual org). Now skips eager property access for discovery URLs.
 - **`auth create --environment` validates access before saving** - For interactive auth with `--environment`, now validates actual connection to the resolved environment before saving the profile. Previously resolved via Global Discovery but didn't verify access.
 - **Profile name validation** - Profile names for `auth create`, `auth update`, and `auth name` now enforce character restrictions: must start with letter/number and contain only letters, numbers, spaces, hyphens, or underscores.
-
-### Added
-
-- **`env list --filter` option** - Filter environments by name, URL, or ID (case-insensitive). Aliases: `-fl`. ([#92](https://github.com/joshsmithxrm/ppds-sdk/issues/92))
-- **`env who --environment` option** - Query a specific environment without changing the saved default. Supports ID, URL, unique name, or partial name. Aliases: `-env`. ([#93](https://github.com/joshsmithxrm/ppds-sdk/issues/93))
-
-### Changed
-
-- **BREAKING: Standardized output format flag** - Replaced `--json` / `-j` with `--output-format` / `-f` enum option (values: `Text`, `Json`) across all commands for consistency ([#73](https://github.com/joshsmithxrm/ppds-sdk/issues/73))
-- **BREAKING: Moved schema and users commands to data group** - `ppds schema generate` → `ppds data schema`, `ppds users generate` → `ppds data users` ([#74](https://github.com/joshsmithxrm/ppds-sdk/issues/74))
 
 ### Removed
 
