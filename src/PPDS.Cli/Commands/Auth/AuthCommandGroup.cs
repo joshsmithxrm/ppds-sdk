@@ -246,6 +246,9 @@ public static class AuthCommandGroup
                 Console.ResetColor();
             }
 
+            // Track stored credential key for cleanup on failure
+            string? storedCredentialKey = null;
+
             if (!string.IsNullOrWhiteSpace(options.ApplicationId))
             {
                 var storedCredential = new StoredCredential
@@ -256,6 +259,7 @@ public static class AuthCommandGroup
                     CertificatePassword = options.CertificatePassword
                 };
                 await credentialStore.StoreAsync(storedCredential, cancellationToken);
+                storedCredentialKey = options.ApplicationId;
             }
             else if (!string.IsNullOrWhiteSpace(options.Username) && !string.IsNullOrWhiteSpace(options.Password))
             {
@@ -266,6 +270,16 @@ public static class AuthCommandGroup
                     Password = options.Password
                 };
                 await credentialStore.StoreAsync(storedCredential, cancellationToken);
+                storedCredentialKey = options.Username;
+            }
+
+            // Helper to clean up stored credentials on failure
+            async Task CleanupCredentialsAsync()
+            {
+                if (storedCredentialKey != null)
+                {
+                    await credentialStore.RemoveAsync(storedCredentialKey, cancellationToken);
+                }
             }
 
             // For service principals, we must authenticate directly to the environment URL
@@ -278,6 +292,7 @@ public static class AuthCommandGroup
             {
                 if (string.IsNullOrWhiteSpace(options.Environment))
                 {
+                    await CleanupCredentialsAsync();
                     ErrorOutput.WriteErrorLine($"--environment is required for {authMethod} authentication.");
                     ErrorOutput.WriteLine("Service principals must specify the full environment URL (e.g., https://org.crm.dynamics.com).");
                     return ExitCodes.Failure;
@@ -287,6 +302,7 @@ public static class AuthCommandGroup
                 // to resolve partial names like "Dev" or "Production"
                 if (!options.Environment.Contains("://"))
                 {
+                    await CleanupCredentialsAsync();
                     ErrorOutput.WriteErrorLine("Service principals require a full environment URL.");
                     ErrorOutput.WriteLine($"  Provided: {options.Environment}");
                     ErrorOutput.WriteLine($"  Expected: https://org.crm.dynamics.com");
@@ -438,6 +454,7 @@ public static class AuthCommandGroup
             }
             catch (AuthenticationException ex)
             {
+                await CleanupCredentialsAsync();
                 Console.Error.WriteLine($"Error: Authentication failed: {ex.Message}");
                 return ExitCodes.Failure;
             }
@@ -901,7 +918,7 @@ public static class AuthCommandGroup
                 }
             }
 
-            // Clean up stored credentials for this profile
+            // Clean up stored credentials for this profile (only if no other profiles share them)
             string? credentialKey = null;
             if (!string.IsNullOrWhiteSpace(profile.ApplicationId))
             {
@@ -915,8 +932,23 @@ public static class AuthCommandGroup
 
             if (credentialKey != null)
             {
-                using var credentialStore = new SecureCredentialStore();
-                await credentialStore.RemoveAsync(credentialKey, cancellationToken);
+                // Check if any other profiles share this credential key
+                var isShared = collection.All
+                    .Where(p => p.Index != profile.Index)
+                    .Any(p =>
+                    {
+                        if (!string.IsNullOrWhiteSpace(p.ApplicationId))
+                            return string.Equals(credentialKey, p.ApplicationId, StringComparison.OrdinalIgnoreCase);
+                        if (p.AuthMethod == AuthMethod.UsernamePassword && !string.IsNullOrWhiteSpace(p.Username))
+                            return string.Equals(credentialKey, p.Username, StringComparison.OrdinalIgnoreCase);
+                        return false;
+                    });
+
+                if (!isShared)
+                {
+                    using var credentialStore = new SecureCredentialStore();
+                    await credentialStore.RemoveAsync(credentialKey, cancellationToken);
+                }
             }
 
             collection.RemoveByIndex(profile.Index);
@@ -1377,7 +1409,10 @@ public static class AuthCommandGroup
                         Console.WriteLine($"Organization Unique Name:    {profile.Environment.UniqueName}");
                     }
 
-                    Console.WriteLine($"Organization Friendly Name:  {profile.Environment.DisplayName}");
+                    if (!string.IsNullOrEmpty(profile.Environment.DisplayName))
+                    {
+                        Console.WriteLine($"Organization Friendly Name:  {profile.Environment.DisplayName}");
+                    }
                 }
                 else
                 {

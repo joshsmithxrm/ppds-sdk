@@ -297,6 +297,64 @@ public class AuthCommandE2ETests : CliE2ETestBase
         }
     }
 
+    [CliE2EWithCredentials]
+    public async Task AuthDelete_WithSharedCredentials_PreservesCredentialsForOtherProfiles()
+    {
+        // Bug test: When two profiles share the same ApplicationId (service principal),
+        // deleting one profile should NOT remove credentials used by the other.
+        var profile1Name = GenerateTestProfileName();
+        var profile2Name = GenerateTestProfileName();
+
+        // Create first profile with credentials
+        var create1Result = await RunCliAsync(
+            "auth", "create",
+            "--name", profile1Name,
+            "--applicationId", Configuration.ApplicationId!,
+            "--clientSecret", Configuration.ClientSecret!,
+            "--tenant", Configuration.TenantId!,
+            "--environment", Configuration.DataverseUrl!);
+
+        create1Result.ExitCode.Should().Be(0, $"First profile creation failed: {create1Result.StdErr}");
+
+        // Create second profile with SAME credentials (different name, same service principal)
+        var create2Result = await RunCliAsync(
+            "auth", "create",
+            "--name", profile2Name,
+            "--applicationId", Configuration.ApplicationId!,
+            "--clientSecret", Configuration.ClientSecret!,
+            "--tenant", Configuration.TenantId!,
+            "--environment", Configuration.DataverseUrl!);
+
+        create2Result.ExitCode.Should().Be(0, $"Second profile creation failed: {create2Result.StdErr}");
+
+        // Verify credential file contains the credentials
+        var credentialFile = Path.Combine(IsolatedConfigDir, "ppds.credentials.dat");
+        File.Exists(credentialFile).Should().BeTrue("credential file should exist");
+        var contentBefore = await File.ReadAllTextAsync(credentialFile);
+        contentBefore.Should().Contain(Configuration.ApplicationId!.ToLowerInvariant(),
+            "credential file should contain the application ID");
+
+        // Delete the FIRST profile only
+        CreatedProfiles.Remove(profile1Name);
+        var deleteResult = await RunCliAsync("auth", "delete", "--name", profile1Name);
+        deleteResult.ExitCode.Should().Be(0);
+
+        // Credentials should STILL exist because profile2 still uses them
+        File.Exists(credentialFile).Should().BeTrue("credential file should still exist");
+        var contentAfter = await File.ReadAllTextAsync(credentialFile);
+        contentAfter.Should().Contain(Configuration.ApplicationId!.ToLowerInvariant(),
+            "credentials should be preserved because another profile still uses them");
+
+        // Verify profile2 can still authenticate (credentials weren't deleted)
+        var selectResult = await RunCliAsync("auth", "select", "--name", profile2Name);
+        selectResult.ExitCode.Should().Be(0);
+
+        var whoResult = await RunCliAsync("auth", "who");
+        whoResult.ExitCode.Should().Be(0);
+        // auth who shows connection details - verify the Application ID is shown (proves auth worked)
+        whoResult.StdOut.Should().Contain(Configuration.ApplicationId!);
+    }
+
     #endregion
 
     #region auth name validation
