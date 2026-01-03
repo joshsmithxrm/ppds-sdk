@@ -32,7 +32,7 @@ public sealed class CertificateStoreCredentialProvider : ICredentialProvider
     public AuthMethod AuthMethod => AuthMethod.CertificateStore;
 
     /// <inheritdoc />
-    public string? Identity => $"app:{_applicationId[..Math.Min(8, _applicationId.Length)]}...";
+    public string? Identity => _applicationId;
 
     /// <inheritdoc />
     public DateTimeOffset? TokenExpiresAt => _tokenExpiresAt;

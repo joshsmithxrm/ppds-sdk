@@ -203,7 +203,7 @@ public sealed class AuthProfile
             if (!string.IsNullOrWhiteSpace(Username))
                 return Username;
             if (!string.IsNullOrWhiteSpace(ApplicationId))
-                return $"app:{ApplicationId[..Math.Min(8, ApplicationId.Length)]}...";
+                return ApplicationId;
             return "(unknown)";
         }
     }

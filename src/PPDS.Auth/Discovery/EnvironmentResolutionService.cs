@@ -120,7 +120,8 @@ public sealed class EnvironmentResolutionService : IDisposable
                 UniqueName = client.ConnectedOrgUniqueName,
                 OrganizationId = client.ConnectedOrgId != Guid.Empty
                     ? client.ConnectedOrgId.ToString()
-                    : null
+                    : null,
+                EnvironmentId = client.EnvironmentId
             };
 
             return EnvironmentResolutionResult.Succeeded(envInfo, ResolutionMethod.DirectConnection);

@@ -53,21 +53,31 @@ public static class EnvCommandGroup
             DefaultValueFactory = _ => OutputFormat.Text
         };
 
+        var filterOption = new Option<string?>("--filter", "-fl")
+        {
+            Description = "Filter environments by name, URL, or ID (case-insensitive)"
+        };
+
         var command = new Command("list", "List available environments")
         {
-            outputFormatOption
+            outputFormatOption,
+            filterOption
         };
 
         command.SetAction(async (parseResult, cancellationToken) =>
         {
             var outputFormat = parseResult.GetValue(outputFormatOption);
-            return await ExecuteListAsync(outputFormat, cancellationToken);
+            var filter = parseResult.GetValue(filterOption);
+            return await ExecuteListAsync(outputFormat, filter, cancellationToken);
         });
 
         return command;
     }
 
-    private static async Task<int> ExecuteListAsync(OutputFormat outputFormat, CancellationToken cancellationToken)
+    private static async Task<int> ExecuteListAsync(
+        OutputFormat outputFormat,
+        string? filter,
+        CancellationToken cancellationToken)
     {
         try
         {
@@ -88,13 +98,25 @@ public static class EnvCommandGroup
             using var gds = GlobalDiscoveryService.FromProfile(profile);
             var environments = await gds.DiscoverEnvironmentsAsync(cancellationToken);
 
+            // Apply filter if provided
+            IReadOnlyList<DiscoveredEnvironment> filtered = environments;
+            if (!string.IsNullOrWhiteSpace(filter))
+            {
+                filtered = environments.Where(e =>
+                    e.FriendlyName.Contains(filter, StringComparison.OrdinalIgnoreCase) ||
+                    e.UniqueName.Contains(filter, StringComparison.OrdinalIgnoreCase) ||
+                    e.ApiUrl.Contains(filter, StringComparison.OrdinalIgnoreCase) ||
+                    (e.EnvironmentId?.Contains(filter, StringComparison.OrdinalIgnoreCase) ?? false)
+                ).ToList();
+            }
+
             if (outputFormat == OutputFormat.Json)
             {
-                WriteEnvironmentsAsJson(environments, profile);
+                WriteEnvironmentsAsJson(filtered, profile, filter);
             }
             else
             {
-                WriteEnvironmentsAsText(environments, profile);
+                WriteEnvironmentsAsText(filtered, profile, filter);
             }
 
             return ExitCodes.Success;
@@ -108,13 +130,21 @@ public static class EnvCommandGroup
 
     private static void WriteEnvironmentsAsText(
         IReadOnlyList<DiscoveredEnvironment> environments,
-        AuthProfile profile)
+        AuthProfile profile,
+        string? filter)
     {
         if (environments.Count == 0)
         {
-            Console.WriteLine("No environments found.");
-            Console.WriteLine();
-            Console.WriteLine("This may indicate the user has no access to any environments.");
+            if (!string.IsNullOrWhiteSpace(filter))
+            {
+                Console.WriteLine($"No environments matching '{filter}'.");
+            }
+            else
+            {
+                Console.WriteLine("No environments found.");
+                Console.WriteLine();
+                Console.WriteLine("This may indicate the user has no access to any environments.");
+            }
             return;
         }
 
@@ -144,7 +174,8 @@ public static class EnvCommandGroup
             Console.WriteLine();
         }
 
-        Console.WriteLine($"Total: {environments.Count} environment(s)");
+        var filterNote = !string.IsNullOrWhiteSpace(filter) ? $" matching '{filter}'" : "";
+        Console.WriteLine($"Total: {environments.Count} environment(s){filterNote}");
         if (selectedUrl != null)
         {
             Console.WriteLine("* = active environment");
@@ -153,12 +184,14 @@ public static class EnvCommandGroup
 
     private static void WriteEnvironmentsAsJson(
         IReadOnlyList<DiscoveredEnvironment> environments,
-        AuthProfile profile)
+        AuthProfile profile,
+        string? filter)
     {
         var selectedUrl = profile.Environment?.Url?.TrimEnd('/').ToLowerInvariant();
 
         var output = new
         {
+            filter,
             environments = environments.Select(e => new
             {
                 id = e.Id,
@@ -237,7 +270,22 @@ public static class EnvCommandGroup
                 return ExitCodes.Failure;
             }
 
-            profile.Environment = result.Environment;
+            var resolved = result.Environment!;
+
+            // Validate connection before saving - ensures user has actual access to the environment
+            Console.WriteLine("Validating connection...");
+
+            await using var serviceProvider = await ProfileServiceFactory.CreateFromProfileAsync(
+                profile.Name, resolved.Url,
+                deviceCodeCallback: ProfileServiceFactory.DefaultDeviceCodeCallback,
+                cancellationToken: cancellationToken);
+
+            var pool = serviceProvider.GetRequiredService<IDataverseConnectionPool>();
+            await using var client = await pool.GetClientAsync(cancellationToken: cancellationToken);
+            await client.ExecuteAsync(new WhoAmIRequest(), cancellationToken);
+
+            // Connection validated - now safe to save
+            profile.Environment = resolved;
             await store.SaveAsync(collection, cancellationToken);
 
             var methodNote = result.Method == ResolutionMethod.DirectConnection
@@ -245,7 +293,7 @@ public static class EnvCommandGroup
                 : " (via Global Discovery)";
 
             Console.ForegroundColor = ConsoleColor.Green;
-            Console.WriteLine($"Connected to {result.Environment!.DisplayName}{methodNote}");
+            Console.WriteLine($"Connected to {resolved.DisplayName}{methodNote}");
             Console.ResetColor();
 
             return ExitCodes.Success;
@@ -269,21 +317,31 @@ public static class EnvCommandGroup
             DefaultValueFactory = _ => OutputFormat.Text
         };
 
+        var envOption = new Option<string?>("--environment", "-env")
+        {
+            Description = "Environment to query (ID, URL, unique name, or partial name). Uses profile default if not specified."
+        };
+
         var command = new Command("who", "Verify connection and show current user info from Dataverse")
         {
-            outputFormatOption
+            outputFormatOption,
+            envOption
         };
 
         command.SetAction(async (parseResult, cancellationToken) =>
         {
             var outputFormat = parseResult.GetValue(outputFormatOption);
-            return await ExecuteWhoAsync(outputFormat, cancellationToken);
+            var environmentOverride = parseResult.GetValue(envOption);
+            return await ExecuteWhoAsync(outputFormat, environmentOverride, cancellationToken);
         });
 
         return command;
     }
 
-    private static async Task<int> ExecuteWhoAsync(OutputFormat outputFormat, CancellationToken cancellationToken)
+    private static async Task<int> ExecuteWhoAsync(
+        OutputFormat outputFormat,
+        string? environmentOverride,
+        CancellationToken cancellationToken)
     {
         try
         {
@@ -306,34 +364,77 @@ public static class EnvCommandGroup
                 return ExitCodes.Failure;
             }
 
-            var env = profile.Environment;
-            if (env == null)
-            {
-                if (outputFormat == OutputFormat.Json)
-                {
-                    Console.WriteLine("{\"error\": \"No environment selected\"}");
-                }
-                else
-                {
-                    Console.WriteLine($"Profile: {profile.DisplayIdentifier}");
-                    Console.WriteLine();
-                    Console.ForegroundColor = ConsoleColor.Yellow;
-                    Console.WriteLine("No environment selected.");
-                    Console.ResetColor();
-                    Console.WriteLine();
-                    Console.WriteLine("Use 'ppds env select <environment>' to select one.");
-                }
-                return ExitCodes.Failure;
-            }
+            // Resolve environment: use override if provided, otherwise profile default
+            string environmentUrl;
+            string environmentName;
+            string? environmentId = null;
 
-            if (outputFormat != OutputFormat.Json)
+            if (!string.IsNullOrWhiteSpace(environmentOverride))
             {
-                ConsoleHeader.WriteConnectedAs(profile, env.DisplayName);
+                // Resolve the override environment using multi-layer resolution
+                if (outputFormat != OutputFormat.Json)
+                {
+                    ConsoleHeader.WriteConnectedAs(profile);
+                    Console.WriteLine($"Resolving environment '{environmentOverride}'...");
+                }
+
+                using var resolver = new EnvironmentResolutionService(profile);
+                var result = await resolver.ResolveAsync(environmentOverride, cancellationToken);
+
+                if (!result.Success)
+                {
+                    if (outputFormat == OutputFormat.Json)
+                    {
+                        Console.WriteLine(System.Text.Json.JsonSerializer.Serialize(new { error = result.ErrorMessage }));
+                    }
+                    else
+                    {
+                        Console.Error.WriteLine($"Error: {result.ErrorMessage}");
+                    }
+                    return ExitCodes.Failure;
+                }
+
+                var resolved = result.Environment!;
+                environmentUrl = resolved.Url;
+                environmentName = resolved.DisplayName;
+                environmentId = resolved.EnvironmentId;
+            }
+            else
+            {
+                // Use profile's default environment
+                var env = profile.Environment;
+                if (env == null)
+                {
+                    if (outputFormat == OutputFormat.Json)
+                    {
+                        Console.WriteLine("{\"error\": \"No environment selected\"}");
+                    }
+                    else
+                    {
+                        Console.WriteLine($"Profile: {profile.DisplayIdentifier}");
+                        Console.WriteLine();
+                        Console.ForegroundColor = ConsoleColor.Yellow;
+                        Console.WriteLine("No environment selected.");
+                        Console.ResetColor();
+                        Console.WriteLine();
+                        Console.WriteLine("Use 'ppds env select <environment>' to select one.");
+                    }
+                    return ExitCodes.Failure;
+                }
+
+                environmentUrl = env.Url;
+                environmentName = env.DisplayName;
+                environmentId = env.EnvironmentId;
+
+                if (outputFormat != OutputFormat.Json)
+                {
+                    ConsoleHeader.WriteConnectedAs(profile, environmentName);
+                }
             }
 
             await using var serviceProvider = await ProfileServiceFactory.CreateFromProfileAsync(
                 null, // Use active profile
-                null, // Use profile's environment
+                environmentUrl, // Use resolved environment URL
                 deviceCodeCallback: ProfileServiceFactory.DefaultDeviceCodeCallback,
                 cancellationToken: cancellationToken);
 
@@ -359,9 +460,9 @@ public static class EnvCommandGroup
                     organizationId = orgId,
                     organizationName = orgName,
                     organizationUniqueName = orgUniqueName,
-                    environmentId = env.EnvironmentId,
-                    environmentUrl = env.Url,
-                    environmentName = env.DisplayName
+                    environmentId,
+                    environmentUrl,
+                    environmentName
                 };
 
                 var jsonOutput = System.Text.Json.JsonSerializer.Serialize(output, new System.Text.Json.JsonSerializerOptions
@@ -378,15 +479,15 @@ public static class EnvCommandGroup
                 Console.WriteLine($"  Org ID:         {orgId}");
                 Console.WriteLine($"  Unique Name:    {orgUniqueName}");
                 Console.WriteLine($"  Friendly Name:  {orgName}");
-                Console.WriteLine($"  Org URL:        {env.Url}");
+                Console.WriteLine($"  Org URL:        {environmentUrl}");
                 if (!string.IsNullOrEmpty(profile.Username))
                 {
                     Console.WriteLine($"  User Email:     {profile.Username}");
                 }
                 Console.WriteLine($"  User ID:        {whoAmIResponse.UserId}");
-                if (!string.IsNullOrEmpty(env.EnvironmentId))
+                if (!string.IsNullOrEmpty(environmentId))
                 {
-                    Console.WriteLine($"  Environment ID: {env.EnvironmentId}");
+                    Console.WriteLine($"  Environment ID: {environmentId}");
                 }
             }
 

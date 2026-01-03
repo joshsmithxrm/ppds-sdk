@@ -28,7 +28,7 @@ public sealed class AzureDevOpsFederatedCredentialProvider : ICredentialProvider
     public AuthMethod AuthMethod => AuthMethod.AzureDevOpsFederated;
 
     /// <inheritdoc />
-    public string? Identity => $"app:{_applicationId[..Math.Min(8, _applicationId.Length)]}...";
+    public string? Identity => _applicationId;
 
     /// <inheritdoc />
     public DateTimeOffset? TokenExpiresAt => _cachedToken?.ExpiresOn;
