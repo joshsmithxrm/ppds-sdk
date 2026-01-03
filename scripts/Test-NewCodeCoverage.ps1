@@ -134,7 +134,7 @@ if ($excluded.Count -gt 0) {
 
 if ($covered.Count -gt 0) {
     Write-Host "Has tests: $($covered.Count)" -ForegroundColor Green
-    $covered | ForEach-Object { Write-Host "  [✓] $_" -ForegroundColor Green }
+    $covered | ForEach-Object { Write-Host "  [+] $_" -ForegroundColor Green }
     Write-Host ""
 }
 
