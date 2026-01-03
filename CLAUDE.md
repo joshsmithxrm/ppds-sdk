@@ -76,9 +76,11 @@ ppds-sdk/
 │   ├── PPDS.Plugins.Tests/          # Unit tests
 │   ├── PPDS.Dataverse.Tests/        # Unit tests
 │   ├── PPDS.Cli.Tests/              # Unit tests
+│   ├── PPDS.Auth.Tests/             # Unit tests
+│   ├── PPDS.Migration.Tests/        # Unit tests
 │   ├── PPDS.Auth.IntegrationTests/  # Auth smoke tests
 │   ├── PPDS.Dataverse.IntegrationTests/  # FakeXrmEasy mocked tests
-│   └── PPDS.LiveTests/              # Live Dataverse integration tests
+│   └── PPDS.LiveTests/              # Live Dataverse + CLI E2E tests
 ├── docs/
 │   ├── adr/                     # Architecture Decision Records
 │   └── architecture/            # Pattern documentation
@@ -386,9 +388,9 @@ See [CLI README](src/PPDS.Cli/README.md) for full documentation.
 |---------|------------|-------------------|--------|
 | PPDS.Plugins | PPDS.Plugins.Tests | - | ✅ |
 | PPDS.Dataverse | PPDS.Dataverse.Tests | PPDS.Dataverse.IntegrationTests (FakeXrmEasy) | ✅ |
-| PPDS.Cli | PPDS.Cli.Tests | PPDS.LiveTests/Cli (E2E) | ⏳ E2E pending |
-| PPDS.Auth | **Needs unit tests** | PPDS.LiveTests/Authentication | ❌ Unit pending |
-| PPDS.Migration | **Needs unit tests** | - | ❌ Unit pending |
+| PPDS.Cli | PPDS.Cli.Tests | PPDS.LiveTests/Cli (E2E) | ✅ |
+| PPDS.Auth | PPDS.Auth.Tests | PPDS.LiveTests/Authentication | ✅ |
+| PPDS.Migration | PPDS.Migration.Tests | - | ✅ |
 
 ### Live Tests (PPDS.LiveTests)
 
@@ -397,7 +399,7 @@ Live integration tests against real Dataverse environment:
 - `Pooling/` - Connection pool, DOP detection
 - `Resilience/` - Throttle detection
 - `BulkOperations/` - Live bulk operation execution
-- `Cli/` - CLI E2E tests (pending)
+- `Cli/` - CLI E2E tests (auth, env, data schema commands)
 
 **Rules:**
 - New public class → must have corresponding test class
