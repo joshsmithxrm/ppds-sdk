@@ -320,7 +320,21 @@ public sealed class SecureCredentialStore : ISecureCredentialStore, IDisposable
 
         // Register the cache helper to protect the file
         // The cache helper will encrypt/decrypt data when reading/writing
-        _cacheHelper.VerifyPersistence();
+        try
+        {
+            _cacheHelper.VerifyPersistence();
+        }
+        catch (MsalCachePersistenceException ex)
+        {
+            if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+            {
+                throw new InvalidOperationException(
+                    "Secure credential storage (libsecret) is unavailable on this system. " +
+                    "Use --accept-cleartext-caching to allow cleartext storage, or install libsecret with a keyring.",
+                    ex);
+            }
+            throw;
+        }
     }
 
     /// <summary>
@@ -336,17 +350,20 @@ public sealed class SecureCredentialStore : ISecureCredentialStore, IDisposable
 
         if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
         {
-            // Linux requires libsecret configuration
-            builder.WithLinuxKeyring(
-                schemaName: "ppds.credentials",
-                collection: "default",
-                secretLabel: "PPDS Credentials",
-                attribute1: new KeyValuePair<string, string>("application", "ppds"),
-                attribute2: new KeyValuePair<string, string>("version", "2"));
-
             if (_allowCleartextFallback)
             {
+                // User explicitly opted into cleartext storage
                 builder.WithLinuxUnprotectedFile();
+            }
+            else
+            {
+                // Use libsecret (will fail if not available)
+                builder.WithLinuxKeyring(
+                    schemaName: "ppds.credentials",
+                    collection: "default",
+                    secretLabel: "PPDS Credentials",
+                    attribute1: new KeyValuePair<string, string>("application", "ppds"),
+                    attribute2: new KeyValuePair<string, string>("version", "2"));
             }
         }
 
