@@ -56,29 +56,11 @@ public class EnvCommandE2ETests : CliE2ETestBase
         result.StdErr.Should().Contain("No active profile");
     }
 
-    [SkipIfNoClientSecret]
-    public async Task EnvList_JsonFormat_ReturnsValidJson()
-    {
-        var profileName = GenerateTestProfileName();
-        await RunCliAsync(
-            "auth", "create",
-            "--name", profileName,
-            "--applicationId", Configuration.ApplicationId!,
-            "--clientSecret", Configuration.ClientSecret!,
-            "--tenant", Configuration.TenantId!,
-            "--environment", Configuration.DataverseUrl!);
-
-        await RunCliAsync("auth", "select", "--name", profileName);
-
-        var result = await RunCliAsync("env", "list", "--output-format", "json");
-
-        // Either succeeds with JSON or fails (service principal limitation)
-        if (result.ExitCode == 0)
-        {
-            result.StdOut.Trim().Should().StartWith("{");
-            result.StdOut.Should().Contain("\"environments\"");
-        }
-    }
+    // Skip: Global Discovery Service does not support service principal authentication.
+    // The test would hang/timeout waiting for a response that will never come.
+    // This is a known platform limitation documented by Microsoft.
+    // [SkipIfNoClientSecret]
+    // public async Task EnvList_JsonFormat_ReturnsValidJson() { ... }
 
     #endregion
 

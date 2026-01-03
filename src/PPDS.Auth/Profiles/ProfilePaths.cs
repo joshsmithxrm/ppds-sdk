@@ -14,6 +14,11 @@ public static class ProfilePaths
     public const string AppName = "PPDS";
 
     /// <summary>
+    /// Environment variable to override the data directory.
+    /// </summary>
+    public const string ConfigDirEnvVar = "PPDS_CONFIG_DIR";
+
+    /// <summary>
     /// Profile storage file name.
     /// </summary>
     public const string ProfilesFileName = "profiles.json";
@@ -27,13 +32,21 @@ public static class ProfilePaths
     /// Gets the PPDS data directory for the current platform.
     /// </summary>
     /// <remarks>
-    /// Windows: %LOCALAPPDATA%\PPDS
-    /// macOS/Linux: ~/.ppds
+    /// Priority: PPDS_CONFIG_DIR env var > platform default.
+    /// Windows default: %LOCALAPPDATA%\PPDS
+    /// macOS/Linux default: ~/.ppds
     /// </remarks>
     public static string DataDirectory
     {
         get
         {
+            // Check for environment variable override (useful for testing and CI)
+            var envOverride = Environment.GetEnvironmentVariable(ConfigDirEnvVar);
+            if (!string.IsNullOrWhiteSpace(envOverride))
+            {
+                return envOverride;
+            }
+
             if (OperatingSystem.IsWindows())
             {
                 var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);

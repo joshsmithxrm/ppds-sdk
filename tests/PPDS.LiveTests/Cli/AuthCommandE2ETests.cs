@@ -27,7 +27,8 @@ public class AuthCommandE2ETests : CliE2ETestBase
 
         result.ExitCode.Should().Be(0);
         result.StdOut.Should().Contain("\"profiles\"");
-        result.StdOut.Should().Contain("\"activeIndex\"");
+        // Note: activeIndex is omitted when null (no profiles) due to WhenWritingNull
+        result.StdOut.Trim().Should().StartWith("{");
     }
 
     #endregion

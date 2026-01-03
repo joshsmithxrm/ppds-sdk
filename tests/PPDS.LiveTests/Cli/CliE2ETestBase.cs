@@ -65,11 +65,20 @@ public abstract class CliE2ETestBase : IAsyncLifetime
     protected List<string> CreatedFiles { get; } = new();
 
     /// <summary>
+    /// Isolated config directory for this test instance.
+    /// Each test class gets a unique directory to avoid race conditions.
+    /// </summary>
+    protected string IsolatedConfigDir { get; }
+
+    /// <summary>
     /// Initializes a new instance of the CLI E2E test base.
     /// </summary>
     protected CliE2ETestBase()
     {
         Configuration = new Infrastructure.LiveTestConfiguration();
+        // Create unique config directory per test instance to isolate profile stores
+        IsolatedConfigDir = Path.Combine(Path.GetTempPath(), $"ppds-test-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(IsolatedConfigDir);
     }
 
     /// <summary>
@@ -88,6 +97,9 @@ public abstract class CliE2ETestBase : IAsyncLifetime
             UseShellExecute = false,
             CreateNoWindow = true
         };
+
+        // Set isolated config directory to avoid race conditions between parallel test runs
+        startInfo.Environment["PPDS_CONFIG_DIR"] = IsolatedConfigDir;
 
         // Build argument list: run --project <path> --configuration Release --framework net8.0 --no-build -- <args>
         // Use net8.0 (LTS) since CLI behavior is framework-agnostic and libraries
@@ -178,23 +190,10 @@ public abstract class CliE2ETestBase : IAsyncLifetime
 
     /// <summary>
     /// Async cleanup called after each test.
-    /// Deletes any profiles and files created during the test.
+    /// Deletes any profiles, files, and the isolated config directory.
     /// </summary>
-    public virtual async Task DisposeAsync()
+    public virtual Task DisposeAsync()
     {
-        // Clean up created profiles
-        foreach (var profileName in CreatedProfiles)
-        {
-            try
-            {
-                await RunCliAsync("auth", "delete", "--name", profileName);
-            }
-            catch
-            {
-                // Ignore cleanup errors
-            }
-        }
-
         // Clean up created files
         foreach (var filePath in CreatedFiles)
         {
@@ -208,6 +207,19 @@ public abstract class CliE2ETestBase : IAsyncLifetime
                 // Ignore cleanup errors
             }
         }
+
+        // Clean up isolated config directory (contains profiles.json and token cache)
+        try
+        {
+            if (Directory.Exists(IsolatedConfigDir))
+                Directory.Delete(IsolatedConfigDir, recursive: true);
+        }
+        catch
+        {
+            // Ignore cleanup errors
+        }
+
+        return Task.CompletedTask;
     }
 
     /// <summary>

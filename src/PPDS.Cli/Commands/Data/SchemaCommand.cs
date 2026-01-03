@@ -199,6 +199,16 @@ public static class SchemaCommand
             var schema = await generator.GenerateAsync(
                 entities, options, progressReporter, cancellationToken);
 
+            // Fail if no entities were successfully processed
+            if (schema.Entities.Count == 0)
+            {
+                var failedEntities = string.Join(", ", entities);
+                progressReporter.Error(
+                    new InvalidOperationException($"No valid entities found: {failedEntities}"),
+                    $"None of the specified entities could be found or accessed: {failedEntities}");
+                return ExitCodes.Failure;
+            }
+
             await schemaWriter.WriteAsync(schema, output.FullName, cancellationToken);
 
             var totalFields = schema.Entities.Sum(e => e.Fields.Count);
