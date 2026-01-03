@@ -78,7 +78,11 @@ public static class ProfileServiceFactory
         var (envUrl, envDisplayName) = await ResolveEnvironmentAsync(
             profile, environmentOverride, cancellationToken).ConfigureAwait(false);
 
-        var source = new ProfileConnectionSource(profile, envUrl, 52, deviceCodeCallback, envDisplayName);
+        // Create credential store for secure secret lookups (registered in DI for disposal)
+        var credentialStore = new SecureCredentialStore();
+
+        var source = new ProfileConnectionSource(
+            profile, envUrl, 52, deviceCodeCallback, envDisplayName, credentialStore);
         var adapter = new ProfileConnectionSourceAdapter(source);
 
         var connectionInfo = new ResolvedConnectionInfo
@@ -88,7 +92,7 @@ public static class ProfileServiceFactory
             EnvironmentDisplayName = envDisplayName
         };
 
-        return CreateProviderFromSources(new[] { adapter }, connectionInfo, verbose, debug);
+        return CreateProviderFromSources(new[] { adapter }, connectionInfo, credentialStore, verbose, debug);
     }
 
     /// <summary>
@@ -167,8 +171,12 @@ public static class ProfileServiceFactory
         var (envUrl, envDisplayName) = await ResolveEnvironmentAsync(
             firstProfile, environmentOverride, cancellationToken).ConfigureAwait(false);
 
+        // Create credential store for secure secret lookups (registered in DI for disposal)
+        var credentialStore = new SecureCredentialStore();
+
         // Now resolve all profiles with the resolved URL
-        using var resolver = new ConnectionResolver(deviceCodeCallback: deviceCodeCallback);
+        using var resolver = new ConnectionResolver(
+            deviceCodeCallback: deviceCodeCallback, credentialStore: credentialStore);
         var sources = await resolver.ResolveMultipleAsync(
                 names, envUrl, environmentDisplayName: envDisplayName, cancellationToken: cancellationToken)
             .ConfigureAwait(false);
@@ -182,7 +190,7 @@ public static class ProfileServiceFactory
             EnvironmentDisplayName = envDisplayName
         };
 
-        return CreateProviderFromSources(adapters, connectionInfo, verbose, debug);
+        return CreateProviderFromSources(adapters, connectionInfo, credentialStore, verbose, debug);
     }
 
     /// <summary>
@@ -239,6 +247,7 @@ public static class ProfileServiceFactory
     private static ServiceProvider CreateProviderFromSources(
         IConnectionSource[] sources,
         ResolvedConnectionInfo connectionInfo,
+        ISecureCredentialStore credentialStore,
         bool verbose,
         bool debug)
     {
@@ -246,6 +255,9 @@ public static class ProfileServiceFactory
         ConfigureLogging(services, verbose, debug);
 
         services.AddSingleton(connectionInfo);
+
+        // Register credential store for disposal with service provider
+        services.AddSingleton<ISecureCredentialStore>(credentialStore);
 
         var dataverseOptions = new DataverseOptions();
         services.AddSingleton<IOptions<DataverseOptions>>(new OptionsWrapper<DataverseOptions>(dataverseOptions));

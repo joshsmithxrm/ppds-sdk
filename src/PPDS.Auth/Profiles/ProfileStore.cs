@@ -4,14 +4,29 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Logging;
 
 namespace PPDS.Auth.Profiles;
 
 /// <summary>
 /// Manages persistent storage of authentication profiles.
 /// </summary>
+/// <remarks>
+/// <para>Schema v2 notes:</para>
+/// <list type="bullet">
+/// <item><description>Profiles stored as array, not dictionary</description></item>
+/// <item><description>Active profile tracked by name, not index</description></item>
+/// <item><description>Secrets stored separately in SecureCredentialStore</description></item>
+/// <item><description>v1 profiles are detected and deleted (breaking change)</description></item>
+/// </list>
+/// </remarks>
 public sealed class ProfileStore : IDisposable
 {
+    /// <summary>
+    /// Current schema version.
+    /// </summary>
+    public const int CurrentVersion = 2;
+
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         WriteIndented = true,
@@ -21,6 +36,7 @@ public sealed class ProfileStore : IDisposable
     };
 
     private readonly string _filePath;
+    private readonly ILogger? _logger;
     private readonly SemaphoreSlim _lock = new(1, 1);
     private ProfileCollection? _cachedCollection;
     private bool _disposed;
@@ -28,7 +44,8 @@ public sealed class ProfileStore : IDisposable
     /// <summary>
     /// Creates a new profile store using the default path.
     /// </summary>
-    public ProfileStore() : this(ProfilePaths.ProfilesFile)
+    /// <param name="logger">Optional logger for diagnostics.</param>
+    public ProfileStore(ILogger? logger = null) : this(ProfilePaths.ProfilesFile, logger)
     {
     }
 
@@ -36,16 +53,26 @@ public sealed class ProfileStore : IDisposable
     /// Creates a new profile store using a custom path.
     /// </summary>
     /// <param name="filePath">The path to the profiles file.</param>
-    public ProfileStore(string filePath)
+    /// <param name="logger">Optional logger for diagnostics.</param>
+    public ProfileStore(string filePath, ILogger? logger = null)
     {
         _filePath = filePath ?? throw new ArgumentNullException(nameof(filePath));
+        _logger = logger;
     }
+
+    /// <summary>
+    /// Gets the path to the profiles file.
+    /// </summary>
+    public string FilePath => _filePath;
 
     /// <summary>
     /// Loads the profile collection from disk.
     /// </summary>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>The profile collection.</returns>
+    /// <remarks>
+    /// If a v1 profile file is detected, it is deleted and an empty collection is returned.
+    /// </remarks>
     public async Task<ProfileCollection> LoadAsync(CancellationToken cancellationToken = default)
     {
         await _lock.WaitAsync(cancellationToken).ConfigureAwait(false);
@@ -63,14 +90,17 @@ public sealed class ProfileStore : IDisposable
             }
 
             var json = await File.ReadAllTextAsync(_filePath, cancellationToken).ConfigureAwait(false);
+
+            // Check for v1 schema and handle migration
+            if (IsV1Schema(json))
+            {
+                HandleV1Migration();
+                _cachedCollection = new ProfileCollection();
+                return _cachedCollection;
+            }
+
             _cachedCollection = JsonSerializer.Deserialize<ProfileCollection>(json, JsonOptions)
                 ?? new ProfileCollection();
-
-            // Decrypt sensitive fields
-            foreach (var profile in _cachedCollection.All)
-            {
-                DecryptProfile(profile);
-            }
 
             return _cachedCollection;
         }
@@ -84,6 +114,9 @@ public sealed class ProfileStore : IDisposable
     /// Loads the profile collection from disk (synchronous).
     /// </summary>
     /// <returns>The profile collection.</returns>
+    /// <remarks>
+    /// If a v1 profile file is detected, it is deleted and an empty collection is returned.
+    /// </remarks>
     public ProfileCollection Load()
     {
         _lock.Wait();
@@ -101,14 +134,17 @@ public sealed class ProfileStore : IDisposable
             }
 
             var json = File.ReadAllText(_filePath);
+
+            // Check for v1 schema and handle migration
+            if (IsV1Schema(json))
+            {
+                HandleV1Migration();
+                _cachedCollection = new ProfileCollection();
+                return _cachedCollection;
+            }
+
             _cachedCollection = JsonSerializer.Deserialize<ProfileCollection>(json, JsonOptions)
                 ?? new ProfileCollection();
-
-            // Decrypt sensitive fields
-            foreach (var profile in _cachedCollection.All)
-            {
-                DecryptProfile(profile);
-            }
 
             return _cachedCollection;
         }
@@ -133,10 +169,10 @@ public sealed class ProfileStore : IDisposable
         {
             ProfilePaths.EnsureDirectoryExists();
 
-            // Create a copy with encrypted sensitive fields
-            var toSave = CloneWithEncryption(collection);
+            // Ensure version is set correctly
+            collection.Version = CurrentVersion;
 
-            var json = JsonSerializer.Serialize(toSave, JsonOptions);
+            var json = JsonSerializer.Serialize(collection, JsonOptions);
             await File.WriteAllTextAsync(_filePath, json, cancellationToken).ConfigureAwait(false);
 
             _cachedCollection = collection;
@@ -161,10 +197,10 @@ public sealed class ProfileStore : IDisposable
         {
             ProfilePaths.EnsureDirectoryExists();
 
-            // Create a copy with encrypted sensitive fields
-            var toSave = CloneWithEncryption(collection);
+            // Ensure version is set correctly
+            collection.Version = CurrentVersion;
 
-            var json = JsonSerializer.Serialize(toSave, JsonOptions);
+            var json = JsonSerializer.Serialize(collection, JsonOptions);
             File.WriteAllText(_filePath, json);
 
             _cachedCollection = collection;
@@ -213,60 +249,71 @@ public sealed class ProfileStore : IDisposable
     }
 
     /// <summary>
-    /// Creates a deep copy of the collection with encrypted sensitive fields.
+    /// Checks if the JSON represents a v1 schema (dictionary-based profiles).
     /// </summary>
-    private static ProfileCollection CloneWithEncryption(ProfileCollection source)
+    private static bool IsV1Schema(string json)
     {
-        var copy = source.Clone();
-
-        // Encrypt sensitive fields
-        foreach (var profile in copy.All)
+        try
         {
-            EncryptProfile(profile);
-        }
+            using var doc = JsonDocument.Parse(json);
+            var root = doc.RootElement;
 
-        return copy;
+            // v1 has "activeIndex" property, v2 has "activeProfile"
+            if (root.TryGetProperty("activeIndex", out _))
+            {
+                return true;
+            }
+
+            // v1 has version = 1
+            if (root.TryGetProperty("version", out var versionElement) &&
+                versionElement.ValueKind == JsonValueKind.Number &&
+                versionElement.GetInt32() == 1)
+            {
+                return true;
+            }
+
+            // v1 profiles is an object (dictionary), v2 profiles is an array
+            if (root.TryGetProperty("profiles", out var profilesElement) &&
+                profilesElement.ValueKind == JsonValueKind.Object)
+            {
+                return true;
+            }
+
+            return false;
+        }
+        catch (JsonException)
+        {
+            // If we can't parse, assume it's corrupted and treat as v1 to delete
+            return true;
+        }
     }
 
     /// <summary>
-    /// Encrypts sensitive fields in a profile.
+    /// Handles migration from v1 by deleting the old file.
     /// </summary>
-    private static void EncryptProfile(AuthProfile profile)
+    /// <remarks>
+    /// Pre-release breaking change: v1 profiles are simply deleted.
+    /// Users must re-authenticate with v2.
+    /// </remarks>
+    private void HandleV1Migration()
     {
-        if (!string.IsNullOrEmpty(profile.ClientSecret) && !ProfileEncryption.IsEncrypted(profile.ClientSecret))
-        {
-            profile.ClientSecret = ProfileEncryption.Encrypt(profile.ClientSecret);
-        }
+        _logger?.LogWarning(
+            "Detected v1 profile schema at '{FilePath}'. " +
+            "This version requires schema v2. The old profile file will be deleted. " +
+            "Please re-authenticate with 'ppds auth create'.",
+            _filePath);
 
-        if (!string.IsNullOrEmpty(profile.CertificatePassword) && !ProfileEncryption.IsEncrypted(profile.CertificatePassword))
+        try
         {
-            profile.CertificatePassword = ProfileEncryption.Encrypt(profile.CertificatePassword);
+            File.Delete(_filePath);
+            _logger?.LogInformation("Deleted v1 profile file: {FilePath}", _filePath);
         }
-
-        if (!string.IsNullOrEmpty(profile.Password) && !ProfileEncryption.IsEncrypted(profile.Password))
+        catch (Exception ex)
         {
-            profile.Password = ProfileEncryption.Encrypt(profile.Password);
-        }
-    }
-
-    /// <summary>
-    /// Decrypts sensitive fields in a profile.
-    /// </summary>
-    private static void DecryptProfile(AuthProfile profile)
-    {
-        if (ProfileEncryption.IsEncrypted(profile.ClientSecret))
-        {
-            profile.ClientSecret = ProfileEncryption.Decrypt(profile.ClientSecret);
-        }
-
-        if (ProfileEncryption.IsEncrypted(profile.CertificatePassword))
-        {
-            profile.CertificatePassword = ProfileEncryption.Decrypt(profile.CertificatePassword);
-        }
-
-        if (ProfileEncryption.IsEncrypted(profile.Password))
-        {
-            profile.Password = ProfileEncryption.Decrypt(profile.Password);
+            _logger?.LogError(ex, "Failed to delete v1 profile file: {FilePath}", _filePath);
+            throw new InvalidOperationException(
+                $"Failed to migrate from v1 profile schema. Please manually delete '{_filePath}' and re-authenticate.",
+                ex);
         }
     }
 

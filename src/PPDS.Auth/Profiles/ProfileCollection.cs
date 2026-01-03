@@ -8,41 +8,55 @@ namespace PPDS.Auth.Profiles;
 /// <summary>
 /// Collection of authentication profiles with active profile tracking.
 /// </summary>
+/// <remarks>
+/// <para>Schema v2 changes from v1:</para>
+/// <list type="bullet">
+/// <item><description>Profiles stored as array instead of dictionary</description></item>
+/// <item><description>Active profile tracked by name instead of index</description></item>
+/// <item><description>Secrets moved to secure credential store</description></item>
+/// </list>
+/// </remarks>
 public sealed class ProfileCollection
 {
     /// <summary>
-    /// Storage format version for migration support.
+    /// Storage format version. v2 uses array storage and name-based active profile.
     /// </summary>
     [JsonPropertyName("version")]
-    public int Version { get; set; } = 1;
+    public int Version { get; set; } = 2;
 
     /// <summary>
-    /// Gets or sets the index of the active profile.
+    /// Gets or sets the name of the active profile.
     /// Null if no profile is active (collection empty).
     /// </summary>
-    [JsonPropertyName("activeIndex")]
-    public int? ActiveIndex { get; set; }
+    [JsonPropertyName("activeProfile")]
+    public string? ActiveProfileName { get; set; }
 
     /// <summary>
-    /// Gets or sets the profiles dictionary (keyed by index).
+    /// Gets or sets the profiles list.
     /// </summary>
     [JsonPropertyName("profiles")]
-    public Dictionary<int, AuthProfile> Profiles { get; set; } = new();
+    public List<AuthProfile> Profiles { get; set; } = new();
 
     /// <summary>
     /// Gets the active profile, or null if none is active.
     /// </summary>
     [JsonIgnore]
-    public AuthProfile? ActiveProfile =>
-        ActiveIndex.HasValue && Profiles.TryGetValue(ActiveIndex.Value, out var profile)
-            ? profile
-            : null;
+    public AuthProfile? ActiveProfile
+    {
+        get
+        {
+            if (string.IsNullOrWhiteSpace(ActiveProfileName))
+                return Profiles.FirstOrDefault();
+
+            return GetByName(ActiveProfileName) ?? Profiles.FirstOrDefault();
+        }
+    }
 
     /// <summary>
     /// Gets all profiles in index order.
     /// </summary>
     [JsonIgnore]
-    public IEnumerable<AuthProfile> All => Profiles.Values.OrderBy(p => p.Index);
+    public IEnumerable<AuthProfile> All => Profiles.OrderBy(p => p.Index);
 
     /// <summary>
     /// Gets the count of profiles.
@@ -54,13 +68,14 @@ public sealed class ProfileCollection
     /// Gets the next available index.
     /// </summary>
     [JsonIgnore]
-    public int NextIndex => Profiles.Count == 0 ? 1 : Profiles.Keys.Max() + 1;
+    public int NextIndex => Profiles.Count == 0 ? 1 : Profiles.Max(p => p.Index) + 1;
 
     /// <summary>
     /// Adds a profile to the collection.
     /// </summary>
     /// <param name="profile">The profile to add.</param>
     /// <param name="setAsActive">Whether to set this as the active profile.</param>
+    /// <exception cref="InvalidOperationException">If a profile with the same index already exists.</exception>
     public void Add(AuthProfile profile, bool setAsActive = false)
     {
         if (profile.Index <= 0)
@@ -68,17 +83,17 @@ public sealed class ProfileCollection
             profile.Index = NextIndex;
         }
 
-        if (Profiles.ContainsKey(profile.Index))
+        if (Profiles.Any(p => p.Index == profile.Index))
         {
             throw new InvalidOperationException($"Profile with index {profile.Index} already exists.");
         }
 
-        Profiles[profile.Index] = profile;
+        Profiles.Add(profile);
 
-        // Auto-select first profile as active
+        // Auto-select first profile as active, or if explicitly requested
         if (setAsActive || Profiles.Count == 1)
         {
-            ActiveIndex = profile.Index;
+            ActiveProfileName = profile.Name;
         }
     }
 
@@ -89,7 +104,7 @@ public sealed class ProfileCollection
     /// <returns>The profile, or null if not found.</returns>
     public AuthProfile? GetByIndex(int index)
     {
-        return Profiles.TryGetValue(index, out var profile) ? profile : null;
+        return Profiles.FirstOrDefault(p => p.Index == index);
     }
 
     /// <summary>
@@ -102,7 +117,7 @@ public sealed class ProfileCollection
         if (string.IsNullOrWhiteSpace(name))
             return null;
 
-        return Profiles.Values.FirstOrDefault(p =>
+        return Profiles.FirstOrDefault(p =>
             string.Equals(p.Name, name, StringComparison.OrdinalIgnoreCase));
     }
 
@@ -133,15 +148,18 @@ public sealed class ProfileCollection
     /// <returns>True if removed, false if not found.</returns>
     public bool RemoveByIndex(int index)
     {
-        if (!Profiles.Remove(index))
+        var profile = GetByIndex(index);
+        if (profile == null)
         {
             return false;
         }
 
-        // If we removed the active profile, clear active or select another
-        if (ActiveIndex == index)
+        Profiles.Remove(profile);
+
+        // If we removed the active profile, select the first remaining profile
+        if (string.Equals(ActiveProfileName, profile.Name, StringComparison.OrdinalIgnoreCase))
         {
-            ActiveIndex = Profiles.Count > 0 ? Profiles.Keys.Min() : null;
+            ActiveProfileName = Profiles.FirstOrDefault()?.Name;
         }
 
         return true;
@@ -165,12 +183,13 @@ public sealed class ProfileCollection
     /// <exception cref="InvalidOperationException">If profile not found.</exception>
     public void SetActiveByIndex(int index)
     {
-        if (!Profiles.ContainsKey(index))
+        var profile = GetByIndex(index);
+        if (profile == null)
         {
             throw new InvalidOperationException($"Profile with index {index} not found.");
         }
 
-        ActiveIndex = index;
+        ActiveProfileName = profile.Name;
     }
 
     /// <summary>
@@ -186,7 +205,7 @@ public sealed class ProfileCollection
             throw new InvalidOperationException($"Profile with name '{name}' not found.");
         }
 
-        ActiveIndex = profile.Index;
+        ActiveProfileName = profile.Name;
     }
 
     /// <summary>
@@ -195,7 +214,7 @@ public sealed class ProfileCollection
     public void Clear()
     {
         Profiles.Clear();
-        ActiveIndex = null;
+        ActiveProfileName = null;
     }
 
     /// <summary>
@@ -209,7 +228,7 @@ public sealed class ProfileCollection
         if (string.IsNullOrWhiteSpace(name))
             return false;
 
-        return Profiles.Values.Any(p =>
+        return Profiles.Any(p =>
             string.Equals(p.Name, name, StringComparison.OrdinalIgnoreCase) &&
             p.Index != excludeIndex);
     }
@@ -222,12 +241,12 @@ public sealed class ProfileCollection
         var copy = new ProfileCollection
         {
             Version = Version,
-            ActiveIndex = ActiveIndex
+            ActiveProfileName = ActiveProfileName
         };
 
-        foreach (var kvp in Profiles)
+        foreach (var profile in Profiles)
         {
-            copy.Profiles[kvp.Key] = kvp.Value.Clone();
+            copy.Profiles.Add(profile.Clone());
         }
 
         return copy;

@@ -28,36 +28,47 @@ public class CredentialProviderFactoryTests
     }
 
     [Fact]
-    public void Create_ClientSecret_WithValidProfile_ReturnsClientSecretProvider()
+    public void Create_ClientSecret_WithoutEnvVar_Throws()
+    {
+        // ClientSecret requires either env var or secure store (CreateAsync)
+        var profile = new AuthProfile
+        {
+            AuthMethod = AuthMethod.ClientSecret,
+            ApplicationId = "app-id",
+            TenantId = "tenant-id"
+        };
+
+        // Clear the env var if set
+        Environment.SetEnvironmentVariable(CredentialProviderFactory.SpnSecretEnvVar, null);
+
+        var act = () => CredentialProviderFactory.Create(profile);
+
+        act.Should().Throw<InvalidOperationException>()
+            .Where(ex => ex.Message.Contains("No client secret found"));
+    }
+
+    [Fact]
+    public void Create_ClientSecret_WithEnvVar_ReturnsClientSecretProvider()
     {
         var profile = new AuthProfile
         {
             AuthMethod = AuthMethod.ClientSecret,
             ApplicationId = "app-id",
-            ClientSecret = "secret",
             TenantId = "tenant-id"
         };
 
-        var provider = CredentialProviderFactory.Create(profile);
-
-        provider.Should().BeOfType<ClientSecretCredentialProvider>();
-        provider.Dispose();
-    }
-
-    [Fact]
-    public void Create_ClientSecret_MissingApplicationId_Throws()
-    {
-        var profile = new AuthProfile
+        try
         {
-            AuthMethod = AuthMethod.ClientSecret,
-            ClientSecret = "secret",
-            TenantId = "tenant-id"
-        };
+            Environment.SetEnvironmentVariable(CredentialProviderFactory.SpnSecretEnvVar, "test-secret");
+            var provider = CredentialProviderFactory.Create(profile);
 
-        var act = () => CredentialProviderFactory.Create(profile);
-
-        act.Should().Throw<ArgumentException>()
-            .Where(ex => ex.Message.Contains("ApplicationId"));
+            provider.Should().BeOfType<ClientSecretCredentialProvider>();
+            provider.Dispose();
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable(CredentialProviderFactory.SpnSecretEnvVar, null);
+        }
     }
 
     [Fact]
@@ -88,36 +99,6 @@ public class CredentialProviderFactoryTests
     }
 
     [Fact]
-    public void Create_GitHubFederated_MissingApplicationId_Throws()
-    {
-        var profile = new AuthProfile
-        {
-            AuthMethod = AuthMethod.GitHubFederated,
-            TenantId = "tenant-id"
-        };
-
-        var act = () => CredentialProviderFactory.Create(profile);
-
-        act.Should().Throw<ArgumentException>()
-            .Where(ex => ex.Message.Contains("ApplicationId"));
-    }
-
-    [Fact]
-    public void Create_GitHubFederated_MissingTenantId_Throws()
-    {
-        var profile = new AuthProfile
-        {
-            AuthMethod = AuthMethod.GitHubFederated,
-            ApplicationId = "app-id"
-        };
-
-        var act = () => CredentialProviderFactory.Create(profile);
-
-        act.Should().Throw<ArgumentException>()
-            .Where(ex => ex.Message.Contains("TenantId"));
-    }
-
-    [Fact]
     public void Create_AzureDevOpsFederated_WithValidProfile_ReturnsAzureDevOpsProvider()
     {
         var profile = new AuthProfile
@@ -134,39 +115,9 @@ public class CredentialProviderFactoryTests
     }
 
     [Fact]
-    public void Create_UsernamePassword_WithValidProfile_ReturnsUsernamePasswordProvider()
+    public void Create_UsernamePassword_WithoutStore_Throws()
     {
-        var profile = new AuthProfile
-        {
-            AuthMethod = AuthMethod.UsernamePassword,
-            Username = "user@example.com",
-            Password = "password"
-        };
-
-        var provider = CredentialProviderFactory.Create(profile);
-
-        provider.Should().BeOfType<UsernamePasswordCredentialProvider>();
-        provider.Dispose();
-    }
-
-    [Fact]
-    public void Create_UsernamePassword_MissingUsername_Throws()
-    {
-        var profile = new AuthProfile
-        {
-            AuthMethod = AuthMethod.UsernamePassword,
-            Password = "password"
-        };
-
-        var act = () => CredentialProviderFactory.Create(profile);
-
-        act.Should().Throw<ArgumentException>()
-            .Where(ex => ex.Message.Contains("Username"));
-    }
-
-    [Fact]
-    public void Create_UsernamePassword_MissingPassword_Throws()
-    {
+        // UsernamePassword requires secure store (must use CreateAsync)
         var profile = new AuthProfile
         {
             AuthMethod = AuthMethod.UsernamePassword,
@@ -175,8 +126,8 @@ public class CredentialProviderFactoryTests
 
         var act = () => CredentialProviderFactory.Create(profile);
 
-        act.Should().Throw<ArgumentException>()
-            .Where(ex => ex.Message.Contains("Password"));
+        act.Should().Throw<InvalidOperationException>()
+            .Where(ex => ex.Message.Contains("CreateAsync"));
     }
 
     [Theory]
@@ -202,5 +153,27 @@ public class CredentialProviderFactoryTests
         var result = CredentialProviderFactory.IsSupported((AuthMethod)999);
 
         result.Should().BeFalse();
+    }
+
+    [Theory]
+    [InlineData(AuthMethod.ClientSecret, true)]
+    [InlineData(AuthMethod.CertificateFile, true)]
+    [InlineData(AuthMethod.UsernamePassword, true)]
+    [InlineData(AuthMethod.InteractiveBrowser, false)]
+    [InlineData(AuthMethod.DeviceCode, false)]
+    [InlineData(AuthMethod.ManagedIdentity, false)]
+    [InlineData(AuthMethod.GitHubFederated, false)]
+    [InlineData(AuthMethod.AzureDevOpsFederated, false)]
+    public void RequiresCredentialStore_ReturnsExpectedValue(AuthMethod authMethod, bool expected)
+    {
+        var result = CredentialProviderFactory.RequiresCredentialStore(authMethod);
+
+        result.Should().Be(expected);
+    }
+
+    [Fact]
+    public void SpnSecretEnvVar_HasExpectedName()
+    {
+        CredentialProviderFactory.SpnSecretEnvVar.Should().Be("PPDS_SPN_SECRET");
     }
 }

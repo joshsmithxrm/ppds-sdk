@@ -125,6 +125,15 @@ public static class AuthCommandGroup
             DefaultValueFactory = _ => false
         };
 
+        var acceptCleartextOption = new Option<bool>("--accept-cleartext-caching")
+        {
+            Description = "Accept cleartext credential storage on Linux when secure storage (libsecret) is unavailable",
+            DefaultValueFactory = _ => false,
+            // Only show this option on Linux where it's relevant
+            Hidden = !System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(
+                System.Runtime.InteropServices.OSPlatform.Linux)
+        };
+
         var command = new Command("create", "Create and store authentication profiles on this computer")
         {
             nameOption,
@@ -141,7 +150,8 @@ public static class AuthCommandGroup
             usernameOption,
             passwordOption,
             githubFederatedOption,
-            azureDevOpsFederatedOption
+            azureDevOpsFederatedOption,
+            acceptCleartextOption
         };
 
         command.SetAction(async (parseResult, cancellationToken) =>
@@ -162,7 +172,8 @@ public static class AuthCommandGroup
                 Username = parseResult.GetValue(usernameOption),
                 Password = parseResult.GetValue(passwordOption),
                 GitHubFederated = parseResult.GetValue(githubFederatedOption),
-                AzureDevOpsFederated = parseResult.GetValue(azureDevOpsFederatedOption)
+                AzureDevOpsFederated = parseResult.GetValue(azureDevOpsFederatedOption),
+                AcceptCleartextCaching = parseResult.GetValue(acceptCleartextOption)
             };
 
             return await ExecuteCreateAsync(options, cancellationToken);
@@ -188,6 +199,7 @@ public static class AuthCommandGroup
         public string? Password { get; set; }
         public bool GitHubFederated { get; set; }
         public bool AzureDevOpsFederated { get; set; }
+        public bool AcceptCleartextCaching { get; set; }
     }
 
     private static async Task<int> ExecuteCreateAsync(CreateOptions options, CancellationToken cancellationToken)
@@ -218,11 +230,57 @@ public static class AuthCommandGroup
                 Cloud = options.Cloud,
                 TenantId = options.Tenant,
                 ApplicationId = options.ApplicationId,
-                ClientSecret = options.ClientSecret,
                 CertificatePath = options.CertificatePath,
-                CertificatePassword = options.CertificatePassword,
                 CertificateThumbprint = options.CertificateThumbprint
             };
+
+            // Store secrets in secure credential store (not in profile)
+            using var credentialStore = new SecureCredentialStore(allowCleartextFallback: options.AcceptCleartextCaching);
+
+            // Warn if using cleartext storage on Linux
+            if (credentialStore.IsCleartextCachingEnabled)
+            {
+                Console.ForegroundColor = ConsoleColor.Yellow;
+                Console.Error.WriteLine("Warning: Secure storage (libsecret) is unavailable. Credentials will be stored in cleartext.");
+                Console.Error.WriteLine("         Install libsecret and a keyring (gnome-keyring or kwallet) for secure storage.");
+                Console.ResetColor();
+            }
+
+            // Track stored credential key for cleanup on failure
+            string? storedCredentialKey = null;
+
+            if (!string.IsNullOrWhiteSpace(options.ApplicationId))
+            {
+                var storedCredential = new StoredCredential
+                {
+                    ApplicationId = options.ApplicationId,
+                    ClientSecret = options.ClientSecret,
+                    CertificatePath = options.CertificatePath,
+                    CertificatePassword = options.CertificatePassword
+                };
+                await credentialStore.StoreAsync(storedCredential, cancellationToken);
+                storedCredentialKey = options.ApplicationId;
+            }
+            else if (!string.IsNullOrWhiteSpace(options.Username) && !string.IsNullOrWhiteSpace(options.Password))
+            {
+                // For username/password auth, key by username
+                var storedCredential = new StoredCredential
+                {
+                    ApplicationId = options.Username,
+                    Password = options.Password
+                };
+                await credentialStore.StoreAsync(storedCredential, cancellationToken);
+                storedCredentialKey = options.Username;
+            }
+
+            // Helper to clean up stored credentials on failure
+            async Task CleanupCredentialsAsync()
+            {
+                if (storedCredentialKey != null)
+                {
+                    await credentialStore.RemoveAsync(storedCredentialKey, cancellationToken);
+                }
+            }
 
             // For service principals, we must authenticate directly to the environment URL
             // Global discovery doesn't work with client credentials flow
@@ -234,6 +292,7 @@ public static class AuthCommandGroup
             {
                 if (string.IsNullOrWhiteSpace(options.Environment))
                 {
+                    await CleanupCredentialsAsync();
                     ErrorOutput.WriteErrorLine($"--environment is required for {authMethod} authentication.");
                     ErrorOutput.WriteLine("Service principals must specify the full environment URL (e.g., https://org.crm.dynamics.com).");
                     return ExitCodes.Failure;
@@ -243,6 +302,7 @@ public static class AuthCommandGroup
                 // to resolve partial names like "Dev" or "Production"
                 if (!options.Environment.Contains("://"))
                 {
+                    await CleanupCredentialsAsync();
                     ErrorOutput.WriteErrorLine("Service principals require a full environment URL.");
                     ErrorOutput.WriteLine($"  Provided: {options.Environment}");
                     ErrorOutput.WriteLine($"  Expected: https://org.crm.dynamics.com");
@@ -296,6 +356,12 @@ public static class AuthCommandGroup
                 if (string.IsNullOrEmpty(profile.TenantId) && !string.IsNullOrEmpty(provider.TenantId))
                 {
                     profile.TenantId = provider.TenantId;
+                }
+
+                // Store the full authority URL
+                if (!string.IsNullOrEmpty(profile.TenantId))
+                {
+                    profile.Authority = CloudEndpoints.GetAuthorityUrl(profile.Cloud, profile.TenantId);
                 }
 
                 var claims = JwtClaimsParser.Parse(provider.IdTokenClaims, provider.AccessToken);
@@ -388,6 +454,7 @@ public static class AuthCommandGroup
             }
             catch (AuthenticationException ex)
             {
+                await CleanupCredentialsAsync();
                 Console.Error.WriteLine($"Error: Authentication failed: {ex.Message}");
                 return ExitCodes.Failure;
             }
@@ -417,7 +484,7 @@ public static class AuthCommandGroup
                 Console.WriteLine($"  Environment: (none - use 'ppds env select' to set)");
             }
 
-            if (collection.ActiveIndex == profile.Index)
+            if (collection.ActiveProfile?.Index == profile.Index)
             {
                 Console.WriteLine();
                 Console.WriteLine("This profile is now active.");
@@ -607,7 +674,7 @@ public static class AuthCommandGroup
         var rows = collection.All.Select(p => new
         {
             Index = $"[{p.Index}]",
-            Active = collection.ActiveIndex == p.Index ? "*" : "",
+            Active = collection.ActiveProfile?.Index == p.Index ? "*" : "",
             Method = p.AuthMethod.ToString(),
             Name = p.Name ?? "",
             User = p.IdentityDisplay,
@@ -657,7 +724,7 @@ public static class AuthCommandGroup
     {
         var output = new
         {
-            activeIndex = collection.ActiveIndex,
+            activeProfile = collection.ActiveProfileName,
             profiles = collection.All.Select(p => new
             {
                 index = p.Index,
@@ -670,7 +737,7 @@ public static class AuthCommandGroup
                     url = p.Environment.Url,
                     displayName = p.Environment.DisplayName
                 } : null,
-                isActive = collection.ActiveIndex == p.Index,
+                isActive = collection.ActiveProfile?.Index == p.Index,
                 createdAt = p.CreatedAt,
                 lastUsedAt = p.LastUsedAt
             })
@@ -851,6 +918,39 @@ public static class AuthCommandGroup
                 }
             }
 
+            // Clean up stored credentials for this profile (only if no other profiles share them)
+            string? credentialKey = null;
+            if (!string.IsNullOrWhiteSpace(profile.ApplicationId))
+            {
+                credentialKey = profile.ApplicationId;
+            }
+            else if (profile.AuthMethod == AuthMethod.UsernamePassword && !string.IsNullOrWhiteSpace(profile.Username))
+            {
+                // For username/password auth, credentials are keyed by username
+                credentialKey = profile.Username;
+            }
+
+            if (credentialKey != null)
+            {
+                // Check if any other profiles share this credential key
+                var isShared = collection.All
+                    .Where(p => p.Index != profile.Index)
+                    .Any(p =>
+                    {
+                        if (!string.IsNullOrWhiteSpace(p.ApplicationId))
+                            return string.Equals(credentialKey, p.ApplicationId, StringComparison.OrdinalIgnoreCase);
+                        if (p.AuthMethod == AuthMethod.UsernamePassword && !string.IsNullOrWhiteSpace(p.Username))
+                            return string.Equals(credentialKey, p.Username, StringComparison.OrdinalIgnoreCase);
+                        return false;
+                    });
+
+                if (!isShared)
+                {
+                    using var credentialStore = new SecureCredentialStore();
+                    await credentialStore.RemoveAsync(credentialKey, cancellationToken);
+                }
+            }
+
             collection.RemoveByIndex(profile.Index);
             await store.SaveAsync(collection, cancellationToken);
 
@@ -954,7 +1054,8 @@ public static class AuthCommandGroup
                 Console.WriteLine($"Resolving environment '{newEnvironment}'...");
 
                 // Use multi-layer resolution: direct connection first for URLs, Global Discovery for names
-                using var resolver = new EnvironmentResolutionService(profile);
+                using var credentialStore = new SecureCredentialStore();
+                using var resolver = new EnvironmentResolutionService(profile, credentialStore: credentialStore);
                 var result = await resolver.ResolveAsync(newEnvironment, cancellationToken);
 
                 if (!result.Success)
@@ -1106,7 +1207,11 @@ public static class AuthCommandGroup
             // Clear all MSAL token caches (file + platform-specific secure storage)
             await TokenCacheManager.ClearAllCachesAsync();
 
-            Console.WriteLine("Authentication profiles and token cache removed");
+            // Clear secure credential store
+            using var credentialStore = new SecureCredentialStore();
+            await credentialStore.ClearAsync(cancellationToken);
+
+            Console.WriteLine("Authentication profiles, token cache, and stored credentials removed");
 
             return ExitCodes.Success;
         }
@@ -1189,21 +1294,21 @@ public static class AuthCommandGroup
                         cloud = profile.Cloud.ToString(),
                         tenantId = profile.TenantId,
                         user = profile.Username,
-                        puid = profile.Puid,
                         objectId = profile.ObjectId,
+                        puid = profile.Puid,
                         applicationId = profile.ApplicationId,
-                        authority = CloudEndpoints.GetAuthorityUrl(profile.Cloud, profile.TenantId),
                         tokenExpires = profile.TokenExpiresOn,
                         tokenStatus,
+                        authority = profile.Authority ?? CloudEndpoints.GetAuthorityUrl(profile.Cloud, profile.TenantId),
                         environment = profile.Environment != null ? new
                         {
-                            url = profile.Environment.Url,
-                            displayName = profile.Environment.DisplayName,
+                            region = profile.Environment.Region,
                             environmentId = profile.Environment.EnvironmentId,
                             environmentType = profile.Environment.Type,
-                            region = profile.Environment.Region,
                             organizationId = profile.Environment.OrganizationId,
-                            uniqueName = profile.Environment.UniqueName
+                            uniqueName = profile.Environment.UniqueName,
+                            displayName = profile.Environment.DisplayName,
+                            url = profile.Environment.Url
                         } : null,
                         createdAt = profile.CreatedAt,
                         lastUsedAt = profile.LastUsedAt
@@ -1228,7 +1333,7 @@ public static class AuthCommandGroup
                 Console.WriteLine($"Connected as {identity}");
                 Console.WriteLine();
 
-                // Auth info section
+                // Auth info section - ordered to match PAC CLI
                 Console.WriteLine($"Method:                      {profile.AuthMethod}");
                 Console.WriteLine($"Type:                        {cacheType}");
                 Console.WriteLine($"Cloud:                       {profile.Cloud}");
@@ -1243,24 +1348,20 @@ public static class AuthCommandGroup
                     Console.WriteLine($"User:                        {profile.Username}");
                 }
 
-                if (!string.IsNullOrEmpty(profile.Puid))
-                {
-                    Console.WriteLine($"PUID:                        {profile.Puid}");
-                }
-
                 if (!string.IsNullOrEmpty(profile.ObjectId))
                 {
                     Console.WriteLine($"Entra ID Object Id:          {profile.ObjectId}");
+                }
+
+                if (!string.IsNullOrEmpty(profile.Puid))
+                {
+                    Console.WriteLine($"PUID:                        {profile.Puid}");
                 }
 
                 if (!string.IsNullOrEmpty(profile.ApplicationId))
                 {
                     Console.WriteLine($"Application Id:              {profile.ApplicationId}");
                 }
-
-                // Show authority based on cloud
-                var authority = CloudEndpoints.GetAuthorityUrl(profile.Cloud, profile.TenantId);
-                Console.WriteLine($"Authority:                   {authority}");
 
                 if (profile.TokenExpiresOn.HasValue)
                 {
@@ -1277,12 +1378,17 @@ public static class AuthCommandGroup
                     }
                 }
 
-                // Environment section
+                // Show authority based on cloud
+                var authority = profile.Authority ?? CloudEndpoints.GetAuthorityUrl(profile.Cloud, profile.TenantId);
+                Console.WriteLine($"Authority:                   {authority}");
+
+                // Environment section - ordered to match PAC CLI
                 if (profile.HasEnvironment)
                 {
-                    Console.WriteLine();
-                    Console.WriteLine($"Environment:                 {profile.Environment!.DisplayName}");
-                    Console.WriteLine($"Environment URL:             {profile.Environment.Url}");
+                    if (!string.IsNullOrEmpty(profile.Environment!.Region))
+                    {
+                        Console.WriteLine($"Environment Geo:             {profile.Environment.Region}");
+                    }
 
                     if (!string.IsNullOrEmpty(profile.Environment.EnvironmentId))
                     {
@@ -1294,11 +1400,6 @@ public static class AuthCommandGroup
                         Console.WriteLine($"Environment Type:            {profile.Environment.Type}");
                     }
 
-                    if (!string.IsNullOrEmpty(profile.Environment.Region))
-                    {
-                        Console.WriteLine($"Environment Geo:             {profile.Environment.Region}");
-                    }
-
                     if (!string.IsNullOrEmpty(profile.Environment.OrganizationId))
                     {
                         Console.WriteLine($"Organization Id:             {profile.Environment.OrganizationId}");
@@ -1307,6 +1408,11 @@ public static class AuthCommandGroup
                     if (!string.IsNullOrEmpty(profile.Environment.UniqueName))
                     {
                         Console.WriteLine($"Organization Unique Name:    {profile.Environment.UniqueName}");
+                    }
+
+                    if (!string.IsNullOrEmpty(profile.Environment.DisplayName))
+                    {
+                        Console.WriteLine($"Organization Friendly Name:  {profile.Environment.DisplayName}");
                     }
                 }
                 else

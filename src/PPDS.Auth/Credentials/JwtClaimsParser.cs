@@ -6,7 +6,7 @@ using System.Security.Claims;
 namespace PPDS.Auth.Credentials;
 
 /// <summary>
-/// Parses JWT tokens and ClaimsPrincipal to extract claims for display.
+/// Parses JWT tokens and ClaimsPrincipal to extract claims for profile storage.
 /// </summary>
 public static class JwtClaimsParser
 {
@@ -23,12 +23,11 @@ public static class JwtClaimsParser
         // Try ClaimsPrincipal first (from ID token)
         if (claimsPrincipal?.Claims != null)
         {
-            puid = claimsPrincipal.Claims
-                .FirstOrDefault(c => string.Equals(c.Type, "puid", StringComparison.OrdinalIgnoreCase))?.Value;
+            puid = GetClaimValue(claimsPrincipal, "puid");
         }
 
-        // Fall back to access token
-        if (puid == null && !string.IsNullOrWhiteSpace(accessToken))
+        // Fall back to access token for any missing claims
+        if (!string.IsNullOrWhiteSpace(accessToken))
         {
             try
             {
@@ -36,17 +35,26 @@ public static class JwtClaimsParser
                 if (handler.CanReadToken(accessToken))
                 {
                     var token = handler.ReadJwtToken(accessToken);
-                    puid = token.Claims
-                        .FirstOrDefault(c => string.Equals(c.Type, "puid", StringComparison.OrdinalIgnoreCase))?.Value;
+
+                    puid ??= GetClaimValue(token, "puid");
                 }
             }
             catch
             {
-                // Token parsing failed
+                // Token parsing failed, use what we have
             }
         }
 
-        return puid != null ? new ParsedJwtClaims { Puid = puid } : null;
+        // Return null if we couldn't extract any claims
+        if (puid == null)
+        {
+            return null;
+        }
+
+        return new ParsedJwtClaims
+        {
+            Puid = puid
+        };
     }
 
     /// <summary>
@@ -57,6 +65,20 @@ public static class JwtClaimsParser
     public static ParsedJwtClaims? Parse(string? accessToken)
     {
         return Parse(null, accessToken);
+    }
+
+    private static string? GetClaimValue(ClaimsPrincipal principal, string claimType)
+    {
+        return principal.Claims
+            .FirstOrDefault(c => string.Equals(c.Type, claimType, StringComparison.OrdinalIgnoreCase))
+            ?.Value;
+    }
+
+    private static string? GetClaimValue(JwtSecurityToken token, string claimType)
+    {
+        return token.Claims
+            .FirstOrDefault(c => string.Equals(c.Type, claimType, StringComparison.OrdinalIgnoreCase))
+            ?.Value;
     }
 }
 

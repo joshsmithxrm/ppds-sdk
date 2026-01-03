@@ -57,13 +57,6 @@ public sealed class AuthProfile
     [JsonPropertyName("objectId")]
     public string? ObjectId { get; set; }
 
-    /// <summary>
-    /// Gets or sets the password (encrypted).
-    /// For UsernamePassword auth.
-    /// </summary>
-    [JsonPropertyName("password")]
-    public string? Password { get; set; }
-
     #endregion
 
     #region Application Authentication
@@ -75,13 +68,6 @@ public sealed class AuthProfile
     [JsonPropertyName("applicationId")]
     public string? ApplicationId { get; set; }
 
-    /// <summary>
-    /// Gets or sets the client secret (encrypted).
-    /// For ClientSecret authentication.
-    /// </summary>
-    [JsonPropertyName("clientSecret")]
-    public string? ClientSecret { get; set; }
-
     #endregion
 
     #region Certificate Authentication
@@ -92,13 +78,6 @@ public sealed class AuthProfile
     /// </summary>
     [JsonPropertyName("certificatePath")]
     public string? CertificatePath { get; set; }
-
-    /// <summary>
-    /// Gets or sets the certificate password (encrypted).
-    /// For CertificateFile authentication.
-    /// </summary>
-    [JsonPropertyName("certificatePassword")]
-    public string? CertificatePassword { get; set; }
 
     /// <summary>
     /// Gets or sets the certificate thumbprint.
@@ -172,6 +151,13 @@ public sealed class AuthProfile
     [JsonPropertyName("homeAccountId")]
     public string? HomeAccountId { get; set; }
 
+    /// <summary>
+    /// Gets or sets the authority URL for authentication.
+    /// Full URL like "https://login.microsoftonline.com/{tenantId}".
+    /// </summary>
+    [JsonPropertyName("authority")]
+    public string? Authority { get; set; }
+
     #endregion
 
     /// <summary>
@@ -232,7 +218,7 @@ public sealed class AuthProfile
 
             case AuthMethod.ClientSecret:
                 RequireField(ApplicationId, nameof(ApplicationId));
-                RequireField(ClientSecret, nameof(ClientSecret));
+                // ClientSecret is now in secure credential store, not in profile
                 RequireField(TenantId, nameof(TenantId));
                 break;
 
@@ -260,7 +246,7 @@ public sealed class AuthProfile
 
             case AuthMethod.UsernamePassword:
                 RequireField(Username, nameof(Username));
-                RequireField(Password, nameof(Password));
+                // Password is now in secure credential store, not in profile
                 break;
 
             default:
@@ -290,11 +276,8 @@ public sealed class AuthProfile
             TenantId = TenantId,
             Username = Username,
             ObjectId = ObjectId,
-            Password = Password,
             ApplicationId = ApplicationId,
-            ClientSecret = ClientSecret,
             CertificatePath = CertificatePath,
-            CertificatePassword = CertificatePassword,
             CertificateThumbprint = CertificateThumbprint,
             CertificateStoreName = CertificateStoreName,
             CertificateStoreLocation = CertificateStoreLocation,
@@ -303,7 +286,8 @@ public sealed class AuthProfile
             LastUsedAt = LastUsedAt,
             TokenExpiresOn = TokenExpiresOn,
             Puid = Puid,
-            HomeAccountId = HomeAccountId
+            HomeAccountId = HomeAccountId,
+            Authority = Authority
         };
     }
 }

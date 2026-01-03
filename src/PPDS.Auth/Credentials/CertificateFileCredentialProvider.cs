@@ -71,11 +71,43 @@ public sealed class CertificateFileCredentialProvider : ICredentialProvider
     }
 
     /// <summary>
-    /// Creates a provider from an auth profile.
+    /// Creates a provider from an auth profile and credential from secure store.
     /// </summary>
     /// <param name="profile">The auth profile.</param>
+    /// <param name="credential">The credential containing the certificate password.</param>
     /// <returns>A new provider instance.</returns>
-    public static CertificateFileCredentialProvider FromProfile(AuthProfile profile)
+    public static CertificateFileCredentialProvider FromProfile(AuthProfile profile, StoredCredential? credential)
+    {
+        if (profile.AuthMethod != AuthMethod.CertificateFile)
+            throw new ArgumentException($"Profile auth method must be CertificateFile, got {profile.AuthMethod}", nameof(profile));
+
+        if (string.IsNullOrWhiteSpace(profile.ApplicationId))
+            throw new ArgumentException("Profile ApplicationId is required", nameof(profile));
+
+        if (string.IsNullOrWhiteSpace(profile.CertificatePath))
+            throw new ArgumentException("Profile CertificatePath is required", nameof(profile));
+
+        if (string.IsNullOrWhiteSpace(profile.TenantId))
+            throw new ArgumentException("Profile TenantId is required", nameof(profile));
+
+        // Certificate password is optional - use from credential if available
+        var password = credential?.CertificatePassword;
+
+        return new CertificateFileCredentialProvider(
+            profile.ApplicationId,
+            profile.CertificatePath,
+            password,
+            profile.TenantId,
+            profile.Cloud);
+    }
+
+    /// <summary>
+    /// Creates a provider from an auth profile with explicit certificate password.
+    /// </summary>
+    /// <param name="profile">The auth profile.</param>
+    /// <param name="certificatePassword">The certificate password (optional).</param>
+    /// <returns>A new provider instance.</returns>
+    public static CertificateFileCredentialProvider FromProfileWithPassword(AuthProfile profile, string? certificatePassword)
     {
         if (profile.AuthMethod != AuthMethod.CertificateFile)
             throw new ArgumentException($"Profile auth method must be CertificateFile, got {profile.AuthMethod}", nameof(profile));
@@ -92,7 +124,7 @@ public sealed class CertificateFileCredentialProvider : ICredentialProvider
         return new CertificateFileCredentialProvider(
             profile.ApplicationId,
             profile.CertificatePath,
-            profile.CertificatePassword,
+            certificatePassword,
             profile.TenantId,
             profile.Cloud);
     }

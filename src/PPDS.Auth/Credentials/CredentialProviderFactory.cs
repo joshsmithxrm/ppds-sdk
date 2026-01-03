@@ -1,4 +1,6 @@
 using System;
+using System.Threading;
+using System.Threading.Tasks;
 using PPDS.Auth.Profiles;
 
 namespace PPDS.Auth.Credentials;
@@ -9,14 +11,62 @@ namespace PPDS.Auth.Credentials;
 public static class CredentialProviderFactory
 {
     /// <summary>
+    /// Environment variable name for service principal secret bypass.
+    /// When set, this value is used instead of looking up from secure store.
+    /// </summary>
+    public const string SpnSecretEnvVar = "PPDS_SPN_SECRET";
+
+    /// <summary>
     /// Creates a credential provider for the specified auth profile.
     /// </summary>
     /// <param name="profile">The auth profile.</param>
-    /// <param name="deviceCodeCallback">Optional callback for device code display (for DeviceCode auth in headless mode).</param>
+    /// <param name="credentialStore">Optional secure credential store for looking up secrets.</param>
+    /// <param name="deviceCodeCallback">Optional callback for device code display.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>A credential provider for the profile's auth method.</returns>
-    /// <exception cref="ArgumentNullException">If profile is null.</exception>
-    /// <exception cref="ArgumentException">If required profile fields are missing for the auth method.</exception>
-    /// <exception cref="NotSupportedException">If the auth method is not supported.</exception>
+    public static async Task<ICredentialProvider> CreateAsync(
+        AuthProfile profile,
+        ISecureCredentialStore? credentialStore = null,
+        Action<DeviceCodeInfo>? deviceCodeCallback = null,
+        CancellationToken cancellationToken = default)
+    {
+        if (profile == null)
+            throw new ArgumentNullException(nameof(profile));
+
+        // Check for environment variable override for SPN secret
+        var envSecret = Environment.GetEnvironmentVariable(SpnSecretEnvVar);
+
+        return profile.AuthMethod switch
+        {
+            AuthMethod.InteractiveBrowser => InteractiveBrowserCredentialProvider.FromProfile(profile),
+            AuthMethod.DeviceCode => CreateInteractiveProvider(profile, deviceCodeCallback),
+            AuthMethod.ClientSecret => await CreateClientSecretProviderAsync(
+                profile, credentialStore, envSecret, cancellationToken).ConfigureAwait(false),
+            AuthMethod.CertificateFile => await CreateCertificateFileProviderAsync(
+                profile, credentialStore, cancellationToken).ConfigureAwait(false),
+            AuthMethod.CertificateStore => CertificateStoreCredentialProvider.FromProfile(profile),
+            AuthMethod.ManagedIdentity => ManagedIdentityCredentialProvider.FromProfile(profile),
+            AuthMethod.GitHubFederated => new GitHubFederatedCredentialProvider(
+                profile.ApplicationId!, profile.TenantId!, profile.Cloud),
+            AuthMethod.AzureDevOpsFederated => new AzureDevOpsFederatedCredentialProvider(
+                profile.ApplicationId!, profile.TenantId!, profile.Cloud),
+            AuthMethod.UsernamePassword => await CreateUsernamePasswordProviderAsync(
+                profile, credentialStore, cancellationToken).ConfigureAwait(false),
+            _ => throw new NotSupportedException($"Unknown auth method: {profile.AuthMethod}")
+        };
+    }
+
+    /// <summary>
+    /// Creates a credential provider synchronously.
+    /// Prefer CreateAsync when possible for better performance with secure store lookups.
+    /// </summary>
+    /// <param name="profile">The auth profile.</param>
+    /// <param name="deviceCodeCallback">Optional callback for device code display.</param>
+    /// <returns>A credential provider for the profile's auth method.</returns>
+    /// <remarks>
+    /// This overload does not support secure credential store lookups.
+    /// Use CreateAsync for full functionality.
+    /// </remarks>
     public static ICredentialProvider Create(
         AuthProfile profile,
         Action<DeviceCodeInfo>? deviceCodeCallback = null)
@@ -24,71 +74,122 @@ public static class CredentialProviderFactory
         if (profile == null)
             throw new ArgumentNullException(nameof(profile));
 
-        // Validate required fields based on auth method
-        ValidateRequiredFields(profile);
+        // Check for environment variable override for SPN secret
+        var envSecret = Environment.GetEnvironmentVariable(SpnSecretEnvVar);
 
         return profile.AuthMethod switch
         {
             AuthMethod.InteractiveBrowser => InteractiveBrowserCredentialProvider.FromProfile(profile),
             AuthMethod.DeviceCode => CreateInteractiveProvider(profile, deviceCodeCallback),
-            AuthMethod.ClientSecret => ClientSecretCredentialProvider.FromProfile(profile),
-            AuthMethod.CertificateFile => CertificateFileCredentialProvider.FromProfile(profile),
+            AuthMethod.ClientSecret => CreateClientSecretProviderSync(profile, envSecret),
+            AuthMethod.CertificateFile => CertificateFileCredentialProvider.FromProfile(profile, null),
             AuthMethod.CertificateStore => CertificateStoreCredentialProvider.FromProfile(profile),
             AuthMethod.ManagedIdentity => ManagedIdentityCredentialProvider.FromProfile(profile),
             AuthMethod.GitHubFederated => new GitHubFederatedCredentialProvider(
                 profile.ApplicationId!, profile.TenantId!, profile.Cloud),
             AuthMethod.AzureDevOpsFederated => new AzureDevOpsFederatedCredentialProvider(
                 profile.ApplicationId!, profile.TenantId!, profile.Cloud),
-            AuthMethod.UsernamePassword => new UsernamePasswordCredentialProvider(
-                profile.Username!, profile.Password!, profile.Cloud, profile.TenantId),
+            AuthMethod.UsernamePassword => throw new InvalidOperationException(
+                "UsernamePassword requires secure credential store. Use CreateAsync instead."),
             _ => throw new NotSupportedException($"Unknown auth method: {profile.AuthMethod}")
         };
     }
 
-    /// <summary>
-    /// Validates that required fields are present for the profile's auth method.
-    /// </summary>
-    private static void ValidateRequiredFields(AuthProfile profile)
+    private static async Task<ICredentialProvider> CreateClientSecretProviderAsync(
+        AuthProfile profile,
+        ISecureCredentialStore? credentialStore,
+        string? envSecret,
+        CancellationToken cancellationToken)
     {
-        switch (profile.AuthMethod)
+        // Environment variable takes priority over secure store
+        if (!string.IsNullOrWhiteSpace(envSecret))
         {
-            case AuthMethod.GitHubFederated:
-            case AuthMethod.AzureDevOpsFederated:
-                RequireField(profile.ApplicationId, nameof(profile.ApplicationId), profile.AuthMethod);
-                RequireField(profile.TenantId, nameof(profile.TenantId), profile.AuthMethod);
-                break;
-
-            case AuthMethod.UsernamePassword:
-                RequireField(profile.Username, nameof(profile.Username), profile.AuthMethod);
-                RequireField(profile.Password, nameof(profile.Password), profile.AuthMethod);
-                break;
-
-            // Other auth methods validate in their FromProfile methods
+            return ClientSecretCredentialProvider.FromProfileWithSecret(profile, envSecret);
         }
+
+        // Look up from secure store
+        if (credentialStore != null && !string.IsNullOrWhiteSpace(profile.ApplicationId))
+        {
+            var credential = await credentialStore.GetAsync(profile.ApplicationId, cancellationToken).ConfigureAwait(false);
+            if (credential != null && !string.IsNullOrWhiteSpace(credential.ClientSecret))
+            {
+                return ClientSecretCredentialProvider.FromProfile(profile, credential);
+            }
+        }
+
+        throw new InvalidOperationException(
+            $"No client secret found for application '{profile.ApplicationId}'. " +
+            $"Set {SpnSecretEnvVar} environment variable or create a profile with 'ppds auth create'.");
     }
 
-    /// <summary>
-    /// Throws if a required field is null or empty.
-    /// </summary>
-    private static void RequireField(string? value, string fieldName, AuthMethod authMethod)
+    private static ICredentialProvider CreateClientSecretProviderSync(AuthProfile profile, string? envSecret)
     {
-        if (string.IsNullOrWhiteSpace(value))
+        // Environment variable takes priority
+        if (!string.IsNullOrWhiteSpace(envSecret))
         {
-            throw new ArgumentException(
-                $"Profile field '{fieldName}' is required for {authMethod} authentication.",
-                fieldName);
+            return ClientSecretCredentialProvider.FromProfileWithSecret(profile, envSecret);
         }
+
+        throw new InvalidOperationException(
+            $"No client secret found for application '{profile.ApplicationId}'. " +
+            $"Set {SpnSecretEnvVar} environment variable or use CreateAsync with a credential store.");
+    }
+
+    private static async Task<ICredentialProvider> CreateCertificateFileProviderAsync(
+        AuthProfile profile,
+        ISecureCredentialStore? credentialStore,
+        CancellationToken cancellationToken)
+    {
+        StoredCredential? credential = null;
+
+        // Look up password from secure store if available
+        if (credentialStore != null && !string.IsNullOrWhiteSpace(profile.ApplicationId))
+        {
+            credential = await credentialStore.GetAsync(profile.ApplicationId, cancellationToken).ConfigureAwait(false);
+        }
+
+        return CertificateFileCredentialProvider.FromProfile(profile, credential);
+    }
+
+    private static async Task<ICredentialProvider> CreateUsernamePasswordProviderAsync(
+        AuthProfile profile,
+        ISecureCredentialStore? credentialStore,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(profile.Username))
+            throw new ArgumentException("Profile Username is required", nameof(profile));
+
+        string? password = null;
+
+        // Look up password from secure store using username as key
+        if (credentialStore != null)
+        {
+            // For UsernamePassword, we use username as the key since there's no applicationId
+            var credential = await credentialStore.GetAsync(profile.Username, cancellationToken).ConfigureAwait(false);
+            password = credential?.Password;
+        }
+
+        if (string.IsNullOrWhiteSpace(password))
+        {
+            throw new InvalidOperationException(
+                $"No password found for user '{profile.Username}'. " +
+                "Create a profile with 'ppds auth create'.");
+        }
+
+        return new UsernamePasswordCredentialProvider(
+            profile.Username,
+            password,
+            profile.Cloud,
+            profile.TenantId);
     }
 
     /// <summary>
     /// Creates the appropriate interactive provider based on environment.
-    /// Uses browser authentication by default, falls back to device code for headless environments.
     /// </summary>
     private static ICredentialProvider CreateInteractiveProvider(
         AuthProfile profile,
         Action<DeviceCodeInfo>? deviceCodeCallback)
     {
-        // Browser auth when display available, device code for headless (SSH, CI, containers)
         if (InteractiveBrowserCredentialProvider.IsAvailable())
         {
             return InteractiveBrowserCredentialProvider.FromProfile(profile);
@@ -102,8 +203,6 @@ public static class CredentialProviderFactory
     /// <summary>
     /// Checks if the specified auth method is supported.
     /// </summary>
-    /// <param name="authMethod">The auth method to check.</param>
-    /// <returns>True if supported, false otherwise.</returns>
     public static bool IsSupported(AuthMethod authMethod)
     {
         return authMethod switch
@@ -116,6 +215,20 @@ public static class CredentialProviderFactory
             AuthMethod.ManagedIdentity => true,
             AuthMethod.GitHubFederated => true,
             AuthMethod.AzureDevOpsFederated => true,
+            AuthMethod.UsernamePassword => true,
+            _ => false
+        };
+    }
+
+    /// <summary>
+    /// Checks if the specified auth method requires a secure credential store.
+    /// </summary>
+    public static bool RequiresCredentialStore(AuthMethod authMethod)
+    {
+        return authMethod switch
+        {
+            AuthMethod.ClientSecret => true,
+            AuthMethod.CertificateFile => true, // For password, though optional
             AuthMethod.UsernamePassword => true,
             _ => false
         };

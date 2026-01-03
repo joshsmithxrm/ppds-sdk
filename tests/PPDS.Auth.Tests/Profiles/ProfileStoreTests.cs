@@ -77,6 +77,7 @@ public class ProfileStoreTests : IDisposable
         });
 
         await _store.SaveAsync(collection);
+        _store.ClearCache();
         var loaded = await _store.LoadAsync();
 
         loaded.Count.Should().Be(1);
@@ -98,6 +99,7 @@ public class ProfileStoreTests : IDisposable
         });
 
         _store.Save(collection);
+        _store.ClearCache();
         var loaded = _store.Load();
 
         loaded.Count.Should().Be(1);
@@ -105,59 +107,18 @@ public class ProfileStoreTests : IDisposable
     }
 
     [Fact]
-    public async Task SaveAsync_EncryptsSensitiveFields()
-    {
-        var collection = new ProfileCollection();
-        collection.Add(new AuthProfile
-        {
-            Name = "test",
-            ClientSecret = "my-secret",
-            Password = "my-password",
-            CertificatePassword = "cert-password"
-        });
-
-        await _store.SaveAsync(collection);
-        var json = await File.ReadAllTextAsync(_tempFilePath);
-
-        json.Should().Contain("ENCRYPTED:");
-        json.Should().NotContain("my-secret");
-        json.Should().NotContain("my-password");
-        json.Should().NotContain("cert-password");
-    }
-
-    [Fact]
-    public async Task LoadAsync_DecryptsSensitiveFields()
-    {
-        var collection = new ProfileCollection();
-        collection.Add(new AuthProfile
-        {
-            Name = "test",
-            ClientSecret = "my-secret",
-            Password = "my-password",
-            CertificatePassword = "cert-password"
-        });
-
-        await _store.SaveAsync(collection);
-        _store.ClearCache();
-        var loaded = await _store.LoadAsync();
-
-        var profile = loaded.All.First();
-        profile.ClientSecret.Should().Be("my-secret");
-        profile.Password.Should().Be("my-password");
-        profile.CertificatePassword.Should().Be("cert-password");
-    }
-
-    [Fact]
-    public async Task SaveAsync_PreservesActiveIndex()
+    public async Task SaveAsync_PreservesActiveProfile()
     {
         var collection = new ProfileCollection();
         collection.Add(new AuthProfile { Name = "first" });
         collection.Add(new AuthProfile { Name = "second" }, setAsActive: true);
 
         await _store.SaveAsync(collection);
+        _store.ClearCache();
         var loaded = await _store.LoadAsync();
 
         loaded.ActiveProfile!.Name.Should().Be("second");
+        loaded.ActiveProfileName.Should().Be("second");
     }
 
     [Fact]
@@ -255,39 +216,162 @@ public class ProfileStoreTests : IDisposable
         collection.Add(new AuthProfile
         {
             Name = "test",
-            Environment = EnvironmentInfo.Create("env-id", "https://test.crm.dynamics.com", "Test Env")
+            Environment = EnvironmentInfo.Create("https://test.crm.dynamics.com", "Test Env")
         });
 
         await _store.SaveAsync(collection);
+        _store.ClearCache();
         var loaded = await _store.LoadAsync();
 
         var env = loaded.All.First().Environment;
         env.Should().NotBeNull();
-        env!.Id.Should().Be("env-id");
-        env.Url.Should().Be("https://test.crm.dynamics.com");
+        env!.Url.Should().Be("https://test.crm.dynamics.com");
         env.DisplayName.Should().Be("Test Env");
     }
 
     [Fact]
-    public async Task SaveAsync_DoesNotDoubleEncrypt()
+    public async Task SaveAsync_SetsVersionToTwo()
+    {
+        var collection = new ProfileCollection();
+        collection.Add(new AuthProfile { Name = "test" });
+
+        await _store.SaveAsync(collection);
+        var json = await File.ReadAllTextAsync(_tempFilePath);
+
+        json.Should().Contain("\"version\": 2");
+    }
+
+    [Fact]
+    public async Task SaveAsync_UsesArrayForProfiles()
+    {
+        var collection = new ProfileCollection();
+        collection.Add(new AuthProfile { Name = "test1" });
+        collection.Add(new AuthProfile { Name = "test2" });
+
+        await _store.SaveAsync(collection);
+        var json = await File.ReadAllTextAsync(_tempFilePath);
+
+        // v2 uses array format with "profiles": [...]
+        json.Should().Contain("\"profiles\": [");
+    }
+
+    [Fact]
+    public async Task SaveAsync_UsesActiveProfileName()
+    {
+        var collection = new ProfileCollection();
+        collection.Add(new AuthProfile { Name = "myprofile" });
+
+        await _store.SaveAsync(collection);
+        var json = await File.ReadAllTextAsync(_tempFilePath);
+
+        json.Should().Contain("\"activeProfile\": \"myprofile\"");
+    }
+
+    [Fact]
+    public async Task SaveAsync_PreservesNewFields()
     {
         var collection = new ProfileCollection();
         collection.Add(new AuthProfile
         {
             Name = "test",
-            ClientSecret = "my-secret"
+            Authority = "https://login.microsoftonline.com/tenant-id"
         });
 
         await _store.SaveAsync(collection);
         _store.ClearCache();
         var loaded = await _store.LoadAsync();
-        loaded.All.First().ClientSecret.Should().Be("my-secret");
 
-        // Save again with the same collection
-        await _store.SaveAsync(loaded);
-        _store.ClearCache();
-        var reloaded = await _store.LoadAsync();
+        var profile = loaded.All.First();
+        profile.Authority.Should().Be("https://login.microsoftonline.com/tenant-id");
+    }
 
-        reloaded.All.First().ClientSecret.Should().Be("my-secret");
+    [Fact]
+    public async Task LoadAsync_V1Schema_DeletesAndReturnsEmpty()
+    {
+        // Write a v1 schema file directly
+        var v1Json = """
+            {
+              "version": 1,
+              "activeIndex": 1,
+              "profiles": {
+                "1": {
+                  "index": 1,
+                  "name": "test",
+                  "authMethod": "clientSecret",
+                  "applicationId": "app-id",
+                  "clientSecret": "secret"
+                }
+              }
+            }
+            """;
+        await File.WriteAllTextAsync(_tempFilePath, v1Json);
+
+        var loaded = await _store.LoadAsync();
+
+        // v1 profiles should be deleted
+        File.Exists(_tempFilePath).Should().BeFalse();
+        loaded.Count.Should().Be(0);
+    }
+
+    [Fact]
+    public void Load_V1Schema_DeletesAndReturnsEmpty()
+    {
+        // Write a v1 schema file directly
+        var v1Json = """
+            {
+              "version": 1,
+              "activeIndex": 1,
+              "profiles": {
+                "1": {
+                  "index": 1,
+                  "name": "test"
+                }
+              }
+            }
+            """;
+        File.WriteAllText(_tempFilePath, v1Json);
+
+        var loaded = _store.Load();
+
+        // v1 profiles should be deleted
+        File.Exists(_tempFilePath).Should().BeFalse();
+        loaded.Count.Should().Be(0);
+    }
+
+    [Fact]
+    public async Task LoadAsync_V1DetectedByActiveIndex_DeletesFile()
+    {
+        // v1 is detected by presence of "activeIndex" property
+        var v1Json = """
+            {
+              "activeIndex": 1,
+              "profiles": []
+            }
+            """;
+        await File.WriteAllTextAsync(_tempFilePath, v1Json);
+
+        var loaded = await _store.LoadAsync();
+
+        File.Exists(_tempFilePath).Should().BeFalse();
+        loaded.Count.Should().Be(0);
+    }
+
+    [Fact]
+    public async Task LoadAsync_V1DetectedByDictionaryProfiles_DeletesFile()
+    {
+        // v1 profiles is an object (dictionary), v2 is an array
+        var v1Json = """
+            {
+              "profiles": {
+                "1": { "index": 1, "name": "test" }
+              }
+            }
+            """;
+        await File.WriteAllTextAsync(_tempFilePath, v1Json);
+
+        var loaded = await _store.LoadAsync();
+
+        File.Exists(_tempFilePath).Should().BeFalse();
+        loaded.Count.Should().Be(0);
     }
 }

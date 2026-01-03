@@ -7,8 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **BREAKING: Profile storage schema v2** - Modernized profile storage format. Profiles now stored as array with name-based active profile instead of dictionary with numeric index. v1 profiles are automatically deleted on first load (pre-release breaking change). ([#107](https://github.com/joshsmithxrm/ppds-sdk/issues/107))
+- **BREAKING: Secure credential storage** - Secrets (client secrets, certificate passwords, user passwords) are now stored in platform-native secure storage using MSAL.Extensions (Windows DPAPI, macOS Keychain, Linux libsecret) instead of in profile JSON. New `SecureCredentialStore` class manages encrypted credential storage. ([#107](https://github.com/joshsmithxrm/ppds-sdk/issues/107))
+- **BREAKING: Removed `EnvironmentInfo.Id`** - Redundant field removed; use `OrganizationId` or `EnvironmentId` instead. ([#107](https://github.com/joshsmithxrm/ppds-sdk/issues/107))
+
+### Added
+
+- **`SecureCredentialStore`** - Cross-platform encrypted credential storage using MSAL.Extensions.Msal. Credentials keyed by ApplicationId. ([#107](https://github.com/joshsmithxrm/ppds-sdk/issues/107))
+- **`CredentialProviderFactory.CreateAsync()`** - Async factory method that retrieves secrets from secure store. Supports `PPDS_SPN_SECRET` environment variable for CI/CD scenarios. ([#107](https://github.com/joshsmithxrm/ppds-sdk/issues/107))
+- **`AuthProfile.Authority`** - Stores full authority URL for authentication. ([#107](https://github.com/joshsmithxrm/ppds-sdk/issues/107))
+
+### Removed
+
+- **`AuthProfile.ClientSecret`** - Moved to secure credential store
+- **`AuthProfile.CertificatePassword`** - Moved to secure credential store
+- **`AuthProfile.Password`** - Moved to secure credential store
+- **`AuthProfile.UserCountry`** - Removed (optional JWT claims not available without app manifest configuration)
+- **`AuthProfile.TenantCountry`** - Removed (optional JWT claims not available without app manifest configuration)
+
 ### Fixed
 
+- **Linux cleartext storage uses exclusive MSAL config** - On Linux without libsecret, the SecureCredentialStore now uses an isolated MSAL configuration path to prevent conflicts with system keyring detection. ([#107](https://github.com/joshsmithxrm/ppds-sdk/issues/107))
 - **ServiceClient org metadata not populated** - Credential providers now force eager org metadata discovery by accessing `ConnectedOrgFriendlyName` immediately after creating the ServiceClient. Discovery is lazy by default, and the connection pool clones clients before properties are accessed, resulting in empty metadata. This fix ensures `ConnectedOrgFriendlyName`, `ConnectedOrgUniqueName`, and `ConnectedOrgId` are populated. ([#86](https://github.com/joshsmithxrm/ppds-sdk/issues/86))
 - **Service principal identity display truncated** - Credential providers now return full Application ID (GUID) instead of truncated `app:xxxxxxxx...` format. Affects `ClientSecretCredentialProvider`, `CertificateFileCredentialProvider`, `CertificateStoreCredentialProvider`, `GitHubFederatedCredentialProvider`, `AzureDevOpsFederatedCredentialProvider`, and `ManagedIdentityCredentialProvider`. ([#100](https://github.com/joshsmithxrm/ppds-sdk/issues/100))
 - **Missing Environment ID for direct connections** - `EnvironmentResolutionService.TryDirectConnectionAsync` now populates `EnvironmentId` from `ServiceClient.EnvironmentId` property. Previously only Global Discovery paths returned this value. ([#101](https://github.com/joshsmithxrm/ppds-sdk/issues/101))
