@@ -1,6 +1,7 @@
 # PPDS SDK
 
 [![Build](https://github.com/joshsmithxrm/ppds-sdk/actions/workflows/build.yml/badge.svg)](https://github.com/joshsmithxrm/ppds-sdk/actions/workflows/build.yml)
+[![codecov](https://codecov.io/gh/joshsmithxrm/ppds-sdk/graph/badge.svg)](https://codecov.io/gh/joshsmithxrm/ppds-sdk)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 NuGet packages for Microsoft Dataverse development. Part of the [Power Platform Developer Suite](https://github.com/joshsmithxrm/power-platform-developer-suite) ecosystem.
