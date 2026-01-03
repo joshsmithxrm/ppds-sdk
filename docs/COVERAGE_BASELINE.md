@@ -1,8 +1,5 @@
 # Code Coverage Baseline
 
-Established: January 2026
-Last Updated: January 2026 (Phase 5 Complete)
-
 ## Overview
 
 This document records the baseline code coverage for each PPDS SDK package, used to track progress toward the targets defined in [Issue #55](https://github.com/joshsmithxrm/ppds-sdk/issues/55).
