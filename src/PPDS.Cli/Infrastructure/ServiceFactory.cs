@@ -17,10 +17,15 @@ public static class ServiceFactory
     /// <param name="outputFormat">The output format.</param>
     /// <param name="operationName">The operation name for completion messages (e.g., "Export", "Import").</param>
     /// <returns>An appropriate progress reporter.</returns>
+    /// <remarks>
+    /// Progress is written to stderr to keep stdout clean for command results,
+    /// enabling piping (e.g., <c>ppds data export | jq</c>) without interference.
+    /// </remarks>
     public static IProgressReporter CreateProgressReporter(OutputFormat outputFormat, string operationName = "Operation")
     {
+        // Progress goes to stderr to keep stdout clean for results
         IProgressReporter reporter = outputFormat == OutputFormat.Json
-            ? new JsonProgressReporter(Console.Out)
+            ? new JsonProgressReporter(Console.Error)
             : new ConsoleProgressReporter();
 
         reporter.OperationName = operationName;
