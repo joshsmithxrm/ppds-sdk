@@ -12,12 +12,6 @@ public class EnvCommandE2ETests : CliE2ETestBase
 {
     #region env list
 
-    // Skip: EnvList_WithActiveProfile_ListsEnvironments
-    // Global Discovery Service does not support service principal authentication.
-    // The CLI hangs waiting for a response that will never come, causing 120s timeout.
-    // This is a known platform limitation documented by Microsoft.
-    // To test env list, use interactive auth (not available in CI).
-
     [CliE2EFact]
     public async Task EnvList_NoActiveProfile_Fails()
     {
@@ -30,11 +24,31 @@ public class EnvCommandE2ETests : CliE2ETestBase
         result.StdErr.Should().Contain("No active profile");
     }
 
-    // Skip: Global Discovery Service does not support service principal authentication.
-    // The test would hang/timeout waiting for a response that will never come.
-    // This is a known platform limitation documented by Microsoft.
-    // [CliE2EWithCredentials]
-    // public async Task EnvList_JsonFormat_ReturnsValidJson() { ... }
+    [CliE2EWithCredentials]
+    public async Task EnvList_WithServicePrincipal_FailsWithClearError()
+    {
+        // Service principals cannot use Global Discovery - it requires interactive auth.
+        // The CLI should fail fast with a clear error message, NOT hang.
+        var profileName = GenerateTestProfileName();
+        var createResult = await RunCliAsync(
+            "auth", "create",
+            "--name", profileName,
+            "--applicationId", Configuration.ApplicationId!,
+            "--clientSecret", Configuration.ClientSecret!,
+            "--tenant", Configuration.TenantId!,
+            "--environment", Configuration.DataverseUrl!);
+
+        createResult.ExitCode.Should().Be(0, $"Profile creation failed: {createResult.StdErr}");
+        await RunCliAsync("auth", "select", "--name", profileName);
+
+        var result = await RunCliAsync("env", "list");
+
+        // Should fail with clear error, NOT timeout
+        result.ExitCode.Should().NotBe(0);
+        (result.StdOut + result.StdErr).Should().ContainAny(
+            "interactive", "not supported", "ClientSecret", "service principal",
+            "ppds env select", "ppds auth create");
+    }
 
     #endregion
 
