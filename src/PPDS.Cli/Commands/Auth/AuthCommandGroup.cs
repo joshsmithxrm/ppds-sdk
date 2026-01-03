@@ -1218,22 +1218,24 @@ public static class AuthCommandGroup
                         type = cacheType.ToString(),
                         cloud = profile.Cloud.ToString(),
                         tenantId = profile.TenantId,
+                        tenantCountry = profile.TenantCountry,
                         user = profile.Username,
-                        puid = profile.Puid,
                         objectId = profile.ObjectId,
+                        puid = profile.Puid,
+                        userCountry = profile.UserCountry,
                         applicationId = profile.ApplicationId,
-                        authority = CloudEndpoints.GetAuthorityUrl(profile.Cloud, profile.TenantId),
                         tokenExpires = profile.TokenExpiresOn,
                         tokenStatus,
+                        authority = profile.Authority ?? CloudEndpoints.GetAuthorityUrl(profile.Cloud, profile.TenantId),
                         environment = profile.Environment != null ? new
                         {
-                            url = profile.Environment.Url,
-                            displayName = profile.Environment.DisplayName,
+                            region = profile.Environment.Region,
                             environmentId = profile.Environment.EnvironmentId,
                             environmentType = profile.Environment.Type,
-                            region = profile.Environment.Region,
                             organizationId = profile.Environment.OrganizationId,
-                            uniqueName = profile.Environment.UniqueName
+                            uniqueName = profile.Environment.UniqueName,
+                            displayName = profile.Environment.DisplayName,
+                            url = profile.Environment.Url
                         } : null,
                         createdAt = profile.CreatedAt,
                         lastUsedAt = profile.LastUsedAt
@@ -1258,7 +1260,7 @@ public static class AuthCommandGroup
                 Console.WriteLine($"Connected as {identity}");
                 Console.WriteLine();
 
-                // Auth info section
+                // Auth info section - ordered to match PAC CLI
                 Console.WriteLine($"Method:                      {profile.AuthMethod}");
                 Console.WriteLine($"Type:                        {cacheType}");
                 Console.WriteLine($"Cloud:                       {profile.Cloud}");
@@ -1268,14 +1270,14 @@ public static class AuthCommandGroup
                     Console.WriteLine($"Tenant Id:                   {profile.TenantId}");
                 }
 
+                if (!string.IsNullOrEmpty(profile.TenantCountry))
+                {
+                    Console.WriteLine($"Tenant Country:              {profile.TenantCountry}");
+                }
+
                 if (!string.IsNullOrEmpty(profile.Username))
                 {
                     Console.WriteLine($"User:                        {profile.Username}");
-                }
-
-                if (!string.IsNullOrEmpty(profile.Puid))
-                {
-                    Console.WriteLine($"PUID:                        {profile.Puid}");
                 }
 
                 if (!string.IsNullOrEmpty(profile.ObjectId))
@@ -1283,14 +1285,20 @@ public static class AuthCommandGroup
                     Console.WriteLine($"Entra ID Object Id:          {profile.ObjectId}");
                 }
 
+                if (!string.IsNullOrEmpty(profile.Puid))
+                {
+                    Console.WriteLine($"PUID:                        {profile.Puid}");
+                }
+
+                if (!string.IsNullOrEmpty(profile.UserCountry))
+                {
+                    Console.WriteLine($"User Country/Region:         {profile.UserCountry}");
+                }
+
                 if (!string.IsNullOrEmpty(profile.ApplicationId))
                 {
                     Console.WriteLine($"Application Id:              {profile.ApplicationId}");
                 }
-
-                // Show authority based on cloud
-                var authority = CloudEndpoints.GetAuthorityUrl(profile.Cloud, profile.TenantId);
-                Console.WriteLine($"Authority:                   {authority}");
 
                 if (profile.TokenExpiresOn.HasValue)
                 {
@@ -1307,12 +1315,17 @@ public static class AuthCommandGroup
                     }
                 }
 
-                // Environment section
+                // Show authority based on cloud
+                var authority = profile.Authority ?? CloudEndpoints.GetAuthorityUrl(profile.Cloud, profile.TenantId);
+                Console.WriteLine($"Authority:                   {authority}");
+
+                // Environment section - ordered to match PAC CLI
                 if (profile.HasEnvironment)
                 {
-                    Console.WriteLine();
-                    Console.WriteLine($"Environment:                 {profile.Environment!.DisplayName}");
-                    Console.WriteLine($"Environment URL:             {profile.Environment.Url}");
+                    if (!string.IsNullOrEmpty(profile.Environment!.Region))
+                    {
+                        Console.WriteLine($"Environment Geo:             {profile.Environment.Region}");
+                    }
 
                     if (!string.IsNullOrEmpty(profile.Environment.EnvironmentId))
                     {
@@ -1324,11 +1337,6 @@ public static class AuthCommandGroup
                         Console.WriteLine($"Environment Type:            {profile.Environment.Type}");
                     }
 
-                    if (!string.IsNullOrEmpty(profile.Environment.Region))
-                    {
-                        Console.WriteLine($"Environment Geo:             {profile.Environment.Region}");
-                    }
-
                     if (!string.IsNullOrEmpty(profile.Environment.OrganizationId))
                     {
                         Console.WriteLine($"Organization Id:             {profile.Environment.OrganizationId}");
@@ -1338,6 +1346,8 @@ public static class AuthCommandGroup
                     {
                         Console.WriteLine($"Organization Unique Name:    {profile.Environment.UniqueName}");
                     }
+
+                    Console.WriteLine($"Organization Friendly Name:  {profile.Environment.DisplayName}");
                 }
                 else
                 {
