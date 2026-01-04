@@ -238,8 +238,8 @@ public class DataSchemaCommandE2ETests : CliE2ETestBase
             "--output-format", "json");
 
         result.ExitCode.Should().Be(0, $"StdErr: {result.StdErr}");
-        // JSON format should output progress as JSON
-        result.StdOut.Should().Contain("{");
+        // JSON format outputs progress to stderr per output conventions
+        result.StdErr.Should().Contain("{");
     }
 
     #endregion
