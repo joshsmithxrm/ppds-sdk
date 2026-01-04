@@ -16,34 +16,21 @@ namespace PPDS.LiveTests.Cli;
 public class PluginsCleanCommandE2ETests : CliE2ETestBase
 {
     /// <summary>
-    /// Gets the path to the TestData directory.
+    /// Empty config for cleanup - declares assembly with no types to make all steps orphans.
     /// </summary>
-    private static string TestDataDir => GetTestDataDir();
-
-    /// <summary>
-    /// Gets the path to the test registrations config file.
-    /// </summary>
-    private static string TestRegistrationsPath => Path.Combine(TestDataDir, "test-registrations.json");
-
-    private static string GetTestDataDir()
-    {
-        var solutionDir = FindSolutionDir(AppContext.BaseDirectory);
-        return Path.Combine(solutionDir, "tests", "PPDS.LiveTests", "TestData");
-    }
-
-    private static string FindSolutionDir(string startPath)
-    {
-        var dir = new DirectoryInfo(startPath);
-        while (dir != null)
+    private const string EmptyConfigJson = """
         {
-            if (File.Exists(Path.Combine(dir.FullName, "PPDS.Sdk.sln")))
-                return dir.FullName;
-            dir = dir.Parent;
+            "version": "1.0",
+            "assemblies": [
+                {
+                    "name": "PPDS.LiveTests.Fixtures",
+                    "type": "Assembly",
+                    "path": "PPDS.LiveTests.Fixtures.dll",
+                    "types": []
+                }
+            ]
         }
-
-        throw new InvalidOperationException(
-            $"Could not find PPDS.Sdk.sln starting from: {startPath}");
-    }
+        """;
 
     #region Tier 1: Safe tests (--what-if)
 
@@ -136,42 +123,42 @@ public class PluginsCleanCommandE2ETests : CliE2ETestBase
 
         await RunCliAsync("auth", "select", "--name", profileName);
 
-        // Deploy the plugin first
-        var deployResult = await RunCliAsync(
-            "plugins", "deploy",
-            "--config", TestRegistrationsPath);
-
-        deployResult.ExitCode.Should().Be(0, $"Deploy failed: {deployResult.StdErr}");
-
-        // Create an empty config to make all steps orphans
+        // Create empty config for cleanup
         var emptyConfigPath = GenerateTempFilePath(".json");
-        await File.WriteAllTextAsync(emptyConfigPath, @"{
-            ""version"": ""1.0"",
-            ""assemblies"": [
-                {
-                    ""name"": ""PPDS.LiveTests.Fixtures"",
-                    ""type"": ""Assembly"",
-                    ""path"": ""PPDS.LiveTests.Fixtures.dll"",
-                    ""types"": []
-                }
-            ]
-        }");
+        await File.WriteAllTextAsync(emptyConfigPath, EmptyConfigJson);
 
-        // Clean with empty config - should find orphans
-        var cleanResult = await RunCliAsync(
-            "plugins", "clean",
-            "--config", emptyConfigPath);
+        try
+        {
+            // Deploy the plugin first
+            var deployResult = await RunCliAsync(
+                "plugins", "deploy",
+                "--config", TestRegistrationsPath);
 
-        cleanResult.ExitCode.Should().Be(0, $"Clean failed: {cleanResult.StdErr}");
+            deployResult.ExitCode.Should().Be(0, $"Deploy failed: {deployResult.StdErr}");
 
-        // Verify cleanup was successful
-        var listResult = await RunCliAsync(
-            "plugins", "list",
-            "--assembly", "PPDS.LiveTests.Fixtures",
-            "--output-format", "json");
+            // Clean with empty config - should find orphans
+            var cleanResult = await RunCliAsync(
+                "plugins", "clean",
+                "--config", emptyConfigPath);
 
-        listResult.ExitCode.Should().Be(0);
-        // After clean, the assembly should have no steps
+            cleanResult.ExitCode.Should().Be(0, $"Clean failed: {cleanResult.StdErr}");
+
+            // Verify cleanup was successful
+            var listResult = await RunCliAsync(
+                "plugins", "list",
+                "--assembly", "PPDS.LiveTests.Fixtures",
+                "--output-format", "json");
+
+            listResult.ExitCode.Should().Be(0);
+            // After clean, the assembly should have no steps
+        }
+        finally
+        {
+            // Ensure cleanup even if assertions fail
+            await RunCliAsync(
+                "plugins", "clean",
+                "--config", emptyConfigPath);
+        }
     }
 
     [DestructiveE2EWithCredentials]
@@ -188,6 +175,10 @@ public class PluginsCleanCommandE2ETests : CliE2ETestBase
             "--environment", Configuration.DataverseUrl!);
 
         await RunCliAsync("auth", "select", "--name", profileName);
+
+        // Create empty config for cleanup
+        var emptyConfigPath = GenerateTempFilePath(".json");
+        await File.WriteAllTextAsync(emptyConfigPath, EmptyConfigJson);
 
         try
         {
@@ -209,19 +200,6 @@ public class PluginsCleanCommandE2ETests : CliE2ETestBase
         finally
         {
             // Clean up: remove the deployed plugin using empty config
-            var emptyConfigPath = GenerateTempFilePath(".json");
-            await File.WriteAllTextAsync(emptyConfigPath, @"{
-                ""version"": ""1.0"",
-                ""assemblies"": [
-                    {
-                        ""name"": ""PPDS.LiveTests.Fixtures"",
-                        ""type"": ""Assembly"",
-                        ""path"": ""PPDS.LiveTests.Fixtures.dll"",
-                        ""types"": []
-                    }
-                ]
-            }");
-
             await RunCliAsync(
                 "plugins", "clean",
                 "--config", emptyConfigPath);

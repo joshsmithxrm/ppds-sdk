@@ -14,39 +14,6 @@ namespace PPDS.LiveTests.Cli;
 /// </remarks>
 public class PluginsExtractCommandE2ETests : CliE2ETestBase
 {
-    /// <summary>
-    /// Gets the path to the test plugin DLL.
-    /// </summary>
-    private static string TestPluginDllPath => GetTestPluginPath();
-
-    /// <summary>
-    /// Gets the path to the TestData directory.
-    /// </summary>
-    private static string TestDataDir => GetTestDataDir();
-
-    private static string GetTestDataDir()
-    {
-        var solutionDir = FindSolutionDir(AppContext.BaseDirectory);
-        return Path.Combine(solutionDir, "tests", "PPDS.LiveTests", "TestData");
-    }
-
-    private static string GetTestPluginPath()
-        => Path.Combine(GetTestDataDir(), "PPDS.LiveTests.Fixtures.dll");
-
-    private static string FindSolutionDir(string startPath)
-    {
-        var dir = new DirectoryInfo(startPath);
-        while (dir != null)
-        {
-            if (File.Exists(Path.Combine(dir.FullName, "PPDS.Sdk.sln")))
-                return dir.FullName;
-            dir = dir.Parent;
-        }
-
-        throw new InvalidOperationException(
-            $"Could not find PPDS.Sdk.sln starting from: {startPath}");
-    }
-
     #region Extract from DLL
 
     [CliE2EFact]
@@ -56,7 +23,7 @@ public class PluginsExtractCommandE2ETests : CliE2ETestBase
 
         var result = await RunCliAsync(
             "plugins", "extract",
-            "--input", TestPluginDllPath,
+            "--input", TestPluginAssemblyPath,
             "--output", outputPath);
 
         result.ExitCode.Should().Be(0, $"StdErr: {result.StdErr}");
@@ -70,7 +37,7 @@ public class PluginsExtractCommandE2ETests : CliE2ETestBase
 
         var result = await RunCliAsync(
             "plugins", "extract",
-            "--input", TestPluginDllPath,
+            "--input", TestPluginAssemblyPath,
             "--output", outputPath);
 
         result.ExitCode.Should().Be(0, $"StdErr: {result.StdErr}");
@@ -89,7 +56,7 @@ public class PluginsExtractCommandE2ETests : CliE2ETestBase
 
         var result = await RunCliAsync(
             "plugins", "extract",
-            "--input", TestPluginDllPath,
+            "--input", TestPluginAssemblyPath,
             "--output", outputPath);
 
         result.ExitCode.Should().Be(0, $"StdErr: {result.StdErr}");
@@ -105,21 +72,24 @@ public class PluginsExtractCommandE2ETests : CliE2ETestBase
     {
         var customDir = Path.Combine(Path.GetTempPath(), $"ppds-extract-test-{Guid.NewGuid():N}");
         Directory.CreateDirectory(customDir);
-        CreatedFiles.Add(customDir); // For cleanup
 
-        var outputPath = Path.Combine(customDir, "custom-output.json");
+        try
+        {
+            var outputPath = Path.Combine(customDir, "custom-output.json");
 
-        var result = await RunCliAsync(
-            "plugins", "extract",
-            "--input", TestPluginDllPath,
-            "--output", outputPath);
+            var result = await RunCliAsync(
+                "plugins", "extract",
+                "--input", TestPluginAssemblyPath,
+                "--output", outputPath);
 
-        result.ExitCode.Should().Be(0, $"StdErr: {result.StdErr}");
-        File.Exists(outputPath).Should().BeTrue("Extract should write to custom path");
-
-        // Cleanup
-        if (Directory.Exists(customDir))
-            Directory.Delete(customDir, recursive: true);
+            result.ExitCode.Should().Be(0, $"StdErr: {result.StdErr}");
+            File.Exists(outputPath).Should().BeTrue("Extract should write to custom path");
+        }
+        finally
+        {
+            if (Directory.Exists(customDir))
+                Directory.Delete(customDir, recursive: true);
+        }
     }
 
     [CliE2EFact]
@@ -130,7 +100,7 @@ public class PluginsExtractCommandE2ETests : CliE2ETestBase
         // First extraction
         var result1 = await RunCliAsync(
             "plugins", "extract",
-            "--input", TestPluginDllPath,
+            "--input", TestPluginAssemblyPath,
             "--output", outputPath);
 
         result1.ExitCode.Should().Be(0, $"StdErr: {result1.StdErr}");
@@ -139,7 +109,7 @@ public class PluginsExtractCommandE2ETests : CliE2ETestBase
         // Second extraction with --force should succeed without merging
         var result2 = await RunCliAsync(
             "plugins", "extract",
-            "--input", TestPluginDllPath,
+            "--input", TestPluginAssemblyPath,
             "--output", outputPath,
             "--force");
 

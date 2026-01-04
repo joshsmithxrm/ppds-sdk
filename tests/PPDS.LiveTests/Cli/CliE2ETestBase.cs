@@ -262,9 +262,33 @@ public abstract class CliE2ETestBase : IAsyncLifetime
     }
 
     /// <summary>
+    /// Gets the path to the TestData directory.
+    /// </summary>
+    protected static string TestDataDir { get; } = GetTestDataDir();
+
+    /// <summary>
+    /// Gets the path to the test registrations config file.
+    /// </summary>
+    protected static string TestRegistrationsPath => Path.Combine(TestDataDir, "test-registrations.json");
+
+    /// <summary>
+    /// Gets the path to the test plugin assembly.
+    /// </summary>
+    protected static string TestPluginAssemblyPath => Path.Combine(TestDataDir, "PPDS.LiveTests.Fixtures.dll");
+
+    /// <summary>
+    /// Gets the path to the TestData directory.
+    /// </summary>
+    private static string GetTestDataDir()
+    {
+        var solutionDir = FindSolutionDirectory(AppContext.BaseDirectory);
+        return Path.Combine(solutionDir, "tests", "PPDS.LiveTests", "TestData");
+    }
+
+    /// <summary>
     /// Finds the solution directory by walking up from the given path.
     /// </summary>
-    private static string FindSolutionDirectory(string startPath)
+    protected static string FindSolutionDirectory(string startPath)
     {
         var dir = new DirectoryInfo(startPath);
         while (dir != null)

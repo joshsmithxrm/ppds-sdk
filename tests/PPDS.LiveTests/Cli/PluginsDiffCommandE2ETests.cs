@@ -11,36 +11,6 @@ namespace PPDS.LiveTests.Cli;
 /// </summary>
 public class PluginsDiffCommandE2ETests : CliE2ETestBase
 {
-    /// <summary>
-    /// Gets the path to the TestData directory.
-    /// </summary>
-    private static string TestDataDir => GetTestDataDir();
-
-    /// <summary>
-    /// Gets the path to the test registrations config file.
-    /// </summary>
-    private static string TestRegistrationsPath => Path.Combine(TestDataDir, "test-registrations.json");
-
-    private static string GetTestDataDir()
-    {
-        var solutionDir = FindSolutionDir(AppContext.BaseDirectory);
-        return Path.Combine(solutionDir, "tests", "PPDS.LiveTests", "TestData");
-    }
-
-    private static string FindSolutionDir(string startPath)
-    {
-        var dir = new DirectoryInfo(startPath);
-        while (dir != null)
-        {
-            if (File.Exists(Path.Combine(dir.FullName, "PPDS.Sdk.sln")))
-                return dir.FullName;
-            dir = dir.Parent;
-        }
-
-        throw new InvalidOperationException(
-            $"Could not find PPDS.Sdk.sln starting from: {startPath}");
-    }
-
     #region Tier 1: Safe tests
 
     [CliE2EWithCredentials]

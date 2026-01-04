@@ -15,36 +15,6 @@ namespace PPDS.LiveTests.Cli;
 /// </remarks>
 public class PluginsDeployCommandE2ETests : CliE2ETestBase
 {
-    /// <summary>
-    /// Gets the path to the TestData directory.
-    /// </summary>
-    private static string TestDataDir => GetTestDataDir();
-
-    /// <summary>
-    /// Gets the path to the test registrations config file.
-    /// </summary>
-    private static string TestRegistrationsPath => Path.Combine(TestDataDir, "test-registrations.json");
-
-    private static string GetTestDataDir()
-    {
-        var solutionDir = FindSolutionDir(AppContext.BaseDirectory);
-        return Path.Combine(solutionDir, "tests", "PPDS.LiveTests", "TestData");
-    }
-
-    private static string FindSolutionDir(string startPath)
-    {
-        var dir = new DirectoryInfo(startPath);
-        while (dir != null)
-        {
-            if (File.Exists(Path.Combine(dir.FullName, "PPDS.Sdk.sln")))
-                return dir.FullName;
-            dir = dir.Parent;
-        }
-
-        throw new InvalidOperationException(
-            $"Could not find PPDS.Sdk.sln starting from: {startPath}");
-    }
-
     #region Tier 1: Safe tests (--what-if)
 
     [CliE2EWithCredentials]
@@ -205,30 +175,39 @@ public class PluginsDeployCommandE2ETests : CliE2ETestBase
 
         await RunCliAsync("auth", "select", "--name", profileName);
 
-        // Deploy the plugin
-        var deployResult = await RunCliAsync(
-            "plugins", "deploy",
-            "--config", TestRegistrationsPath);
+        try
+        {
+            // Deploy the plugin
+            var deployResult = await RunCliAsync(
+                "plugins", "deploy",
+                "--config", TestRegistrationsPath);
 
-        deployResult.ExitCode.Should().Be(0, $"Deploy failed: {deployResult.StdErr}");
+            deployResult.ExitCode.Should().Be(0, $"Deploy failed: {deployResult.StdErr}");
 
-        // Clean up using --clean flag on deploy with empty config
-        // or use the clean command directly
-        var cleanResult = await RunCliAsync(
-            "plugins", "clean",
-            "--config", TestRegistrationsPath);
+            // Clean up using the clean command
+            var cleanResult = await RunCliAsync(
+                "plugins", "clean",
+                "--config", TestRegistrationsPath);
 
-        cleanResult.ExitCode.Should().Be(0, $"Clean failed: {cleanResult.StdErr}");
+            cleanResult.ExitCode.Should().Be(0, $"Clean failed: {cleanResult.StdErr}");
 
-        // Verify the plugin was removed
-        var listResult = await RunCliAsync(
-            "plugins", "list",
-            "--assembly", "PPDS.LiveTests.Fixtures",
-            "--output-format", "json");
+            // Verify the plugin was removed
+            var listResult = await RunCliAsync(
+                "plugins", "list",
+                "--assembly", "PPDS.LiveTests.Fixtures",
+                "--output-format", "json");
 
-        listResult.ExitCode.Should().Be(0);
-        // After clean, the assembly should not be in the list
-        // (or list should be empty for that filter)
+            listResult.ExitCode.Should().Be(0);
+            // After clean, the assembly should not be in the list
+            // (or list should be empty for that filter)
+        }
+        finally
+        {
+            // Ensure cleanup even if assertions fail
+            await RunCliAsync(
+                "plugins", "clean",
+                "--config", TestRegistrationsPath);
+        }
     }
 
     #endregion
