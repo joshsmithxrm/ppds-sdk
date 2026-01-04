@@ -10,6 +10,10 @@ using PPDS.Cli.Plugins.Registration;
 using PPDS.Dataverse.Pooling;
 using StreamJsonRpc;
 
+// Aliases to disambiguate from local DTOs
+using PluginTypeInfoModel = PPDS.Cli.Plugins.Registration.PluginTypeInfo;
+using PluginImageInfoModel = PPDS.Cli.Plugins.Registration.PluginImageInfo;
+
 namespace PPDS.Cli.Commands.Serve.Handlers;
 
 /// <summary>
@@ -309,15 +313,14 @@ public class RpcMethodHandler
 
         var pool = serviceProvider.GetRequiredService<IDataverseConnectionPool>();
         var logger = serviceProvider.GetRequiredService<ILogger<PluginRegistrationService>>();
-        await using var client = await pool.GetClientAsync(cancellationToken: cancellationToken);
-        var registrationService = new PluginRegistrationService(client, logger);
+        var registrationService = new PluginRegistrationService(pool, logger);
 
         var response = new PluginsListResponse();
 
         // Get assemblies (unless package filter is specified)
         if (string.IsNullOrEmpty(package))
         {
-            var assemblies = await registrationService.ListAssembliesAsync(assembly);
+            var assemblies = await registrationService.ListAssembliesAsync(assembly, cancellationToken);
 
             foreach (var asm in assemblies)
             {
@@ -329,8 +332,8 @@ public class RpcMethodHandler
                     Types = []
                 };
 
-                var types = await registrationService.ListTypesForAssemblyAsync(asm.Id);
-                await PopulatePluginTypesAsync(registrationService, types, assemblyOutput.Types);
+                var types = await registrationService.ListTypesForAssemblyAsync(asm.Id, cancellationToken);
+                await PopulatePluginTypesAsync(registrationService, types, assemblyOutput.Types, cancellationToken);
 
                 response.Assemblies.Add(assemblyOutput);
             }
@@ -339,7 +342,7 @@ public class RpcMethodHandler
         // Get packages (unless assembly filter is specified)
         if (string.IsNullOrEmpty(assembly))
         {
-            var packages = await registrationService.ListPackagesAsync(package);
+            var packages = await registrationService.ListPackagesAsync(package, cancellationToken);
 
             foreach (var pkg in packages)
             {
@@ -351,7 +354,7 @@ public class RpcMethodHandler
                     Assemblies = []
                 };
 
-                var assemblies = await registrationService.ListAssembliesForPackageAsync(pkg.Id);
+                var assemblies = await registrationService.ListAssembliesForPackageAsync(pkg.Id, cancellationToken);
                 foreach (var asm in assemblies)
                 {
                     var assemblyOutput = new PluginAssemblyInfo
@@ -362,8 +365,8 @@ public class RpcMethodHandler
                         Types = []
                     };
 
-                    var types = await registrationService.ListTypesForAssemblyAsync(asm.Id);
-                    await PopulatePluginTypesAsync(registrationService, types, assemblyOutput.Types);
+                    var types = await registrationService.ListTypesForAssemblyAsync(asm.Id, cancellationToken);
+                    await PopulatePluginTypesAsync(registrationService, types, assemblyOutput.Types, cancellationToken);
 
                     packageOutput.Assemblies.Add(assemblyOutput);
                 }
@@ -377,22 +380,51 @@ public class RpcMethodHandler
 
     private static async Task PopulatePluginTypesAsync(
         PluginRegistrationService registrationService,
-        List<PluginTypeInfo> types,
-        List<PluginTypeInfoDto> typeOutputs)
+        List<PluginTypeInfoModel> types,
+        List<PluginTypeInfoDto> typeOutputs,
+        CancellationToken cancellationToken)
     {
-        foreach (var type in types)
+        if (types.Count == 0)
+            return;
+
+        // Fetch all steps in parallel - each call gets its own client from the pool
+        var stepTasks = types.Select(t => registrationService.ListStepsForTypeAsync(t.Id, cancellationToken));
+        var stepsPerType = await Task.WhenAll(stepTasks);
+
+        // Collect all steps for image fetching
+        var allSteps = stepsPerType.SelectMany(s => s).ToList();
+
+        // Build step-to-type index for later mapping
+        var stepToTypeIndex = new Dictionary<Guid, int>();
+        for (var i = 0; i < types.Count; i++)
         {
+            foreach (var step in stepsPerType[i])
+            {
+                stepToTypeIndex[step.Id] = i;
+            }
+        }
+
+        // Fetch all images in parallel if there are steps
+        Dictionary<Guid, List<PluginImageInfoModel>> imagesByStepId = [];
+        if (allSteps.Count > 0)
+        {
+            var imageTasks = allSteps.Select(s => registrationService.ListImagesForStepAsync(s.Id, cancellationToken));
+            var imagesPerStep = await Task.WhenAll(imageTasks);
+            imagesByStepId = allSteps
+                .Select((step, idx) => (step.Id, images: imagesPerStep[idx]))
+                .ToDictionary(t => t.Id, t => t.images);
+        }
+
+        // Build DTOs
+        for (var i = 0; i < types.Count; i++)
+        {
+            var type = types[i];
+            var stepsForType = stepsPerType[i];
+
             var typeOutput = new PluginTypeInfoDto
             {
                 TypeName = type.TypeName,
-                Steps = []
-            };
-
-            var steps = await registrationService.ListStepsForTypeAsync(type.Id);
-
-            foreach (var step in steps)
-            {
-                var stepOutput = new PluginStepInfo
+                Steps = stepsForType.Select(step => new PluginStepInfo
                 {
                     Name = step.Name,
                     Message = step.Message,
@@ -406,24 +438,17 @@ public class RpcMethodHandler
                     Deployment = step.Deployment,
                     RunAsUser = step.ImpersonatingUserName,
                     AsyncAutoDelete = step.AsyncAutoDelete,
-                    Images = []
-                };
-
-                var images = await registrationService.ListImagesForStepAsync(step.Id);
-
-                foreach (var image in images)
-                {
-                    stepOutput.Images.Add(new PluginImageInfo
-                    {
-                        Name = image.Name,
-                        EntityAlias = image.EntityAlias ?? image.Name,
-                        ImageType = image.ImageType,
-                        Attributes = image.Attributes
-                    });
-                }
-
-                typeOutput.Steps.Add(stepOutput);
-            }
+                    Images = imagesByStepId.TryGetValue(step.Id, out var images)
+                        ? images.Select(img => new PluginImageInfo
+                        {
+                            Name = img.Name,
+                            EntityAlias = img.EntityAlias ?? img.Name,
+                            ImageType = img.ImageType,
+                            Attributes = img.Attributes
+                        }).ToList()
+                        : []
+                }).ToList()
+            };
 
             typeOutputs.Add(typeOutput);
         }
@@ -452,8 +477,6 @@ public class RpcMethodHandler
         // TODO: Implement schema retrieval
         // This will be fully implemented when #51 (metadata commands) is merged
         // For now, return a placeholder indicating the method is recognized
-        await Task.CompletedTask;
-
         throw new RpcException(
             ErrorCodes.Operation.NotSupported,
             "Schema retrieval will be available after metadata commands (#51) are implemented");

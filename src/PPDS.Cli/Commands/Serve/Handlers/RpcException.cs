@@ -45,7 +45,10 @@ public class RpcException : LocalRpcException
         {
             Code = errorCode,
             Message = innerException.Message,
-            Details = innerException.StackTrace
+#if DEBUG
+            // Only include stack trace in debug builds to avoid leaking internal details
+            Details = innerException.ToString()
+#endif
         };
     }
 }

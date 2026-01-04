@@ -38,16 +38,21 @@ public class RpcExceptionTests
     }
 
     [Fact]
-    public void Constructor_WithInnerException_IncludesStackTraceInDetails()
+    public void Constructor_WithInnerException_HandlesDetailsCorrectly()
     {
         var inner = new InvalidOperationException("Inner error");
         var exception = new RpcException(ErrorCodes.Operation.Internal, inner);
 
         var errorData = exception.ErrorData as RpcErrorData;
         Assert.NotNull(errorData);
-        // Stack trace is included in Details for debugging
-        // (It may be null if the inner exception doesn't have a stack trace yet)
-        Assert.Equal(inner.StackTrace, errorData.Details);
+
+#if DEBUG
+        // In debug builds, Details contains the full exception string for debugging
+        Assert.Contains("Inner error", errorData.Details);
+#else
+        // In release builds, Details is not populated (avoid leaking internal details)
+        Assert.Null(errorData.Details);
+#endif
     }
 
     [Theory]
