@@ -261,7 +261,7 @@ public sealed class SqlToFetchXmlTranspiler
     /// </summary>
     private void TranspileJoin(SqlJoin join, IReadOnlyList<ISqlSelectColumn> columns, List<string> lines)
     {
-        var linkType = join.Type == SqlJoinType.Left ? "outer" : "inner";
+        var linkType = join.Type.ToFetchXmlLinkType();
 
         // Determine which column is from the link-entity vs parent entity
         string fromColumn, toColumn;

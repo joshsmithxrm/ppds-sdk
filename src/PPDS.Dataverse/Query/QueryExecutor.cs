@@ -295,7 +295,6 @@ public class QueryExecutor : IQueryExecutor
 
         var alias = attr.Attribute("alias")?.Value;
         var aggregate = attr.Attribute("aggregate")?.Value;
-        var groupBy = string.Equals(attr.Attribute("groupby")?.Value, "true", StringComparison.OrdinalIgnoreCase);
 
         return new QueryColumn
         {

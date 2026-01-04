@@ -222,7 +222,7 @@ public static class FetchCommand
                 {
                     var prefix = fetchXml.Substring(0, fetchIndex + topStart + topPattern.Length);
                     var suffix = fetchXml.Substring(fetchIndex + valueEnd);
-                    return prefix + top.ToString() + suffix;
+                    return prefix + top + suffix;
                 }
             }
         }
