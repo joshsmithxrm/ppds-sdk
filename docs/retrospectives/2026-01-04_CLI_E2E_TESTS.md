@@ -51,6 +51,7 @@ Added comprehensive E2E test coverage for all 5 plugin CLI commands (extract, li
 **Fix Implemented:**
 - Added 60s internal timeout to `ClientSecretCredentialProvider`
 - CLI E2E tests auto-set `PPDS_SPN_SECRET` to bypass SecureCredentialStore
+  - *Later improved:* `CredentialProviderFactory` now checks `PPDS_TEST_CLIENT_SECRET` as fallback, eliminating need for explicit bridging
 - Created `SecureStorageE2ETests` with `[Trait("Category", "SecureStorage")]` for explicit testing
 
 ### 2. CLI JSON Output Format Mismatch

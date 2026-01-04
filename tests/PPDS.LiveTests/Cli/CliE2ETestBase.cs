@@ -101,13 +101,14 @@ public abstract class CliE2ETestBase : IAsyncLifetime
     /// <returns>The CLI execution result.</returns>
     protected Task<CliResult> RunCliWithoutBypassAsync(params string[] args)
     {
-        // Clear both env vars to force SecureCredentialStore path
-        var clearVars = new Dictionary<string, string>
+        // Remove both env vars to force SecureCredentialStore path
+        // Using null signals RunCliWithEnvAsync to remove the key entirely
+        var clearVars = new Dictionary<string, string?>
         {
-            ["PPDS_SPN_SECRET"] = string.Empty,
-            ["PPDS_TEST_CLIENT_SECRET"] = string.Empty
+            ["PPDS_SPN_SECRET"] = null,
+            ["PPDS_TEST_CLIENT_SECRET"] = null
         };
-        return RunCliWithEnvAsync(clearVars, args);
+        return RunCliWithEnvAsync(clearVars!, args);
     }
 
     /// <summary>
@@ -133,12 +134,15 @@ public abstract class CliE2ETestBase : IAsyncLifetime
         // Set isolated config directory to avoid race conditions between parallel test runs
         startInfo.Environment["PPDS_CONFIG_DIR"] = IsolatedConfigDir;
 
-        // Set additional environment variables
+        // Set or remove environment variables
         if (envVars != null)
         {
             foreach (var (key, value) in envVars)
             {
-                startInfo.Environment[key] = value;
+                if (value == null)
+                    startInfo.Environment.Remove(key);
+                else
+                    startInfo.Environment[key] = value;
             }
         }
 

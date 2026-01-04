@@ -38,7 +38,7 @@ Look for these common issues in the logs:
 
 | Pattern | Likely Cause | Solution |
 |---------|--------------|----------|
-| Test hung / no output for 6hrs | DPAPI/SecureCredentialStore | Use `PPDS_SPN_SECRET` env var |
+| Test hung / no output for 6hrs | DPAPI/SecureCredentialStore | Set `PPDS_TEST_CLIENT_SECRET` in CI (auto-bypasses) |
 | `TimeoutException` | CLI command timeout | Check for infinite loops or slow queries |
 | `JsonException` parsing output | Output format mismatch | Update test to parse envelope format |
 | `CryptographicException` | Certificate loading | Use MachineKeySet + EphemeralKeySet flags |
@@ -104,8 +104,8 @@ Present summary:
 - Job cancelled due to timeout
 
 **Solution:**
-1. Ensure test uses `PPDS_SPN_SECRET` env var path
-2. Add `[Trait("Category", "SecureStorage")]` to exclude from CI
+1. Ensure `PPDS_TEST_CLIENT_SECRET` is set in CI (CredentialProviderFactory auto-bypasses SecureCredentialStore)
+2. If test intentionally uses SecureCredentialStore, add `[Trait("Category", "SecureStorage")]` to exclude from CI
 
 ### JSON Output Envelope
 
