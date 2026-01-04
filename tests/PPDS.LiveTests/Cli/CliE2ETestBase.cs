@@ -82,11 +82,39 @@ public abstract class CliE2ETestBase : IAsyncLifetime
     }
 
     /// <summary>
+    /// Gets standard environment variables to bypass SecureCredentialStore in CI.
+    /// When PPDS_SPN_SECRET is set, both auth create and credential lookup will bypass
+    /// the secure credential store, avoiding MsalCacheHelper initialization issues.
+    /// </summary>
+    protected Dictionary<string, string>? GetBypassEnvVars()
+    {
+        if (string.IsNullOrWhiteSpace(Configuration.ClientSecret))
+            return null;
+
+        return new Dictionary<string, string>
+        {
+            ["PPDS_SPN_SECRET"] = Configuration.ClientSecret
+        };
+    }
+
+    /// <summary>
     /// Runs a CLI command and captures the result.
+    /// Automatically sets PPDS_SPN_SECRET when client secret is available to bypass
+    /// SecureCredentialStore issues on CI.
     /// </summary>
     /// <param name="args">Command arguments (e.g., "auth", "list").</param>
     /// <returns>The CLI execution result.</returns>
     protected Task<CliResult> RunCliAsync(params string[] args)
+        => RunCliWithEnvAsync(GetBypassEnvVars(), args);
+
+    /// <summary>
+    /// Runs a CLI command WITHOUT the PPDS_SPN_SECRET bypass.
+    /// Use this for tests that specifically need to exercise the SecureCredentialStore path.
+    /// These tests should be marked with [Trait("Category", "SecureStorage")] and skipped in CI.
+    /// </summary>
+    /// <param name="args">Command arguments (e.g., "auth", "list").</param>
+    /// <returns>The CLI execution result.</returns>
+    protected Task<CliResult> RunCliWithoutBypassAsync(params string[] args)
         => RunCliWithEnvAsync(null, args);
 
     /// <summary>
@@ -262,9 +290,33 @@ public abstract class CliE2ETestBase : IAsyncLifetime
     }
 
     /// <summary>
+    /// Gets the path to the TestData directory.
+    /// </summary>
+    protected static string TestDataDir { get; } = GetTestDataDir();
+
+    /// <summary>
+    /// Gets the path to the test registrations config file.
+    /// </summary>
+    protected static string TestRegistrationsPath => Path.Combine(TestDataDir, "test-registrations.json");
+
+    /// <summary>
+    /// Gets the path to the test plugin assembly.
+    /// </summary>
+    protected static string TestPluginAssemblyPath => Path.Combine(TestDataDir, "PPDS.LiveTests.Fixtures.dll");
+
+    /// <summary>
+    /// Gets the path to the TestData directory.
+    /// </summary>
+    private static string GetTestDataDir()
+    {
+        var solutionDir = FindSolutionDirectory(AppContext.BaseDirectory);
+        return Path.Combine(solutionDir, "tests", "PPDS.LiveTests", "TestData");
+    }
+
+    /// <summary>
     /// Finds the solution directory by walking up from the given path.
     /// </summary>
-    private static string FindSolutionDirectory(string startPath)
+    protected static string FindSolutionDirectory(string startPath)
     {
         var dir = new DirectoryInfo(startPath);
         while (dir != null)

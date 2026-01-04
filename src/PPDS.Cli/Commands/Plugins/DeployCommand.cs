@@ -57,12 +57,11 @@ public static class DeployCommand
             PluginsCommandGroup.EnvironmentOption,
             PluginsCommandGroup.SolutionOption,
             cleanOption,
-            whatIfOption,
-            PluginsCommandGroup.OutputFormatOption
+            whatIfOption
         };
 
-        // Add global options for verbosity and correlation
-        GlobalOptions.AddToCommand(command, includeOutputFormat: false);
+        // Add global options including output format
+        GlobalOptions.AddToCommand(command);
 
         command.SetAction(async (parseResult, cancellationToken) =>
         {
@@ -305,7 +304,9 @@ public static class DeployCommand
                 // Deploy each step
                 foreach (var stepConfig in typeConfig.Steps)
                 {
-                    var stepName = stepConfig.Name ?? $"{typeConfig.TypeName}: {stepConfig.Message} of {stepConfig.Entity}";
+                    // Resolve auto-generated name if not specified
+                    stepConfig.Name ??= $"{typeConfig.TypeName}: {stepConfig.Message} of {stepConfig.Entity}";
+                    var stepName = stepConfig.Name;
                     configuredStepNames.Add(stepName);
 
                     // Lookup message and filter

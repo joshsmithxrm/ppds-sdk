@@ -308,6 +308,12 @@ public sealed class SecureCredentialStore : ISecureCredentialStore, IDisposable
     }
 
     /// <summary>
+    /// Timeout for MsalCacheHelper initialization.
+    /// DPAPI/Keychain operations should complete quickly; hanging indicates system issues.
+    /// </summary>
+    private static readonly TimeSpan CacheHelperTimeout = TimeSpan.FromSeconds(15);
+
+    /// <summary>
     /// Initializes the MSAL cache helper for platform-native encryption.
     /// </summary>
     private async Task EnsureCacheHelperAsync()
@@ -316,7 +322,22 @@ public sealed class SecureCredentialStore : ISecureCredentialStore, IDisposable
             return;
 
         var storageProperties = CreateStorageProperties();
-        _cacheHelper = await MsalCacheHelper.CreateAsync(storageProperties).ConfigureAwait(false);
+
+        // Add timeout to fail fast if DPAPI/Keychain is unresponsive
+        try
+        {
+            using var cts = new CancellationTokenSource(CacheHelperTimeout);
+            _cacheHelper = await MsalCacheHelper.CreateAsync(storageProperties)
+                .WaitAsync(cts.Token)
+                .ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            throw new TimeoutException(
+                $"Credential store initialization timed out after {CacheHelperTimeout.TotalSeconds}s. " +
+                "This may indicate DPAPI issues on Windows or Keychain issues on macOS. " +
+                "Set PPDS_SPN_SECRET environment variable to bypass credential store lookup.");
+        }
 
         // Register the cache helper to protect the file
         // The cache helper will encrypt/decrypt data when reading/writing

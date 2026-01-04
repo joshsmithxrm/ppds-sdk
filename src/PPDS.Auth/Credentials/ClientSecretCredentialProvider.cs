@@ -12,6 +12,12 @@ namespace PPDS.Auth.Credentials;
 /// </summary>
 public sealed class ClientSecretCredentialProvider : ICredentialProvider
 {
+    /// <summary>
+    /// Timeout for ServiceClient connection.
+    /// Must fail fast so callers see actionable errors instead of hanging.
+    /// </summary>
+    private static readonly TimeSpan ConnectionTimeout = TimeSpan.FromSeconds(60);
+
     private readonly string _applicationId;
     private readonly string _clientSecret;
     private readonly string _tenantId;
@@ -121,7 +127,7 @@ public sealed class ClientSecretCredentialProvider : ICredentialProvider
     }
 
     /// <inheritdoc />
-    public Task<ServiceClient> CreateServiceClientAsync(
+    public async Task<ServiceClient> CreateServiceClientAsync(
         string environmentUrl,
         CancellationToken cancellationToken = default,
         bool forceInteractive = false) // Ignored for service principals
@@ -135,11 +141,31 @@ public sealed class ClientSecretCredentialProvider : ICredentialProvider
         // Build connection string
         var connectionString = BuildConnectionString(environmentUrl);
 
-        // Create ServiceClient
+        // Create ServiceClient - wrap in Task.Run since constructor is sync and can block.
+        // Use internal timeout combined with caller's token to ensure we fail fast.
+        // WaitAsync enforces the timeout even if ServiceClient constructor ignores cancellation.
+        using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeoutCts.CancelAfter(ConnectionTimeout);
+
         ServiceClient client;
         try
         {
-            client = new ServiceClient(connectionString);
+            client = await Task.Run(() => new ServiceClient(connectionString), timeoutCts.Token)
+                .WaitAsync(timeoutCts.Token)
+                .ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            // Internal timeout expired - caller didn't cancel
+            throw new AuthenticationException(
+                $"Connection to Dataverse timed out after {ConnectionTimeout.TotalSeconds}s for {environmentUrl}. " +
+                "Check network connectivity and environment URL.");
+        }
+        catch (OperationCanceledException)
+        {
+            // Caller cancelled
+            throw new AuthenticationException(
+                $"Connection to Dataverse was cancelled for {environmentUrl}.");
         }
         catch (Exception ex)
         {
@@ -156,7 +182,7 @@ public sealed class ClientSecretCredentialProvider : ICredentialProvider
         // Estimate token expiration (typically 1 hour for client credentials)
         _tokenExpiresAt = DateTimeOffset.UtcNow.AddHours(1);
 
-        return Task.FromResult(client);
+        return client;
     }
 
     /// <summary>
