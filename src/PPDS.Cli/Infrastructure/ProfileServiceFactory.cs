@@ -316,8 +316,8 @@ public static class ProfileServiceFactory
     /// </summary>
     public static void DefaultDeviceCodeCallback(DeviceCodeInfo info)
     {
-        Console.WriteLine();
-        Console.WriteLine(info.Message);
-        Console.WriteLine();
+        Console.Error.WriteLine();
+        Console.Error.WriteLine(info.Message);
+        Console.Error.WriteLine();
     }
 }

@@ -23,6 +23,7 @@
 | Store pooled clients in fields | Causes connection leaks; get per operation, dispose immediately |
 | Use magic strings for generated entities | Use `EntityLogicalName` and `Fields.*` constants; see [Generated Entities](#-generated-entities) |
 | Use late-bound `Entity` for generated entity types | Use early-bound classes (`PluginAssembly`, `SystemUser`, etc.); compile-time safety |
+| Write CLI status messages to stdout | Use `Console.Error.WriteLine` for status; stdout is for data only; see [ADR-0008](docs/adr/0008_CLI_OUTPUT_ARCHITECTURE.md) |
 
 ---
 
@@ -411,6 +412,7 @@ See [ADR-0005](docs/adr/0005_DOP_BASED_PARALLELISM.md) for details.
 | [0005](docs/adr/0005_DOP_BASED_PARALLELISM.md) | DOP-based parallelism (server-recommended limits) |
 | [0006](docs/adr/0006_CONNECTION_SOURCE_ABSTRACTION.md) | IConnectionSource for custom auth methods |
 | [0007](docs/adr/0007_UNIFIED_CLI_AND_AUTH.md) | Unified CLI and shared authentication profiles |
+| [0008](docs/adr/0008_CLI_OUTPUT_ARCHITECTURE.md) | CLI output architecture (structured errors, stdout/stderr separation) |
 
 ---
 
@@ -424,9 +426,8 @@ The unified CLI (`ppds`) uses stored authentication profiles. Create a profile o
 ppds
 ├── auth      Authentication profile management
 ├── env       Environment discovery and selection
-├── data      Data operations (export, import, copy, analyze)
-├── schema    Schema generation and entity listing
-└── users     User mapping for cross-environment migrations
+├── data      Data operations (export, import, copy, analyze, schema, users)
+└── plugins   Plugin registration management
 ```
 
 ### Quick Start
@@ -453,6 +454,28 @@ ppds data export --schema schema.xml --output data.zip
 | Managed Identity | `--managedIdentity` | Azure-hosted |
 | GitHub OIDC | `--githubFederated` + `--applicationId` + `--tenant` | GitHub Actions |
 | Azure DevOps OIDC | `--azureDevOpsFederated` + `--applicationId` + `--tenant` | Azure Pipelines |
+
+### Output Conventions
+
+The CLI follows Unix conventions for output streams (see [ADR-0008](docs/adr/0008_CLI_OUTPUT_ARCHITECTURE.md)):
+
+| Stream | Content | Example |
+|--------|---------|---------|
+| **stdout** | Command results (data) | Profile info, exported data, JSON output |
+| **stderr** | Operational messages | "Connecting...", "Authenticating...", progress |
+
+```csharp
+// ✅ Correct - Status messages to stderr
+Console.Error.WriteLine("Authenticating...");
+
+// ✅ Correct - Results to stdout
+Console.WriteLine(JsonSerializer.Serialize(profile));
+
+// ❌ Wrong - Status pollutes pipeable output
+Console.WriteLine("Connecting to environment...");
+```
+
+This enables clean piping: `ppds data export -f json | jq '.data'`
 
 See [CLI README](src/PPDS.Cli/README.md) for full documentation.
 

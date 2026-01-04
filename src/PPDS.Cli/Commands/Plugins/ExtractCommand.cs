@@ -1,6 +1,10 @@
 using System.CommandLine;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Microsoft.Extensions.Logging;
+using PPDS.Cli.Infrastructure;
+using PPDS.Cli.Infrastructure.Errors;
+using PPDS.Cli.Infrastructure.Output;
 using PPDS.Cli.Plugins.Extraction;
 using PPDS.Cli.Plugins.Models;
 
@@ -50,15 +54,18 @@ public static class ExtractCommand
             PluginsCommandGroup.OutputFormatOption
         };
 
+        // Add global options for verbosity and correlation
+        GlobalOptions.AddToCommand(command, includeOutputFormat: false);
+
         command.SetAction(async (parseResult, cancellationToken) =>
         {
             var input = parseResult.GetValue(inputOption)!;
             var output = parseResult.GetValue(outputOption);
             var solution = parseResult.GetValue(solutionOption);
             var force = parseResult.GetValue(forceOption);
-            var outputFormat = parseResult.GetValue(PluginsCommandGroup.OutputFormatOption);
+            var globalOptions = GlobalOptions.GetValues(parseResult);
 
-            return await ExecuteAsync(input, output, solution, force, outputFormat, cancellationToken);
+            return await ExecuteAsync(input, output, solution, force, globalOptions, cancellationToken);
         });
 
         return command;
@@ -69,9 +76,11 @@ public static class ExtractCommand
         FileInfo? output,
         string? solution,
         bool force,
-        OutputFormat outputFormat,
+        GlobalOptionValues globalOptions,
         CancellationToken cancellationToken)
     {
+        var writer = ServiceFactory.CreateOutputWriter(globalOptions);
+
         try
         {
             var extension = input.Extension.ToLowerInvariant();
@@ -79,23 +88,26 @@ public static class ExtractCommand
 
             if (extension == ".nupkg")
             {
-                if (outputFormat != OutputFormat.Json)
-                    Console.WriteLine($"Extracting from NuGet package: {input.Name}");
+                if (!globalOptions.IsJsonMode)
+                    Console.Error.WriteLine($"Extracting from NuGet package: {input.Name}");
 
                 assemblyConfig = NupkgExtractor.Extract(input.FullName);
             }
             else if (extension == ".dll")
             {
-                if (outputFormat != OutputFormat.Json)
-                    Console.WriteLine($"Extracting from assembly: {input.Name}");
+                if (!globalOptions.IsJsonMode)
+                    Console.Error.WriteLine($"Extracting from assembly: {input.Name}");
 
                 using var extractor = AssemblyExtractor.Create(input.FullName);
                 assemblyConfig = extractor.Extract();
             }
             else
             {
-                Console.Error.WriteLine($"Unsupported file type: {extension}. Expected .dll or .nupkg");
-                return Task.FromResult(ExitCodes.Failure);
+                writer.WriteError(new StructuredError(
+                    ErrorCodes.Validation.InvalidValue,
+                    $"Unsupported file type: {extension}. Expected .dll or .nupkg",
+                    Target: input.Name));
+                return Task.FromResult(ExitCodes.InvalidArguments);
             }
 
             // Make path relative to output location
@@ -127,9 +139,9 @@ public static class ExtractCommand
             PluginRegistrationConfig config;
             var existingFile = new FileInfo(outputPath);
 
-            if (existingFile.Exists && !force && outputFormat != OutputFormat.Json)
+            if (existingFile.Exists && !force && !globalOptions.IsJsonMode)
             {
-                Console.WriteLine($"Merging with existing configuration...");
+                Console.Error.WriteLine("Merging with existing configuration...");
 
                 var existingContent = File.ReadAllText(outputPath);
                 var existingConfig = JsonSerializer.Deserialize<PluginRegistrationConfig>(existingContent, JsonOptions);
@@ -162,26 +174,27 @@ public static class ExtractCommand
 
             var jsonContent = JsonSerializer.Serialize(config, JsonOptions);
 
-            if (outputFormat == OutputFormat.Json)
+            if (globalOptions.IsJsonMode)
             {
                 // Output to stdout for tool integration
-                Console.WriteLine(jsonContent);
+                writer.WriteSuccess(config);
             }
             else
             {
                 // Write to file
                 File.WriteAllText(outputPath, jsonContent);
-                Console.WriteLine();
-                Console.WriteLine($"Found {assemblyConfig.Types.Count} plugin type(s) with {assemblyConfig.Types.Sum(t => t.Steps.Count)} step(s)");
-                Console.WriteLine($"Output: {outputPath}");
+                Console.Error.WriteLine();
+                Console.Error.WriteLine($"Found {assemblyConfig.Types.Count} plugin type(s) with {assemblyConfig.Types.Sum(t => t.Steps.Count)} step(s)");
+                Console.Error.WriteLine($"Output: {outputPath}");
             }
 
             return Task.FromResult(ExitCodes.Success);
         }
         catch (Exception ex)
         {
-            Console.Error.WriteLine($"Error extracting plugin registrations: {ex.Message}");
-            return Task.FromResult(ExitCodes.Failure);
+            var error = ExceptionMapper.Map(ex, context: "extracting plugin registrations", debug: globalOptions.Debug);
+            writer.WriteError(error);
+            return Task.FromResult(ExceptionMapper.ToExitCode(ex));
         }
     }
 

@@ -75,7 +75,8 @@ public class AuthCommandE2ETests : CliE2ETestBase
             "--environment", Configuration.DataverseUrl!);
 
         result.ExitCode.Should().Be(0, $"StdErr: {result.StdErr}");
-        result.StdOut.Should().Contain("Profile created");
+        // Status messages go to stderr per output conventions
+        result.StdErr.Should().Contain("Profile created");
     }
 
     [CliE2EWithCredentials]
@@ -146,7 +147,8 @@ public class AuthCommandE2ETests : CliE2ETestBase
         var deleteResult = await RunCliAsync("auth", "delete", "--name", profileName);
 
         deleteResult.ExitCode.Should().Be(0);
-        deleteResult.StdOut.Should().Contain("deleted");
+        // Status messages go to stderr per output conventions
+        deleteResult.StdErr.Should().Contain("deleted");
     }
 
     [CliE2EFact]
@@ -189,7 +191,8 @@ public class AuthCommandE2ETests : CliE2ETestBase
         var result = await RunCliAsync("auth", "select", "--name", profileName);
 
         result.ExitCode.Should().Be(0);
-        result.StdOut.Should().Contain("Active profile");
+        // Status messages go to stderr per output conventions
+        result.StdErr.Should().Contain("Active profile");
     }
 
     [CliE2EFact]
@@ -244,7 +247,8 @@ public class AuthCommandE2ETests : CliE2ETestBase
         var clearResult = await RunCliAsync("auth", "clear");
 
         clearResult.ExitCode.Should().Be(0);
-        clearResult.StdOut.Should().Contain("stored credentials removed");
+        // Status messages go to stderr per output conventions
+        clearResult.StdErr.Should().Contain("stored credentials removed");
 
         // Credential file should be deleted by ClearAsync
         File.Exists(credentialFile).Should().BeFalse("credential file should be deleted after auth clear");
@@ -286,7 +290,8 @@ public class AuthCommandE2ETests : CliE2ETestBase
         var deleteResult = await RunCliAsync("auth", "delete", "--name", profileName);
 
         deleteResult.ExitCode.Should().Be(0);
-        deleteResult.StdOut.Should().Contain("deleted");
+        // Status messages go to stderr per output conventions
+        deleteResult.StdErr.Should().Contain("deleted");
 
         // After delete, credential file might still exist but shouldn't contain this app's credentials
         if (File.Exists(credentialFile))

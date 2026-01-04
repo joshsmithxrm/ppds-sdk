@@ -9,6 +9,10 @@ namespace PPDS.Migration.Progress
     /// Progress reporter that writes JSON lines to a TextWriter.
     /// Used for CLI and VS Code extension integration.
     /// </summary>
+    /// <remarks>
+    /// Progress is written to the provided TextWriter (typically stderr) to keep
+    /// stdout clean for command results, enabling piping without interference.
+    /// </remarks>
     public class JsonProgressReporter : IProgressReporter
     {
         private readonly TextWriter _writer;

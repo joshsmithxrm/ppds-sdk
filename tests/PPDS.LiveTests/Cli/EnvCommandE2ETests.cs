@@ -149,7 +149,8 @@ public class EnvCommandE2ETests : CliE2ETestBase
         var result = await RunCliAsync("env", "select", "--environment", Configuration.DataverseUrl!);
 
         result.ExitCode.Should().Be(0, $"StdErr: {result.StdErr}");
-        result.StdOut.Should().ContainAny("Connected", "selected", "Environment");
+        // Status messages go to stderr per output conventions
+        result.StdErr.Should().ContainAny("Connected", "selected", "Environment");
     }
 
     [CliE2EWithCredentials]

@@ -7,11 +7,17 @@ using System.Text.RegularExpressions;
 namespace PPDS.Migration.Progress
 {
     /// <summary>
-    /// Progress reporter that writes human-readable output to the console.
+    /// Progress reporter that writes human-readable output to stderr.
     /// </summary>
     /// <remarks>
+    /// <para>
     /// This class is not thread-safe. It is designed for single-threaded CLI usage
     /// where progress events are reported sequentially.
+    /// </para>
+    /// <para>
+    /// Progress is written to stderr to keep stdout clean for command results,
+    /// enabling piping (e.g., <c>ppds data export | jq</c>) without interference.
+    /// </para>
     /// </remarks>
     public class ConsoleProgressReporter : IProgressReporter
     {
@@ -42,7 +48,7 @@ namespace PPDS.Migration.Progress
             switch (args.Phase)
             {
                 case MigrationPhase.Analyzing:
-                    Console.WriteLine($"{prefix} {args.Message}");
+                    Console.Error.WriteLine($"{prefix} {args.Message}");
                     break;
 
                 case MigrationPhase.Exporting:
@@ -50,7 +56,7 @@ namespace PPDS.Migration.Progress
                     // Handle message-only events (e.g., "Writing output file...")
                     if (!string.IsNullOrEmpty(args.Message) && string.IsNullOrEmpty(args.Entity))
                     {
-                        Console.WriteLine($"{prefix} {args.Message}");
+                        Console.Error.WriteLine($"{prefix} {args.Message}");
                         break;
                     }
 
@@ -73,7 +79,7 @@ namespace PPDS.Migration.Progress
                             ? $" [{args.SuccessCount} ok, {args.FailureCount} failed]"
                             : "";
 
-                        Console.WriteLine($"{prefix} [{phase}] {args.Entity}{tierInfo}: {args.Current:N0}/{args.Total:N0}{pct}{rps}{eta}{failureInfo}");
+                        Console.Error.WriteLine($"{prefix} [{phase}] {args.Entity}{tierInfo}: {args.Current:N0}/{args.Total:N0}{pct}{rps}{eta}{failureInfo}");
 
                         _lastEntity = args.Entity;
                         _lastProgress = args.Current;
@@ -85,22 +91,22 @@ namespace PPDS.Migration.Progress
                     if (!string.IsNullOrEmpty(args.Field) && args.Total > 0)
                     {
                         var successInfo = args.SuccessCount > 0 ? $" ({args.SuccessCount} updated)" : "";
-                        Console.WriteLine($"{prefix} [Deferred] {args.Entity}.{args.Field}: {args.Current:N0}/{args.Total:N0}{successInfo}");
+                        Console.Error.WriteLine($"{prefix} [Deferred] {args.Entity}.{args.Field}: {args.Current:N0}/{args.Total:N0}{successInfo}");
                     }
                     else if (!string.IsNullOrEmpty(args.Message))
                     {
-                        Console.WriteLine($"{prefix} [Deferred] {args.Entity}: {args.Message}");
+                        Console.Error.WriteLine($"{prefix} [Deferred] {args.Entity}: {args.Message}");
                     }
                     break;
 
                 case MigrationPhase.ProcessingRelationships:
-                    Console.WriteLine($"{prefix} [M2M] {args.Relationship}: {args.Current:N0}/{args.Total:N0}");
+                    Console.Error.WriteLine($"{prefix} [M2M] {args.Relationship}: {args.Current:N0}/{args.Total:N0}");
                     break;
 
                 default:
                     if (!string.IsNullOrEmpty(args.Message))
                     {
-                        Console.WriteLine($"{prefix} {args.Message}");
+                        Console.Error.WriteLine($"{prefix} {args.Message}");
                     }
                     break;
             }
@@ -110,40 +116,40 @@ namespace PPDS.Migration.Progress
         public void Complete(MigrationResult result)
         {
             _stopwatch.Stop();
-            Console.WriteLine();
+            Console.Error.WriteLine();
 
             // Header line: "Export succeeded." or "Export completed with errors."
             if (result.Success)
             {
                 Console.ForegroundColor = ConsoleColor.Green;
-                Console.WriteLine($"{OperationName} succeeded.");
+                Console.Error.WriteLine($"{OperationName} succeeded.");
             }
             else
             {
                 Console.ForegroundColor = ConsoleColor.Yellow;
-                Console.WriteLine($"{OperationName} completed with errors.");
+                Console.Error.WriteLine($"{OperationName} completed with errors.");
             }
             Console.ResetColor();
 
             // Summary line: "    42,366 records in 00:00:08 (4,774.5 rec/s)"
-            Console.WriteLine($"    {result.SuccessCount:N0} record(s) in {result.Duration:hh\\:mm\\:ss} ({result.RecordsPerSecond:F1} rec/s)");
+            Console.Error.WriteLine($"    {result.SuccessCount:N0} record(s) in {result.Duration:hh\\:mm\\:ss} ({result.RecordsPerSecond:F1} rec/s)");
 
             // Show created/updated breakdown for upsert operations
             if (result.CreatedCount.HasValue && result.UpdatedCount.HasValue)
             {
-                Console.WriteLine($"        Created: {result.CreatedCount:N0} | Updated: {result.UpdatedCount:N0}");
+                Console.Error.WriteLine($"        Created: {result.CreatedCount:N0} | Updated: {result.UpdatedCount:N0}");
             }
 
             // Error count if any
             if (result.FailureCount > 0)
             {
                 Console.ForegroundColor = ConsoleColor.Red;
-                Console.WriteLine($"    {result.FailureCount:N0} Error(s)");
+                Console.Error.WriteLine($"    {result.FailureCount:N0} Error(s)");
                 Console.ResetColor();
             }
             else
             {
-                Console.WriteLine($"    0 Error(s)");
+                Console.Error.WriteLine($"    0 Error(s)");
             }
 
             // Display error details if available
@@ -153,7 +159,7 @@ namespace PPDS.Migration.Progress
                 var patterns = DetectErrorPatterns(result.Errors);
                 var suggestions = GetActionableSuggestions(patterns);
 
-                Console.WriteLine();
+                Console.Error.WriteLine();
                 Console.ForegroundColor = ConsoleColor.Red;
 
                 // Show pattern summary if most errors share the same cause
@@ -162,38 +168,38 @@ namespace PPDS.Migration.Progress
                     var topPattern = patterns.First();
                     if (topPattern.Value >= result.Errors.Count * 0.8) // 80%+ same error
                     {
-                        Console.WriteLine($"Error Pattern: {topPattern.Value:N0} of {result.Errors.Count:N0} errors share the same cause:");
-                        Console.WriteLine($"  {GetPatternDescription(topPattern.Key)}");
+                        Console.Error.WriteLine($"Error Pattern: {topPattern.Value:N0} of {result.Errors.Count:N0} errors share the same cause:");
+                        Console.Error.WriteLine($"  {GetPatternDescription(topPattern.Key)}");
                     }
                     else
                     {
-                        Console.WriteLine($"Errors ({result.Errors.Count:N0}):");
+                        Console.Error.WriteLine($"Errors ({result.Errors.Count:N0}):");
                         foreach (var error in result.Errors.Take(MaxErrorsToDisplay))
                         {
                             var entity = !string.IsNullOrEmpty(error.EntityLogicalName) ? $"{error.EntityLogicalName}: " : "";
                             var index = error.RecordIndex.HasValue ? $"[{error.RecordIndex}] " : "";
-                            Console.WriteLine($"  - {entity}{index}{error.Message}");
+                            Console.Error.WriteLine($"  - {entity}{index}{error.Message}");
                         }
 
                         if (result.Errors.Count > MaxErrorsToDisplay)
                         {
-                            Console.WriteLine($"  ... and {result.Errors.Count - MaxErrorsToDisplay} more errors");
+                            Console.Error.WriteLine($"  ... and {result.Errors.Count - MaxErrorsToDisplay} more errors");
                         }
                     }
                 }
                 else
                 {
-                    Console.WriteLine($"Errors ({result.Errors.Count:N0}):");
+                    Console.Error.WriteLine($"Errors ({result.Errors.Count:N0}):");
                     foreach (var error in result.Errors.Take(MaxErrorsToDisplay))
                     {
                         var entity = !string.IsNullOrEmpty(error.EntityLogicalName) ? $"{error.EntityLogicalName}: " : "";
                         var index = error.RecordIndex.HasValue ? $"[{error.RecordIndex}] " : "";
-                        Console.WriteLine($"  - {entity}{index}{error.Message}");
+                        Console.Error.WriteLine($"  - {entity}{index}{error.Message}");
                     }
 
                     if (result.Errors.Count > MaxErrorsToDisplay)
                     {
-                        Console.WriteLine($"  ... and {result.Errors.Count - MaxErrorsToDisplay} more errors");
+                        Console.Error.WriteLine($"  ... and {result.Errors.Count - MaxErrorsToDisplay} more errors");
                     }
                 }
                 Console.ResetColor();
@@ -201,18 +207,18 @@ namespace PPDS.Migration.Progress
                 // Show actionable suggestions
                 if (suggestions.Count > 0)
                 {
-                    Console.WriteLine();
+                    Console.Error.WriteLine();
                     Console.ForegroundColor = ConsoleColor.Cyan;
-                    Console.WriteLine("Suggested fixes:");
+                    Console.Error.WriteLine("Suggested fixes:");
                     foreach (var suggestion in suggestions.Take(MaxSuggestionsToDisplay))
                     {
-                        Console.WriteLine($"  -> {suggestion}");
+                        Console.Error.WriteLine($"  -> {suggestion}");
                     }
                     Console.ResetColor();
                 }
             }
 
-            Console.WriteLine();
+            Console.Error.WriteLine();
         }
 
         /// <summary>

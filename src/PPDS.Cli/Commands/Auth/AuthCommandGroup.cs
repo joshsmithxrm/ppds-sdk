@@ -6,6 +6,9 @@ using PPDS.Auth.Credentials;
 using PPDS.Auth.Discovery;
 using PPDS.Auth.Profiles;
 using PPDS.Cli.Commands;
+using PPDS.Cli.Infrastructure;
+using PPDS.Cli.Infrastructure.Errors;
+using PPDS.Cli.Infrastructure.Output;
 
 namespace PPDS.Cli.Commands.Auth;
 
@@ -320,8 +323,8 @@ public static class AuthCommandGroup
                 targetUrl = "https://globaldisco.crm.dynamics.com";
             }
 
-            Console.WriteLine($"Authenticating with {authMethod}...");
-            Console.WriteLine();
+            Console.Error.WriteLine($"Authenticating with {authMethod}...");
+            Console.Error.WriteLine();
 
             ICredentialProvider provider = authMethod switch
             {
@@ -389,7 +392,7 @@ public static class AuthCommandGroup
                     else
                     {
                         // For interactive auth, use global discovery for richer environment info
-                        Console.WriteLine("Resolving environment...");
+                        Console.Error.WriteLine("Resolving environment...");
                         try
                         {
                             using var gds = new GlobalDiscoveryService(options.Cloud, options.Tenant);
@@ -415,7 +418,7 @@ public static class AuthCommandGroup
                             }
 
                             // Validate we can actually connect to this environment before saving
-                            Console.WriteLine($"Validating access to {resolved.FriendlyName}...");
+                            Console.Error.WriteLine($"Validating access to {resolved.FriendlyName}...");
                             try
                             {
                                 // forceInteractive=false uses cached MSAL token from initial auth
@@ -467,27 +470,27 @@ public static class AuthCommandGroup
             collection.Add(profile);
             await store.SaveAsync(collection, cancellationToken);
 
-            Console.WriteLine();
+            Console.Error.WriteLine();
             Console.ForegroundColor = ConsoleColor.Green;
-            Console.WriteLine($"Profile created: {profile.DisplayIdentifier}");
+            Console.Error.WriteLine($"Profile created: {profile.DisplayIdentifier}");
             Console.ResetColor();
-            Console.WriteLine($"  Auth: {profile.AuthMethod}");
-            Console.WriteLine($"  Identity: {profile.IdentityDisplay}");
-            Console.WriteLine($"  Cloud: {profile.Cloud}");
+            Console.Error.WriteLine($"  Auth: {profile.AuthMethod}");
+            Console.Error.WriteLine($"  Identity: {profile.IdentityDisplay}");
+            Console.Error.WriteLine($"  Cloud: {profile.Cloud}");
             if (profile.HasEnvironment)
             {
-                Console.WriteLine($"  Environment: {profile.Environment!.DisplayName}");
-                Console.WriteLine($"  Environment URL: {profile.Environment.Url}");
+                Console.Error.WriteLine($"  Environment: {profile.Environment!.DisplayName}");
+                Console.Error.WriteLine($"  Environment URL: {profile.Environment.Url}");
             }
             else
             {
-                Console.WriteLine($"  Environment: (none - use 'ppds env select' to set)");
+                Console.Error.WriteLine($"  Environment: (none - use 'ppds env select' to set)");
             }
 
             if (collection.ActiveProfile?.Index == profile.Index)
             {
-                Console.WriteLine();
-                Console.WriteLine("This profile is now active.");
+                Console.Error.WriteLine();
+                Console.Error.WriteLine("This profile is now active.");
             }
 
             return ExitCodes.Success;
@@ -665,9 +668,9 @@ public static class AuthCommandGroup
     {
         if (collection.Count == 0)
         {
-            Console.WriteLine("No profiles configured.");
-            Console.WriteLine();
-            Console.WriteLine("Use 'ppds auth create' to create a profile.");
+            Console.Error.WriteLine("No profiles configured.");
+            Console.Error.WriteLine();
+            Console.Error.WriteLine("Use 'ppds auth create' to create a profile.");
             return;
         }
 
@@ -830,12 +833,12 @@ public static class AuthCommandGroup
             await store.SaveAsync(collection, cancellationToken);
 
             Console.ForegroundColor = ConsoleColor.Green;
-            Console.WriteLine($"Active profile: {profile.DisplayIdentifier}");
+            Console.Error.WriteLine($"Active profile: {profile.DisplayIdentifier}");
             Console.ResetColor();
-            Console.WriteLine($"  Identity: {profile.IdentityDisplay}");
+            Console.Error.WriteLine($"  Identity: {profile.IdentityDisplay}");
             if (profile.HasEnvironment)
             {
-                Console.WriteLine($"  Environment: {profile.Environment!.DisplayName}");
+                Console.Error.WriteLine($"  Environment: {profile.Environment!.DisplayName}");
             }
 
             return ExitCodes.Success;
@@ -955,16 +958,16 @@ public static class AuthCommandGroup
             await store.SaveAsync(collection, cancellationToken);
 
             Console.ForegroundColor = ConsoleColor.Green;
-            Console.WriteLine($"Profile deleted: {profile.DisplayIdentifier}");
+            Console.Error.WriteLine($"Profile deleted: {profile.DisplayIdentifier}");
             Console.ResetColor();
 
             if (collection.ActiveProfile != null)
             {
-                Console.WriteLine($"Active profile is now: {collection.ActiveProfile.DisplayIdentifier}");
+                Console.Error.WriteLine($"Active profile is now: {collection.ActiveProfile.DisplayIdentifier}");
             }
             else if (collection.Count > 0)
             {
-                Console.WriteLine("No active profile. Use 'ppds auth select' to set one.");
+                Console.Error.WriteLine("No active profile. Use 'ppds auth select' to set one.");
             }
 
             return ExitCodes.Success;
@@ -1046,12 +1049,12 @@ public static class AuthCommandGroup
                 }
                 var oldName = profile.DisplayIdentifier;
                 profile.Name = newName;
-                Console.WriteLine($"Name updated: {oldName} -> {profile.DisplayIdentifier}");
+                Console.Error.WriteLine($"Name updated: {oldName} -> {profile.DisplayIdentifier}");
             }
 
             if (!string.IsNullOrWhiteSpace(newEnvironment))
             {
-                Console.WriteLine($"Resolving environment '{newEnvironment}'...");
+                Console.Error.WriteLine($"Resolving environment '{newEnvironment}'...");
 
                 // Use multi-layer resolution: direct connection first for URLs, Global Discovery for names
                 using var credentialStore = new SecureCredentialStore();
@@ -1069,14 +1072,14 @@ public static class AuthCommandGroup
                 var methodNote = result.Method == ResolutionMethod.DirectConnection
                     ? " (via direct connection)"
                     : " (via Global Discovery)";
-                Console.WriteLine($"Environment set: {result.Environment!.DisplayName}{methodNote}");
+                Console.Error.WriteLine($"Environment set: {result.Environment!.DisplayName}{methodNote}");
             }
 
             await store.SaveAsync(collection, cancellationToken);
 
-            Console.WriteLine();
+            Console.Error.WriteLine();
             Console.ForegroundColor = ConsoleColor.Green;
-            Console.WriteLine($"Profile updated: {profile.DisplayIdentifier}");
+            Console.Error.WriteLine($"Profile updated: {profile.DisplayIdentifier}");
             Console.ResetColor();
 
             return ExitCodes.Success;
@@ -1161,7 +1164,7 @@ public static class AuthCommandGroup
             await store.SaveAsync(collection, cancellationToken);
 
             Console.ForegroundColor = ConsoleColor.Green;
-            Console.WriteLine($"Profile renamed: {oldName} -> {profile.DisplayIdentifier}");
+            Console.Error.WriteLine($"Profile renamed: {oldName} -> {profile.DisplayIdentifier}");
             Console.ResetColor();
 
             return ExitCodes.Success;
@@ -1198,7 +1201,7 @@ public static class AuthCommandGroup
 
             if (collection.Count == 0)
             {
-                Console.WriteLine("No profiles to clear.");
+                Console.Error.WriteLine("No profiles to clear.");
                 return ExitCodes.Success;
             }
 
@@ -1211,7 +1214,7 @@ public static class AuthCommandGroup
             using var credentialStore = new SecureCredentialStore();
             await credentialStore.ClearAsync(cancellationToken);
 
-            Console.WriteLine("Authentication profiles, token cache, and stored credentials removed");
+            Console.Error.WriteLine("Authentication profiles, token cache, and stored credentials removed");
 
             return ExitCodes.Success;
         }
@@ -1264,9 +1267,9 @@ public static class AuthCommandGroup
                 }
                 else
                 {
-                    Console.WriteLine("No active profile.");
-                    Console.WriteLine();
-                    Console.WriteLine("Use 'ppds auth create' to create a profile.");
+                    Console.Error.WriteLine("No active profile.");
+                    Console.Error.WriteLine();
+                    Console.Error.WriteLine("Use 'ppds auth create' to create a profile.");
                 }
                 return ExitCodes.Success;
             }
@@ -1417,12 +1420,12 @@ public static class AuthCommandGroup
                 }
                 else
                 {
-                    Console.WriteLine();
+                    Console.Error.WriteLine();
                     Console.ForegroundColor = ConsoleColor.Yellow;
-                    Console.WriteLine("No environment selected.");
+                    Console.Error.WriteLine("No environment selected.");
                     Console.ResetColor();
-                    Console.WriteLine();
-                    Console.WriteLine("Use 'ppds env select' to set an environment.");
+                    Console.Error.WriteLine();
+                    Console.Error.WriteLine("Use 'ppds env select' to set an environment.");
                 }
             }
 
