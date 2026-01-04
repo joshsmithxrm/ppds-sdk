@@ -34,6 +34,11 @@ Get-Content .env.local | ForEach-Object {
         $name = $matches[1].Trim()
         $value = $matches[2].Trim()
         if ($name -and -not $name.StartsWith('#')) {
+            # Remove surrounding quotes if present
+            if (($value.StartsWith('"') -and $value.EndsWith('"')) -or
+                ($value.StartsWith("'") -and $value.EndsWith("'"))) {
+                $value = $value.Substring(1, $value.Length - 2)
+            }
             [Environment]::SetEnvironmentVariable($name, $value, 'Process')
             Write-Host "  Loaded: $name" -ForegroundColor DarkGray
         }
