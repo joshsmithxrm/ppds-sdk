@@ -100,7 +100,7 @@ See [Issue #104](https://github.com/joshsmithxrm/ppds-sdk/issues/104) for detail
 | `plugins diff` | diff | ✅ Parsing | ❌ Pending | Lower priority |
 | `plugins list` | list | ✅ Parsing | ❌ Pending | Lower priority |
 | `plugins extract` | extract | ✅ Parsing | ❌ Pending | Unit tests sufficient |
-| `plugins clean` | clean | ✅ Parsing | ❌ Pending | Only --what-if |
+| `plugins clean` | clean | ✅ Parsing | ❌ Pending | Only --dry-run |
 
 ## Codecov Configuration
 

@@ -125,5 +125,5 @@ NEVER:
 - Use any profile other than `cli-test`
 - Run data export/import against real environments
 - Delete or modify Dataverse data
-- Run `ppds plugins clean` without `--what-if`
-- Run `ppds plugins deploy` without `--what-if`
+- Run `ppds plugins clean` without `--dry-run`
+- Run `ppds plugins deploy` without `--dry-run`
