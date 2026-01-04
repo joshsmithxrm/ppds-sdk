@@ -117,7 +117,15 @@ public sealed class CsvRecordParser
 
             return result;
         }
-        catch (Exception ex)
+        catch (FormatException ex)
+        {
+            return (false, null, ex.Message);
+        }
+        catch (OverflowException ex)
+        {
+            return (false, null, ex.Message);
+        }
+        catch (ArgumentException ex)
         {
             return (false, null, ex.Message);
         }
