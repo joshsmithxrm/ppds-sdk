@@ -59,7 +59,7 @@ public class PluginsDiffCommandE2ETests : CliE2ETestBase
             "--output-format", "json");
 
         // Diff returns valid JSON to stdout regardless of drift status
-        result.StdOut.Trim().Should().StartWith("[");
+        result.StdOut.Trim().Should().StartWith("{");
         result.StdOut.Should().Contain("assemblyName");
     }
 
