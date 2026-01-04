@@ -44,7 +44,7 @@ public static class DeployCommand
             DefaultValueFactory = _ => false
         };
 
-        var whatIfOption = new Option<bool>("--what-if")
+        var dryRunOption = new Option<bool>("--dry-run")
         {
             Description = "Preview changes without applying",
             DefaultValueFactory = _ => false
@@ -57,7 +57,7 @@ public static class DeployCommand
             PluginsCommandGroup.EnvironmentOption,
             PluginsCommandGroup.SolutionOption,
             cleanOption,
-            whatIfOption
+            dryRunOption
         };
 
         // Add global options including output format
@@ -70,10 +70,10 @@ public static class DeployCommand
             var environment = parseResult.GetValue(PluginsCommandGroup.EnvironmentOption);
             var solution = parseResult.GetValue(PluginsCommandGroup.SolutionOption);
             var clean = parseResult.GetValue(cleanOption);
-            var whatIf = parseResult.GetValue(whatIfOption);
+            var dryRun = parseResult.GetValue(dryRunOption);
             var globalOptions = GlobalOptions.GetValues(parseResult);
 
-            return await ExecuteAsync(config, profile, environment, solution, clean, whatIf, globalOptions, cancellationToken);
+            return await ExecuteAsync(config, profile, environment, solution, clean, dryRun, globalOptions, cancellationToken);
         });
 
         return command;
@@ -85,7 +85,7 @@ public static class DeployCommand
         string? environment,
         string? solutionOverride,
         bool clean,
-        bool whatIf,
+        bool dryRun,
         GlobalOptionValues globalOptions,
         CancellationToken cancellationToken)
     {
@@ -128,9 +128,9 @@ public static class DeployCommand
                 ConsoleHeader.WriteConnectedAs(connectionInfo);
                 Console.Error.WriteLine();
 
-                if (whatIf)
+                if (dryRun)
                 {
-                    Console.Error.WriteLine("[What-If Mode] No changes will be applied.");
+                    Console.Error.WriteLine("[Dry-Run Mode] No changes will be applied.");
                     Console.Error.WriteLine();
                 }
             }
@@ -146,7 +146,7 @@ public static class DeployCommand
                     configDir,
                     solutionOverride,
                     clean,
-                    whatIf,
+                    dryRun,
                     globalOptions,
                     cancellationToken);
 
@@ -183,7 +183,7 @@ public static class DeployCommand
         string configDir,
         string? solutionOverride,
         bool clean,
-        bool whatIf,
+        bool dryRun,
         GlobalOptionValues globalOptions,
         CancellationToken cancellationToken)
     {
@@ -218,12 +218,12 @@ public static class DeployCommand
                 var packageBytes = await File.ReadAllBytesAsync(assemblyPath, cancellationToken);
 
                 Guid packageId;
-                if (whatIf)
+                if (dryRun)
                 {
                     var existingPkg = await service.GetPackageByNameAsync(packageName);
                     packageId = existingPkg?.Id ?? Guid.NewGuid();
                     if (!globalOptions.IsJsonMode)
-                        Console.Error.WriteLine($"  [What-If] Would {(existingPkg == null ? "create" : "update")} package: {packageName}");
+                        Console.Error.WriteLine($"  [Dry-Run] Would {(existingPkg == null ? "create" : "update")} package: {packageName}");
                 }
                 else
                 {
@@ -235,11 +235,11 @@ public static class DeployCommand
                 // Get the assembly ID from the package (Dataverse creates it automatically)
                 // Use assemblyConfig.Name here since that's the assembly name inside the package
                 var pkgAssemblyId = await service.GetAssemblyIdForPackageAsync(packageId, assemblyConfig.Name);
-                if (pkgAssemblyId == null && !whatIf)
+                if (pkgAssemblyId == null && !dryRun)
                 {
                     throw new InvalidOperationException($"Could not find assembly '{assemblyConfig.Name}' in package after deployment");
                 }
-                // In what-if mode for new packages, the assembly won't exist yet - use a placeholder ID
+                // In dry-run mode for new packages, the assembly won't exist yet - use a placeholder ID
                 assemblyId = pkgAssemblyId ?? Guid.NewGuid();
             }
             else
@@ -247,12 +247,12 @@ public static class DeployCommand
                 // For classic assemblies, upload the DLL directly
                 var assemblyBytes = await File.ReadAllBytesAsync(assemblyPath, cancellationToken);
 
-                if (whatIf)
+                if (dryRun)
                 {
                     var existing = await service.GetAssemblyByNameAsync(assemblyConfig.Name);
                     assemblyId = existing?.Id ?? Guid.NewGuid();
                     if (!globalOptions.IsJsonMode)
-                        Console.Error.WriteLine($"  [What-If] Would {(existing == null ? "create" : "update")} assembly");
+                        Console.Error.WriteLine($"  [Dry-Run] Would {(existing == null ? "create" : "update")} assembly");
                 }
                 else
                 {
@@ -286,13 +286,13 @@ public static class DeployCommand
 
                 // Upsert plugin type
                 Guid typeId;
-                if (whatIf)
+                if (dryRun)
                 {
                     typeId = existingTypeMap.TryGetValue(typeConfig.TypeName, out var existing)
                         ? existing.Id
                         : Guid.NewGuid();
                     if (!globalOptions.IsJsonMode)
-                        Console.Error.WriteLine($"  [What-If] Would register type: {typeConfig.TypeName}");
+                        Console.Error.WriteLine($"  [Dry-Run] Would register type: {typeConfig.TypeName}");
                 }
                 else
                 {
@@ -326,11 +326,11 @@ public static class DeployCommand
                     var isNew = !existingStepsMap.ContainsKey(stepName);
 
                     Guid stepId;
-                    if (whatIf)
+                    if (dryRun)
                     {
                         stepId = Guid.NewGuid();
                         if (!globalOptions.IsJsonMode)
-                            Console.Error.WriteLine($"    [What-If] Would {(isNew ? "create" : "update")} step: {stepName}");
+                            Console.Error.WriteLine($"    [Dry-Run] Would {(isNew ? "create" : "update")} step: {stepName}");
 
                         if (isNew) result.StepsCreated++;
                         else result.StepsUpdated++;
@@ -345,18 +345,18 @@ public static class DeployCommand
                         else result.StepsUpdated++;
                     }
 
-                    // Deploy images (skip query in what-if mode or for new steps since stepId doesn't exist)
-                    var existingImages = whatIf || isNew ? [] : await service.ListImagesForStepAsync(stepId);
+                    // Deploy images (skip query in dry-run mode or for new steps since stepId doesn't exist)
+                    var existingImages = dryRun || isNew ? [] : await service.ListImagesForStepAsync(stepId);
                     var existingImageNames = existingImages.Select(i => i.Name).ToHashSet();
 
                     foreach (var imageConfig in stepConfig.Images)
                     {
                         var imageIsNew = !existingImageNames.Contains(imageConfig.Name);
 
-                        if (whatIf)
+                        if (dryRun)
                         {
                             if (!globalOptions.IsJsonMode)
-                                Console.Error.WriteLine($"      [What-If] Would {(imageIsNew ? "create" : "update")} image: {imageConfig.Name}");
+                                Console.Error.WriteLine($"      [Dry-Run] Would {(imageIsNew ? "create" : "update")} image: {imageConfig.Name}");
 
                             if (imageIsNew) result.ImagesCreated++;
                             else result.ImagesUpdated++;
@@ -389,10 +389,10 @@ public static class DeployCommand
                         // Use dictionary lookup instead of re-querying
                         if (existingStepsMap.TryGetValue(orphanName, out var orphanStep))
                         {
-                            if (whatIf)
+                            if (dryRun)
                             {
                                 if (!globalOptions.IsJsonMode)
-                                    Console.Error.WriteLine($"    [What-If] Would delete step: {orphanName}");
+                                    Console.Error.WriteLine($"    [Dry-Run] Would delete step: {orphanName}");
                                 result.StepsDeleted++;
                             }
                             else

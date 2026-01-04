@@ -149,11 +149,12 @@ ppds data import --data data.zip --mode Upsert
 ```
 
 **Commands:**
-- `ppds auth` - Manage authentication profiles (create, list, select, delete, who)
+- `ppds auth` - Authentication profiles (create, list, select, delete, update, who)
 - `ppds env` - Environment discovery and selection (list, select, who)
-- `ppds data` - Data operations (export, import, copy, analyze)
-- `ppds schema` - Schema generation (generate, list)
-- `ppds users` - User mapping for cross-environment migrations
+- `ppds data` - Data operations (export, import, copy, schema, users, load)
+- `ppds plugins` - Plugin registration (extract, deploy, diff, list, clean)
+- `ppds metadata` - Entity browsing (entities, attributes, relationships, keys, optionsets)
+- `ppds query` - Execute queries (fetch, sql)
 
 See [PPDS.Cli documentation](src/PPDS.Cli/README.md) for details.
 
@@ -170,11 +171,29 @@ Key design decisions are documented as ADRs:
 - [ADR-0005: DOP-Based Parallelism](docs/adr/0005_DOP_BASED_PARALLELISM.md)
 - [ADR-0006: Connection Source Abstraction](docs/adr/0006_CONNECTION_SOURCE_ABSTRACTION.md)
 - [ADR-0007: Unified CLI and Shared Authentication](docs/adr/0007_UNIFIED_CLI_AND_AUTH.md)
+- [ADR-0008: CLI Output Architecture](docs/adr/0008_CLI_OUTPUT_ARCHITECTURE.md)
+- [ADR-0009: CSV Mapping Schema](docs/adr/0009_CSV_MAPPING_SCHEMA.md)
+- [ADR-0010: Published vs Unpublished Default](docs/adr/0010_PUBLISHED_UNPUBLISHED_DEFAULT.md)
+- [ADR-0011: Deployment Settings Format](docs/adr/0011_DEPLOYMENT_SETTINGS_FORMAT.md)
+- [ADR-0012: Hybrid Filter Design](docs/adr/0012_HYBRID_FILTER_DESIGN.md)
+- [ADR-0013: CLI Dry-Run Convention](docs/adr/0013_CLI_DRY_RUN_CONVENTION.md)
 
 ## Patterns
 
 - [Connection Pooling](docs/architecture/CONNECTION_POOLING_PATTERNS.md) - When and how to use connection pooling
 - [Bulk Operations](docs/architecture/BULK_OPERATIONS_PATTERNS.md) - High-throughput data operations
+
+---
+
+## Claude Code Integration
+
+PPDS provides templates for Claude Code users developing Power Platform solutions:
+
+- **Consumer Guide** - Best practices for PPDS development
+- **Recommended Settings** - Permission configuration for PPDS commands
+- **Slash Commands** - Quick reference commands
+
+See [templates/claude/INSTALL.md](templates/claude/INSTALL.md) for installation instructions.
 
 ---
 

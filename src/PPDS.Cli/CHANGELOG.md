@@ -44,6 +44,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **BREAKING: Renamed `--what-if` to `--dry-run`** - `ppds plugins deploy` and `ppds plugins clean` now use `--dry-run` for preview mode, aligning with Unix CLI conventions. PowerShell module (PPDS.Tools) will use `-WhatIf`. ([ADR-0013](docs/adr/0013_CLI_DRY_RUN_CONVENTION.md))
 - **Progress output to stderr** - Progress messages now write to stderr, enabling clean piping: `ppds data export -f json | jq` ([#76](https://github.com/joshsmithxrm/ppds-sdk/issues/76))
 - **Status messages to stderr** - Operational messages (connecting, authenticating, etc.) now write to stderr, keeping stdout for data only ([#76](https://github.com/joshsmithxrm/ppds-sdk/issues/76))
 - **Centralized CSV column matching** - Extracted shared column-to-attribute matching logic to `ColumnMatcher` class for code reuse between data loading and mapping generation
