@@ -62,7 +62,7 @@ public class PluginsDeployCommandE2ETests : CliE2ETestBase
             "--output-format", "json");
 
         result.ExitCode.Should().Be(0, $"StdErr: {result.StdErr}");
-        result.StdOut.Trim().Should().StartWith("[");
+        result.StdOut.Trim().Should().StartWith("{");
         result.StdOut.Should().Contain("assemblyName");
     }
 
