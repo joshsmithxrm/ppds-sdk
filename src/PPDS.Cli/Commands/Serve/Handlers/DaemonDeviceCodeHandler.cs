@@ -16,20 +16,28 @@ internal static class DaemonDeviceCodeHandler
     /// <returns>A callback that sends device code info as RPC notification.</returns>
     public static Action<DeviceCodeInfo> CreateCallback(JsonRpc? rpc)
     {
-        return info =>
+        return async info =>
         {
             if (rpc == null)
             {
                 return;
             }
 
-            // Fire-and-forget notification to client (VS Code extension)
-            _ = rpc.NotifyAsync("auth/deviceCode", new DeviceCodeNotification
+            try
             {
-                UserCode = info.UserCode,
-                VerificationUrl = info.VerificationUrl,
-                Message = info.Message
-            });
+                // Fire-and-forget notification to client (VS Code extension)
+                await rpc.NotifyAsync("auth/deviceCode", new DeviceCodeNotification
+                {
+                    UserCode = info.UserCode,
+                    VerificationUrl = info.VerificationUrl,
+                    Message = info.Message
+                });
+            }
+            catch
+            {
+                // Ignore exceptions from fire-and-forget notifications.
+                // This can happen if the client disconnects during auth.
+            }
         };
     }
 }

@@ -38,12 +38,17 @@ public class RpcMethodHandler
 
     /// <summary>
     /// Sets the JSON-RPC context for sending notifications (e.g., device code flow).
-    /// Must be called after JsonRpc.Attach.
+    /// Must be called exactly once after JsonRpc.Attach.
     /// </summary>
     /// <param name="rpc">The JSON-RPC connection.</param>
+    /// <exception cref="InvalidOperationException">Thrown if called more than once.</exception>
     public void SetRpcContext(JsonRpc rpc)
     {
-        _rpc = rpc;
+        ArgumentNullException.ThrowIfNull(rpc);
+        if (Interlocked.CompareExchange(ref _rpc, rpc, null) != null)
+        {
+            throw new InvalidOperationException("RPC context has already been set.");
+        }
     }
 
     #region Auth Methods

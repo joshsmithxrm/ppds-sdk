@@ -56,7 +56,7 @@ public class DaemonDeviceCodeHandlerTests
             Message = "Enter the code"
         };
 
-        var json = JsonSerializer.Serialize(notification);
+        var json = JsonSerializer.Serialize(notification, JsonOptions);
 
         Assert.Contains("\"userCode\"", json);
         Assert.Contains("\"verificationUrl\"", json);

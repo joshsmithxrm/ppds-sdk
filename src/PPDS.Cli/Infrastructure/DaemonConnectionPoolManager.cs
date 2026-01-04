@@ -57,6 +57,12 @@ public sealed class DaemonConnectionPoolManager : IDaemonConnectionPoolManager
     }
 
     /// <inheritdoc/>
+    /// <remarks>
+    /// The <paramref name="deviceCodeCallback"/> is captured by the first caller for a given cache key.
+    /// Subsequent callers awaiting the same pool creation will use the first caller's callback.
+    /// This is acceptable because all callers for the same profile+environment combination should
+    /// receive identical device code notifications.
+    /// </remarks>
     public async Task<IDataverseConnectionPool> GetOrCreatePoolAsync(
         IReadOnlyList<string> profileNames,
         string environmentUrl,
@@ -100,16 +106,28 @@ public sealed class DaemonConnectionPoolManager : IDaemonConnectionPoolManager
             _pools.TryRemove(cacheKey, out _);
             throw new TimeoutException($"Pool creation timed out after {_poolCreationTimeout.TotalSeconds} seconds for key: {cacheKey}");
         }
+        catch (Exception) when (!cancellationToken.IsCancellationRequested)
+        {
+            // Pool creation failed - remove the failed entry so next caller can retry
+            _pools.TryRemove(cacheKey, out _);
+            throw;
+        }
     }
 
     /// <inheritdoc/>
     public void InvalidateProfile(string profileName)
     {
+        ObjectDisposedException.ThrowIf(_disposed != 0, this);
+
         if (string.IsNullOrWhiteSpace(profileName))
         {
             return;
         }
 
+        // Snapshot keys to avoid enumeration during concurrent modification.
+        // Race window is small: entries added after snapshot but before removal
+        // will use old pool briefly until next invalidation. This is acceptable
+        // since profile invalidation typically follows profile modification.
         var keysToRemove = _pools.Keys
             .Where(key => KeyContainsProfile(key, profileName))
             .ToList();
@@ -127,6 +145,8 @@ public sealed class DaemonConnectionPoolManager : IDaemonConnectionPoolManager
     /// <inheritdoc/>
     public void InvalidateEnvironment(string environmentUrl)
     {
+        ObjectDisposedException.ThrowIf(_disposed != 0, this);
+
         if (string.IsNullOrWhiteSpace(environmentUrl))
         {
             return;
@@ -183,7 +203,10 @@ public sealed class DaemonConnectionPoolManager : IDaemonConnectionPoolManager
     /// Generates a cache key from profile names and environment URL.
     /// Profile names are sorted for consistent keying regardless of order.
     /// </summary>
-    private static string GenerateCacheKey(IReadOnlyList<string> profileNames, string environmentUrl)
+    /// <param name="profileNames">The profile names to include in the key.</param>
+    /// <param name="environmentUrl">The environment URL to include in the key.</param>
+    /// <returns>A normalized cache key.</returns>
+    internal static string GenerateCacheKey(IReadOnlyList<string> profileNames, string environmentUrl)
     {
         var sortedProfiles = string.Join(",", profileNames.OrderBy(p => p, StringComparer.OrdinalIgnoreCase));
         var normalizedUrl = NormalizeUrl(environmentUrl);

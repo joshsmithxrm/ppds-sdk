@@ -374,87 +374,70 @@ public class DaemonConnectionPoolManagerTests
     #region Cache Key Tests
 
     [Fact]
-    public async Task GetOrCreatePoolAsync_SameProfilesReordered_CallsLoaderOnce()
+    public void GenerateCacheKey_SameProfilesReordered_ProducesSameKey()
     {
-        // Arrange
-        var callCount = 0;
-        Func<CancellationToken, Task<ProfileCollection>> countingLoader = ct =>
-        {
-            callCount++;
-            return Task.FromResult(new ProfileCollection());
-        };
+        // Act
+        var key1 = DaemonConnectionPoolManager.GenerateCacheKey(new[] { "a", "b" }, "https://test.crm.dynamics.com");
+        var key2 = DaemonConnectionPoolManager.GenerateCacheKey(new[] { "b", "a" }, "https://test.crm.dynamics.com");
 
-        var manager = new DaemonConnectionPoolManager(loadProfilesAsync: countingLoader);
-
-        // Act - Call with profiles in different orders
-        try { await manager.GetOrCreatePoolAsync(new[] { "a", "b" }, "https://test.crm.dynamics.com"); } catch { }
-        try { await manager.GetOrCreatePoolAsync(new[] { "b", "a" }, "https://test.crm.dynamics.com"); } catch { }
-
-        // Assert - Should only call loader once (same key due to sorting)
-        callCount.Should().Be(1, "sorted profile names should produce the same cache key");
+        // Assert
+        key1.Should().Be(key2, "sorted profile names should produce the same cache key");
     }
 
     [Fact]
-    public async Task GetOrCreatePoolAsync_DifferentProfiles_CallsLoaderTwice()
+    public void GenerateCacheKey_DifferentProfiles_ProducesDifferentKeys()
     {
-        // Arrange
-        var callCount = 0;
-        Func<CancellationToken, Task<ProfileCollection>> countingLoader = ct =>
-        {
-            callCount++;
-            return Task.FromResult(new ProfileCollection());
-        };
+        // Act
+        var key1 = DaemonConnectionPoolManager.GenerateCacheKey(new[] { "a" }, "https://test.crm.dynamics.com");
+        var key2 = DaemonConnectionPoolManager.GenerateCacheKey(new[] { "b" }, "https://test.crm.dynamics.com");
 
-        var manager = new DaemonConnectionPoolManager(loadProfilesAsync: countingLoader);
-
-        // Act - Call with different profiles
-        try { await manager.GetOrCreatePoolAsync(new[] { "a" }, "https://test.crm.dynamics.com"); } catch { }
-        try { await manager.GetOrCreatePoolAsync(new[] { "b" }, "https://test.crm.dynamics.com"); } catch { }
-
-        // Assert - Should call loader twice (different keys)
-        callCount.Should().Be(2, "different profiles should produce different cache keys");
+        // Assert
+        key1.Should().NotBe(key2, "different profiles should produce different cache keys");
     }
 
     [Fact]
-    public async Task GetOrCreatePoolAsync_DifferentEnvironments_CallsLoaderTwice()
+    public void GenerateCacheKey_DifferentEnvironments_ProducesDifferentKeys()
     {
-        // Arrange
-        var callCount = 0;
-        Func<CancellationToken, Task<ProfileCollection>> countingLoader = ct =>
-        {
-            callCount++;
-            return Task.FromResult(new ProfileCollection());
-        };
+        // Act
+        var key1 = DaemonConnectionPoolManager.GenerateCacheKey(new[] { "a" }, "https://org1.crm.dynamics.com");
+        var key2 = DaemonConnectionPoolManager.GenerateCacheKey(new[] { "a" }, "https://org2.crm.dynamics.com");
 
-        var manager = new DaemonConnectionPoolManager(loadProfilesAsync: countingLoader);
-
-        // Act - Call with different environments
-        try { await manager.GetOrCreatePoolAsync(new[] { "a" }, "https://org1.crm.dynamics.com"); } catch { }
-        try { await manager.GetOrCreatePoolAsync(new[] { "a" }, "https://org2.crm.dynamics.com"); } catch { }
-
-        // Assert - Should call loader twice (different keys)
-        callCount.Should().Be(2, "different environments should produce different cache keys");
+        // Assert
+        key1.Should().NotBe(key2, "different environments should produce different cache keys");
     }
 
     [Fact]
-    public async Task GetOrCreatePoolAsync_SameEnvironmentWithTrailingSlash_CallsLoaderOnce()
+    public void GenerateCacheKey_SameEnvironmentWithTrailingSlash_ProducesSameKey()
     {
-        // Arrange
-        var callCount = 0;
-        Func<CancellationToken, Task<ProfileCollection>> countingLoader = ct =>
-        {
-            callCount++;
-            return Task.FromResult(new ProfileCollection());
-        };
+        // Act
+        var key1 = DaemonConnectionPoolManager.GenerateCacheKey(new[] { "a" }, "https://test.crm.dynamics.com");
+        var key2 = DaemonConnectionPoolManager.GenerateCacheKey(new[] { "a" }, "https://test.crm.dynamics.com/");
 
-        var manager = new DaemonConnectionPoolManager(loadProfilesAsync: countingLoader);
+        // Assert
+        key1.Should().Be(key2, "URLs differing only by trailing slash should produce the same cache key");
+    }
 
-        // Act - Call with same environment, different trailing slash
-        try { await manager.GetOrCreatePoolAsync(new[] { "a" }, "https://test.crm.dynamics.com"); } catch { }
-        try { await manager.GetOrCreatePoolAsync(new[] { "a" }, "https://test.crm.dynamics.com/"); } catch { }
+    [Fact]
+    public void GenerateCacheKey_ProfilesSortedCaseInsensitively()
+    {
+        // Act - "b" should sort after "A" when using case-insensitive comparison
+        var key1 = DaemonConnectionPoolManager.GenerateCacheKey(new[] { "b", "A" }, "https://test.crm.dynamics.com");
+        var key2 = DaemonConnectionPoolManager.GenerateCacheKey(new[] { "A", "b" }, "https://test.crm.dynamics.com");
 
-        // Assert - Should only call loader once (normalized URLs)
-        callCount.Should().Be(1, "URLs differing only by trailing slash should produce the same cache key");
+        // Assert - Both should produce same key due to case-insensitive sorting
+        key1.Should().Be(key2, "profiles should be sorted case-insensitively");
+        // Note: Profile names preserve their original case in the key (only sorting is case-insensitive)
+    }
+
+    [Fact]
+    public void GenerateCacheKey_CaseInsensitiveUrl_ProducesSameKey()
+    {
+        // Act
+        var key1 = DaemonConnectionPoolManager.GenerateCacheKey(new[] { "a" }, "https://TEST.crm.dynamics.com");
+        var key2 = DaemonConnectionPoolManager.GenerateCacheKey(new[] { "a" }, "https://test.crm.dynamics.com");
+
+        // Assert
+        key1.Should().Be(key2, "URLs should be case-insensitive for cache key generation");
     }
 
     #endregion
