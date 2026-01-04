@@ -30,19 +30,26 @@
 
 ## Phase 2: Connection Management (Design Session 2)
 
-**Status:** Not Started
+**Status:** Design Complete
 
 | Feature | Command | Issue | Status |
 |---------|---------|-------|--------|
+| Early-bound Entities | - | [#149](https://github.com/joshsmithxrm/ppds-sdk/issues/149) | Planned |
+| Power Apps API Auth | - | [#150](https://github.com/joshsmithxrm/ppds-sdk/issues/150) | Planned |
 | Flows | `ppds flows` | [#142](https://github.com/joshsmithxrm/ppds-sdk/issues/142) | Planned |
 | Connection References | `ppds connrefs` | [#143](https://github.com/joshsmithxrm/ppds-sdk/issues/143) | Planned |
+| Environment Variables | `ppds envvars` | [#151](https://github.com/joshsmithxrm/ppds-sdk/issues/151) | Planned |
 | Connections | `ppds connections` | [#144](https://github.com/joshsmithxrm/ppds-sdk/issues/144) | Planned |
 | Deployment Settings | `ppds deployment-settings` | [#145](https://github.com/joshsmithxrm/ppds-sdk/issues/145) | Planned |
 
 **Scope:**
-- Flow/ConnRef/Connection entity relationships
-- Orphaned connection reference detection
-- Deployment settings generation (Microsoft format)
+- SDK `QueryExpression` pattern for Dataverse entities (flows, connrefs, envvars)
+- Power Apps Admin API for connections (different from Dataverse)
+- Orphaned connection reference detection (port from extension)
+- Deployment settings sync with value preservation and deterministic sorting
+- PAC-compatible format (see [ADR-0011](adr/0011_DEPLOYMENT_SETTINGS_FORMAT.md))
+
+**Design Session:** 2026-01-04 - Completed
 
 **Session Prompt:** [SESSION_2_CONNREFS_PROMPT.md](design-sessions/SESSION_2_CONNREFS_PROMPT.md)
 
@@ -50,17 +57,27 @@
 
 ## Phase 3: Plugin Traces (Design Session 3)
 
-**Status:** Not Started
+**Status:** Design Complete
 
 | Feature | Command | Issue | Status |
 |---------|---------|-------|--------|
 | Plugin Traces | `ppds plugintraces` | [#140](https://github.com/joshsmithxrm/ppds-sdk/issues/140) | Planned |
+| List with filters | `ppds plugintraces list` | [#152](https://github.com/joshsmithxrm/ppds-sdk/issues/152) | Planned |
+| Get single trace | `ppds plugintraces get` | [#153](https://github.com/joshsmithxrm/ppds-sdk/issues/153) | Planned |
+| Timeline correlation | `ppds plugintraces related` | [#154](https://github.com/joshsmithxrm/ppds-sdk/issues/154) | Planned |
+| Filter file support | `--filter-file` | [#155](https://github.com/joshsmithxrm/ppds-sdk/issues/155) | Planned |
+| Delete traces | `ppds plugintraces delete` | [#156](https://github.com/joshsmithxrm/ppds-sdk/issues/156) | Planned |
+| Trace settings | `ppds plugintraces settings` | [#157](https://github.com/joshsmithxrm/ppds-sdk/issues/157) | Planned |
+| CSV export | `--format csv` | [#158](https://github.com/joshsmithxrm/ppds-sdk/issues/158) | Planned |
 
 **Scope:**
 - Full filtering (25 fields, 11 operators, 8 quick filters)
+- Hybrid filter approach: inline flags + filter file (see [ADR-0012](adr/0012_HYBRID_FILTER_DESIGN.md))
 - Timeline correlation view
-- Trace level management
+- Trace level management (off/exception/all)
 - Export/delete operations
+
+**Design Session:** 2026-01-04 - Completed
 
 **Session Prompt:** [SESSION_3_PLUGINTRACES_PROMPT.md](design-sessions/SESSION_3_PLUGINTRACES_PROMPT.md)
 
@@ -114,6 +131,8 @@ Full plugin lifecycle:
 |-----|----------|
 | [ADR-0009](adr/0009_CLI_COMMAND_TAXONOMY.md) | Use `ppds plugintraces` (not `traces` or `plugins traces`) |
 | [ADR-0010](adr/0010_PUBLISHED_UNPUBLISHED_DEFAULT.md) | Default to published, `--unpublished` flag |
+| [ADR-0011](adr/0011_DEPLOYMENT_SETTINGS_FORMAT.md) | Use PAC-compatible deployment settings format |
+| [ADR-0012](adr/0012_HYBRID_FILTER_DESIGN.md) | Hybrid filter design: inline flags + filter file for complex queries |
 
 ---
 
