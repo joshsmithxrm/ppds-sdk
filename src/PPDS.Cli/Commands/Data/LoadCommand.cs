@@ -265,6 +265,12 @@ public static class LoadCommand
                 Console.Error.WriteLine($"Loading mapping from {mappingFile.Name}...");
                 var mappingJson = await File.ReadAllTextAsync(mappingFile.FullName, cancellationToken);
                 mapping = JsonSerializer.Deserialize<CsvMappingConfig>(mappingJson, JsonOptions);
+
+                // Validate schema version
+                if (mapping != null)
+                {
+                    ValidateMappingSchemaVersion(mapping.Version, outputFormat);
+                }
             }
 
             // Create load options
@@ -339,6 +345,19 @@ public static class LoadCommand
             else
             {
                 WriteTextValidationError(ex);
+            }
+            return ExitCodes.ValidationError;
+        }
+        catch (SchemaVersionException ex)
+        {
+            Console.Error.WriteLine();
+            if (outputFormat == OutputFormat.Json)
+            {
+                WriteJsonSchemaVersionError(ex);
+            }
+            else
+            {
+                Console.Error.WriteLine($"Error: {ex.Message}");
             }
             return ExitCodes.ValidationError;
         }
@@ -716,6 +735,61 @@ public static class LoadCommand
                 missingMappings = ex.MissingMappings,
                 staleMappings = ex.StaleMappings,
                 suggestion = "Update the mapping file to configure all columns (set 'field' or 'skip: true')"
+            }
+        };
+
+        Console.WriteLine(JsonSerializer.Serialize(output, JsonOptions));
+    }
+
+    private const string CurrentSchemaVersion = "1.0";
+
+    private static void ValidateMappingSchemaVersion(string? fileVersion, OutputFormat outputFormat)
+    {
+        if (string.IsNullOrEmpty(fileVersion))
+        {
+            return; // No version specified, assume compatible
+        }
+
+        var fileParts = ParseVersion(fileVersion);
+        var cliParts = ParseVersion(CurrentSchemaVersion);
+
+        // Major version mismatch → fail
+        if (fileParts.Major != cliParts.Major)
+        {
+            throw new SchemaVersionException(fileVersion, CurrentSchemaVersion);
+        }
+
+        // Higher minor version → warn
+        if (fileParts.Minor > cliParts.Minor)
+        {
+            if (outputFormat != OutputFormat.Json)
+            {
+                Console.Error.WriteLine($"Warning: Mapping file version {fileVersion} is newer than CLI version {CurrentSchemaVersion}. " +
+                    "Some features may be ignored.");
+            }
+        }
+    }
+
+    private static (int Major, int Minor) ParseVersion(string version)
+    {
+        var parts = version.Split('.');
+        var major = parts.Length > 0 && int.TryParse(parts[0], out var m) ? m : 0;
+        var minor = parts.Length > 1 && int.TryParse(parts[1], out var n) ? n : 0;
+        return (major, minor);
+    }
+
+    private static void WriteJsonSchemaVersionError(SchemaVersionException ex)
+    {
+        var output = new
+        {
+            success = false,
+            error = new
+            {
+                code = "SCHEMA_VERSION_INCOMPATIBLE",
+                message = ex.Message,
+                fileVersion = ex.FileVersion,
+                cliVersion = ex.CliVersion,
+                suggestion = $"Upgrade to CLI v{ParseVersion(ex.FileVersion).Major}.x or regenerate the mapping file"
             }
         };
 
