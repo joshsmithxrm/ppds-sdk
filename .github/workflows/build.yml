@@ -3,8 +3,22 @@ name: Build
 on:
   push:
     branches: [main]
+    paths:
+      - 'src/**'
+      - 'tests/**'
+      - '**/*.csproj'
+      - '*.sln'
+      - 'Directory.Build.props'
+      - '.github/workflows/**'
   pull_request:
     branches: [main]
+    paths:
+      - 'src/**'
+      - 'tests/**'
+      - '**/*.csproj'
+      - '*.sln'
+      - 'Directory.Build.props'
+      - '.github/workflows/**'
 
 jobs:
   # Dependency review for PRs - checks for vulnerabilities in dependency changes
