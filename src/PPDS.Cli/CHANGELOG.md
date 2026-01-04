@@ -15,7 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Full SQL parser with support for SELECT, WHERE (all operators), JOINs, ORDER BY, GROUP BY, aggregates (COUNT, SUM, AVG, MIN, MAX)
   - Paging support with cookies for large result sets
   - `--show-fetchxml` option to preview transpiled SQL
-  - JSON and table output formats
+  - Output formats: Text (table), JSON, and CSV (`-f csv > file.csv`)
   - RPC methods `query/fetch` and `query/sql` for daemon mode
 - **`ppds metadata` command group** - Browse Dataverse entity metadata without exporting data ([#51](https://github.com/joshsmithxrm/ppds-sdk/issues/51)):
   - `ppds metadata entities` - List all entities (supports `--custom-only`, `--filter` for wildcard matching)

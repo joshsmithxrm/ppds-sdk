@@ -123,7 +123,7 @@ public static class SqlCommand
             var query = await GetSqlAsync(sql, file, stdin, cancellationToken);
 
             // Parse and transpile SQL to FetchXML
-            if (!globalOptions.IsJsonMode && !showFetchXml)
+            if (globalOptions.OutputFormat == OutputFormat.Text && !showFetchXml)
             {
                 Console.Error.WriteLine("Parsing SQL...");
             }
@@ -143,7 +143,7 @@ public static class SqlCommand
             // If --show-fetchxml, output and exit
             if (showFetchXml)
             {
-                if (globalOptions.IsJsonMode)
+                if (globalOptions.OutputFormat == OutputFormat.Json)
                 {
                     writer.WriteSuccess(new { sql = query, fetchXml });
                 }
@@ -165,7 +165,7 @@ public static class SqlCommand
 
             var queryExecutor = serviceProvider.GetRequiredService<IQueryExecutor>();
 
-            if (!globalOptions.IsJsonMode)
+            if (globalOptions.OutputFormat == OutputFormat.Text)
             {
                 var connectionInfo = serviceProvider.GetRequiredService<ResolvedConnectionInfo>();
                 ConsoleHeader.WriteConnectedAs(connectionInfo);
@@ -180,13 +180,17 @@ public static class SqlCommand
                 count,
                 cancellationToken);
 
-            if (globalOptions.IsJsonMode)
+            switch (globalOptions.OutputFormat)
             {
-                writer.WriteSuccess(result);
-            }
-            else
-            {
-                WriteTableOutput(result, fetchXml, globalOptions.Verbose);
+                case OutputFormat.Json:
+                    writer.WriteSuccess(result);
+                    break;
+                case OutputFormat.Csv:
+                    WriteCsvOutput(result);
+                    break;
+                default:
+                    WriteTableOutput(result, fetchXml, globalOptions.Verbose);
+                    break;
             }
 
             return ExitCodes.Success;
@@ -328,5 +332,41 @@ public static class SqlCommand
         }
 
         return value.Substring(0, maxLength - 3) + "...";
+    }
+
+    private static void WriteCsvOutput(QueryResult result)
+    {
+        if (result.Count == 0)
+        {
+            return;
+        }
+
+        // Header row
+        var headers = result.Columns.Select(c => EscapeCsvField(c.Alias ?? c.LogicalName));
+        Console.WriteLine(string.Join(",", headers));
+
+        // Data rows
+        foreach (var record in result.Records)
+        {
+            var values = result.Columns.Select(c =>
+            {
+                var key = c.Alias ?? c.LogicalName;
+                if (record.TryGetValue(key, out var qv) && qv != null)
+                {
+                    return EscapeCsvField(qv.FormattedValue ?? qv.Value?.ToString() ?? "");
+                }
+                return "";
+            });
+            Console.WriteLine(string.Join(",", values));
+        }
+    }
+
+    private static string EscapeCsvField(string value)
+    {
+        if (value.Contains(',') || value.Contains('"') || value.Contains('\n') || value.Contains('\r'))
+        {
+            return $"\"{value.Replace("\"", "\"\"")}\"";
+        }
+        return value;
     }
 }

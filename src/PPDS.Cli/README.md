@@ -262,6 +262,9 @@ ppds query fetch --file queries/active-accounts.xml
 
 # From stdin
 cat query.xml | ppds query fetch --stdin
+
+# Export to CSV file
+ppds query fetch --file query.xml -f csv > results.csv
 ```
 
 Options:
@@ -273,7 +276,7 @@ Options:
 - `--page` - Page number (1-based)
 - `--paging-cookie` - Paging cookie for continuation
 - `--count`, `-c` - Include total record count
-- `--output-format` - Output format (Text or Json)
+- `--output-format` - Output format (Text, Json, or Csv)
 
 #### SQL
 
@@ -294,6 +297,12 @@ ppds query sql "SELECT statecode, COUNT(*) AS cnt FROM account GROUP BY statecod
 
 # JOIN queries
 ppds query sql "SELECT a.name, c.fullname FROM account a INNER JOIN contact c ON a.primarycontactid = c.contactid"
+
+# Export to CSV file
+ppds query sql "SELECT name, revenue FROM account" -f csv > accounts.csv
+
+# Export to JSON file
+ppds query sql "SELECT * FROM contact" -f json > contacts.json
 ```
 
 Options:
@@ -306,7 +315,7 @@ Options:
 - `--page` - Page number (1-based)
 - `--paging-cookie` - Paging cookie for continuation
 - `--count`, `-c` - Include total record count
-- `--output-format` - Output format (Text or Json)
+- `--output-format` - Output format (Text, Json, or Csv)
 
 #### Supported SQL Syntax
 
