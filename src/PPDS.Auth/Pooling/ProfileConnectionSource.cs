@@ -12,6 +12,17 @@ namespace PPDS.Auth.Pooling;
 /// </summary>
 public sealed class ProfileConnectionSource : IDisposable
 {
+    /// <summary>
+    /// Timeout for credential provider creation.
+    /// Includes secure store lookup which may involve DPAPI/Keychain.
+    /// </summary>
+    private static readonly TimeSpan CredentialProviderTimeout = TimeSpan.FromSeconds(20);
+
+    /// <summary>
+    /// Timeout for ServiceClient creation/connection to Dataverse.
+    /// </summary>
+    private static readonly TimeSpan ConnectionTimeout = TimeSpan.FromSeconds(60);
+
     private readonly AuthProfile _profile;
     private readonly string _environmentUrl;
     private readonly string? _environmentDisplayName;
@@ -138,20 +149,42 @@ public sealed class ProfileConnectionSource : IDisposable
             // Create credential provider using async factory (supports secure store lookups).
             // Wrap in Task.Run to avoid deadlock in sync contexts (UI/ASP.NET)
             // by running async code on threadpool which has no sync context.
-            _provider = System.Threading.Tasks.Task.Run(() =>
-                CredentialProviderFactory.CreateAsync(_profile, _credentialStore, _deviceCodeCallback, CancellationToken.None))
-                .GetAwaiter()
-                .GetResult();
+            // Add timeout to fail fast if credential store is unresponsive.
+            try
+            {
+                using var credCts = new CancellationTokenSource(CredentialProviderTimeout);
+                _provider = System.Threading.Tasks.Task.Run(() =>
+                    CredentialProviderFactory.CreateAsync(_profile, _credentialStore, _deviceCodeCallback, credCts.Token))
+                    .WaitAsync(credCts.Token)
+                    .GetAwaiter()
+                    .GetResult();
+            }
+            catch (OperationCanceledException)
+            {
+                throw new TimeoutException(
+                    $"Credential provider creation timed out after {CredentialProviderTimeout.TotalSeconds}s for profile '{_profile.DisplayIdentifier}'. " +
+                    "This may indicate credential store issues. Set PPDS_SPN_SECRET environment variable to bypass.");
+            }
 
             try
             {
-                // Create ServiceClient synchronously (pool expects sync method).
+                // Create ServiceClient with timeout to fail fast if Dataverse is unreachable.
+                using var connCts = new CancellationTokenSource(ConnectionTimeout);
                 _seedClient = System.Threading.Tasks.Task.Run(() =>
-                    _provider.CreateServiceClientAsync(_environmentUrl, CancellationToken.None))
+                    _provider.CreateServiceClientAsync(_environmentUrl, connCts.Token))
+                    .WaitAsync(connCts.Token)
                     .GetAwaiter()
                     .GetResult();
 
                 return _seedClient;
+            }
+            catch (OperationCanceledException)
+            {
+                _provider?.Dispose();
+                _provider = null;
+                throw new TimeoutException(
+                    $"Connection to Dataverse timed out after {ConnectionTimeout.TotalSeconds}s for '{_environmentUrl}'. " +
+                    "Check network connectivity and environment URL.");
             }
             catch (Exception ex)
             {
@@ -189,18 +222,42 @@ public sealed class ProfileConnectionSource : IDisposable
             if (_seedClient != null)
                 return _seedClient;
 
-            // Create credential provider using async factory (supports secure store lookups)
-            _provider = await CredentialProviderFactory.CreateAsync(
-                _profile, _credentialStore, _deviceCodeCallback, cancellationToken)
-                .ConfigureAwait(false);
+            // Create credential provider with timeout to fail fast if credential store is unresponsive
+            try
+            {
+                using var credCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+                credCts.CancelAfter(CredentialProviderTimeout);
+
+                _provider = await CredentialProviderFactory.CreateAsync(
+                    _profile, _credentialStore, _deviceCodeCallback, credCts.Token)
+                    .ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+            {
+                throw new TimeoutException(
+                    $"Credential provider creation timed out after {CredentialProviderTimeout.TotalSeconds}s for profile '{_profile.DisplayIdentifier}'. " +
+                    "This may indicate credential store issues. Set PPDS_SPN_SECRET environment variable to bypass.");
+            }
 
             try
             {
+                // Create ServiceClient with timeout to fail fast if Dataverse is unreachable
+                using var connCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+                connCts.CancelAfter(ConnectionTimeout);
+
                 _seedClient = await _provider
-                    .CreateServiceClientAsync(_environmentUrl, cancellationToken)
+                    .CreateServiceClientAsync(_environmentUrl, connCts.Token)
                     .ConfigureAwait(false);
 
                 return _seedClient;
+            }
+            catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+            {
+                _provider?.Dispose();
+                _provider = null;
+                throw new TimeoutException(
+                    $"Connection to Dataverse timed out after {ConnectionTimeout.TotalSeconds}s for '{_environmentUrl}'. " +
+                    "Check network connectivity and environment URL.");
             }
             catch (Exception ex)
             {
