@@ -45,7 +45,10 @@ public sealed class SqlLiteral
 /// </summary>
 public enum SqlLiteralType
 {
+    /// <summary>String literal value.</summary>
     String,
+    /// <summary>Numeric literal value.</summary>
     Number,
+    /// <summary>NULL literal value.</summary>
     Null
 }

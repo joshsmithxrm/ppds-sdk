@@ -8,62 +8,125 @@ namespace PPDS.Dataverse.Sql.Parsing;
 /// </summary>
 public enum SqlTokenType
 {
-    // Keywords
+    #region Keywords
+
+    /// <summary>SELECT keyword.</summary>
     Select,
+    /// <summary>FROM keyword.</summary>
     From,
+    /// <summary>WHERE keyword.</summary>
     Where,
+    /// <summary>AND keyword.</summary>
     And,
+    /// <summary>OR keyword.</summary>
     Or,
+    /// <summary>ORDER keyword.</summary>
     Order,
+    /// <summary>BY keyword.</summary>
     By,
+    /// <summary>ASC keyword.</summary>
     Asc,
+    /// <summary>DESC keyword.</summary>
     Desc,
+    /// <summary>TOP keyword.</summary>
     Top,
+    /// <summary>LIMIT keyword.</summary>
     Limit,
+    /// <summary>IS keyword.</summary>
     Is,
+    /// <summary>NULL keyword.</summary>
     Null,
+    /// <summary>NOT keyword.</summary>
     Not,
+    /// <summary>IN keyword.</summary>
     In,
+    /// <summary>LIKE keyword.</summary>
     Like,
+    /// <summary>JOIN keyword.</summary>
     Join,
+    /// <summary>INNER keyword.</summary>
     Inner,
+    /// <summary>LEFT keyword.</summary>
     Left,
+    /// <summary>RIGHT keyword.</summary>
     Right,
+    /// <summary>OUTER keyword.</summary>
     Outer,
+    /// <summary>ON keyword.</summary>
     On,
+    /// <summary>AS keyword.</summary>
     As,
+    /// <summary>DISTINCT keyword.</summary>
     Distinct,
+    /// <summary>GROUP keyword.</summary>
     Group,
 
-    // Aggregate functions
+    #endregion
+
+    #region Aggregate Functions
+
+    /// <summary>COUNT aggregate function.</summary>
     Count,
+    /// <summary>SUM aggregate function.</summary>
     Sum,
+    /// <summary>AVG aggregate function.</summary>
     Avg,
+    /// <summary>MIN aggregate function.</summary>
     Min,
+    /// <summary>MAX aggregate function.</summary>
     Max,
 
-    // Operators
-    Equals,              // =
-    NotEquals,           // <> or !=
-    LessThan,            // <
-    GreaterThan,         // >
-    LessThanOrEqual,     // <=
-    GreaterThanOrEqual,  // >=
+    #endregion
 
-    // Punctuation
+    #region Operators
+
+    /// <summary>Equals operator (=).</summary>
+    Equals,
+    /// <summary>Not equals operator (&lt;&gt; or !=).</summary>
+    NotEquals,
+    /// <summary>Less than operator (&lt;).</summary>
+    LessThan,
+    /// <summary>Greater than operator (&gt;).</summary>
+    GreaterThan,
+    /// <summary>Less than or equal operator (&lt;=).</summary>
+    LessThanOrEqual,
+    /// <summary>Greater than or equal operator (&gt;=).</summary>
+    GreaterThanOrEqual,
+
+    #endregion
+
+    #region Punctuation
+
+    /// <summary>Comma separator (,).</summary>
     Comma,
+    /// <summary>Dot separator (.).</summary>
     Dot,
+    /// <summary>Star/asterisk (*).</summary>
     Star,
+    /// <summary>Left parenthesis (().</summary>
     LeftParen,
+    /// <summary>Right parenthesis ()).</summary>
     RightParen,
 
-    // Literals
+    #endregion
+
+    #region Literals
+
+    /// <summary>Identifier (column name, table name, alias).</summary>
     Identifier,
+    /// <summary>String literal.</summary>
     String,
+    /// <summary>Numeric literal.</summary>
     Number,
 
-    // Special
+    #endregion
+
+    #region Special
+
+    /// <summary>End of file/input.</summary>
     Eof
+
+    #endregion
 }
 
 /// <summary>

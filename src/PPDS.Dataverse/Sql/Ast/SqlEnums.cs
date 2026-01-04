@@ -7,12 +7,18 @@ namespace PPDS.Dataverse.Sql.Ast;
 /// </summary>
 public enum SqlComparisonOperator
 {
-    Equal,          // =
-    NotEqual,       // <> or !=
-    LessThan,       // <
-    GreaterThan,    // >
-    LessThanOrEqual,    // <=
-    GreaterThanOrEqual  // >=
+    /// <summary>Equals operator (=).</summary>
+    Equal,
+    /// <summary>Not equal operator (&lt;&gt; or !=).</summary>
+    NotEqual,
+    /// <summary>Less than operator (&lt;).</summary>
+    LessThan,
+    /// <summary>Greater than operator (&gt;).</summary>
+    GreaterThan,
+    /// <summary>Less than or equal operator (&lt;=).</summary>
+    LessThanOrEqual,
+    /// <summary>Greater than or equal operator (&gt;=).</summary>
+    GreaterThanOrEqual
 }
 
 /// <summary>
@@ -20,7 +26,9 @@ public enum SqlComparisonOperator
 /// </summary>
 public enum SqlLogicalOperator
 {
+    /// <summary>AND logical operator.</summary>
     And,
+    /// <summary>OR logical operator.</summary>
     Or
 }
 
@@ -29,7 +37,9 @@ public enum SqlLogicalOperator
 /// </summary>
 public enum SqlSortDirection
 {
+    /// <summary>Ascending sort order (ASC).</summary>
     Ascending,
+    /// <summary>Descending sort order (DESC).</summary>
     Descending
 }
 
@@ -38,8 +48,11 @@ public enum SqlSortDirection
 /// </summary>
 public enum SqlJoinType
 {
+    /// <summary>INNER JOIN.</summary>
     Inner,
+    /// <summary>LEFT OUTER JOIN.</summary>
     Left,
+    /// <summary>RIGHT OUTER JOIN.</summary>
     Right
 }
 
@@ -48,10 +61,15 @@ public enum SqlJoinType
 /// </summary>
 public enum SqlAggregateFunction
 {
+    /// <summary>COUNT aggregate.</summary>
     Count,
+    /// <summary>SUM aggregate.</summary>
     Sum,
+    /// <summary>AVG aggregate.</summary>
     Avg,
+    /// <summary>MIN aggregate.</summary>
     Min,
+    /// <summary>MAX aggregate.</summary>
     Max
 }
 
