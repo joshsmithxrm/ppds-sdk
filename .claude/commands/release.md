@@ -98,6 +98,19 @@ Show final summary:
 3. **Mixed state (some prepped, some not)**: Handle each package independently
 4. **User specifies packages**: Only process those packages (e.g., if user says "just auth and cli")
 
+## CLI Release Special Handling
+
+The CLI package has additional automation beyond NuGet publishing. When the `Cli-v*` tag is pushed:
+
+1. `publish-nuget.yml` publishes the CLI as a .NET tool to NuGet.org
+2. `release-cli.yml` builds and attaches self-contained binaries
+
+**If you create the release first via `/release`:** The workflow detects the existing release and uploads binaries to it.
+
+**If the workflow runs first:** The workflow creates the release with auto-generated notes and attaches binaries.
+
+Either order works - the binaries will be attached to the final release.
+
 ## Example Session
 
 ```
