@@ -746,8 +746,18 @@ public class DataverseMetadataService : IMetadataService
             return null;
         }
 
-        // Convert wildcard pattern to regex: * -> .*
-        var pattern = "^" + Regex.Escape(filter).Replace("\\*", ".*") + "$";
+        string pattern;
+        if (filter.Contains('*'))
+        {
+            // Wildcards present: anchored pattern matching (e.g., 'foo*' = starts with)
+            pattern = "^" + Regex.Escape(filter).Replace("\\*", ".*") + "$";
+        }
+        else
+        {
+            // No wildcards: contains search (more intuitive default)
+            pattern = Regex.Escape(filter);
+        }
+
         return new Regex(pattern, RegexOptions.IgnoreCase | RegexOptions.Compiled);
     }
 

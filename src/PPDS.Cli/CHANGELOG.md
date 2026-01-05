@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **`ppds docs` command** - Opens CLI documentation in browser ([#165](https://github.com/joshsmithxrm/ppds-sdk/issues/165))
+- **Documentation URL in help** - `ppds --help` now shows documentation URL ([#165](https://github.com/joshsmithxrm/ppds-sdk/issues/165))
+
+### Changed
+
+- **Improved `--filter` UX for metadata commands** - Filter without wildcards now performs contains search instead of exact match. `--filter zipcode` matches `ppds_zipcode`, `zipcode`, `zipcode_lookup`. Use wildcards for explicit patterns: `foo*` (starts with), `*foo` (ends with). ([#167](https://github.com/joshsmithxrm/ppds-sdk/issues/167))
+
 ## [1.0.0-beta.7] - 2026-01-04
 
 ### Added
