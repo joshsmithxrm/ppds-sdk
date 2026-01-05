@@ -31,7 +31,7 @@ ppds data export --schema schema.xml --output data.zip
 ppds
 ├── auth      Authentication profile management
 ├── env       Environment discovery and selection
-├── data      Data operations (export, import, copy, analyze, schema, users)
+├── data      Data operations (export, import, copy, load, update, delete, schema, users)
 ├── plugins   Plugin registration management
 ├── query     Execute FetchXML and SQL queries
 └── metadata  Browse entity and attribute metadata
@@ -141,6 +141,9 @@ Data migration operations.
 | `ppds data analyze` | Analyze schema (offline, no connection) |
 | `ppds data schema` | Generate migration schema from metadata |
 | `ppds data users` | Generate user mapping for cross-environment migrations |
+| `ppds data load` | Load CSV data into an entity |
+| `ppds data update` | Update records in an entity |
+| `ppds data delete` | Delete records from an entity |
 
 #### Export
 
@@ -240,6 +243,131 @@ Use the mapping file with import:
 ```bash
 ppds data import --data data.zip --user-mapping user-mapping.xml
 ```
+
+#### Load
+
+Load CSV data into a Dataverse entity using bulk upsert.
+
+```bash
+ppds data load --entity account --file accounts.csv
+```
+
+Options:
+- `--entity`, `-e` (required) - Target entity logical name
+- `--file`, `-f` (required) - Path to CSV file
+- `--key`, `-k` - Alternate key field(s) for upsert (comma-separated for composite)
+- `--mapping`, `-m` - Path to column mapping JSON file
+- `--generate-mapping` - Generate mapping template to file
+- `--dry-run` - Validate without writing to Dataverse
+- `--analyze` - Analyze mapping without loading data
+- `--batch-size` - Records per batch (default: 100)
+- `--bypass-plugins` - Bypass plugins: sync, async, or all
+- `--bypass-flows` - Bypass Power Automate flows
+- `--continue-on-error` - Continue on individual record failures
+- `--force` - Skip unmatched columns (when auto-mapping is incomplete)
+- `--profile`, `-p` - Profile name
+- `--environment`, `-env` - Override environment URL
+- `--output-format`, `-f` - Output format (Text or Json)
+
+#### Update
+
+Update records in a Dataverse entity. Unlike load (upsert), update fails if the record doesn't exist.
+
+```bash
+# Single record by GUID
+ppds data update --entity account --id 00000000-0000-0000-0000-000000000001 --set "description=Updated"
+
+# Single record by alternate key
+ppds data update --entity account --key accountnumber=ACCT001 --set "description=Updated"
+
+# Update multiple fields
+ppds data update --entity account --id 00000000-0000-0000-0000-000000000001 --set "description=Updated,websiteurl=https://example.com"
+
+# Bulk update from CSV file (each row has ID + fields to update)
+ppds data update --entity account --file updates.csv --id-column accountid
+
+# Query-based update
+ppds data update --entity account --filter "statecode eq 0" --set "description=Active account"
+
+# Dry-run (preview without updating)
+ppds data update --entity account --filter "statecode eq 0" --set "description=Updated" --dry-run
+
+# Non-interactive (for CI/CD)
+ppds data update --entity account --filter "statecode eq 0" --set "description=Updated" --force
+```
+
+Options:
+- `--entity`, `-e` (required) - Target entity logical name
+- `--id` - Single record GUID to update
+- `--key`, `-k` - Alternate key for lookup (field=value, comma-separated for composite)
+- `--file` - Path to CSV file containing IDs and values to update
+- `--id-column` - Column name for ID in CSV file (default: entity primary key)
+- `--filter` - SQL-like filter expression to match records
+- `--set`, `-s` - Field values to set (field=value, comma-separated)
+- `--mapping`, `-m` - Path to column mapping JSON file (for --file mode)
+- `--force` - Skip confirmation prompt (required for non-interactive)
+- `--dry-run` - Preview records without updating
+- `--limit` - Maximum records to update (fails if query returns more)
+- `--batch-size` - Records per batch (default: 100)
+- `--bypass-plugins` - Bypass plugins: sync, async, or all
+- `--bypass-flows` - Bypass Power Automate flows
+- `--continue-on-error` - Continue on individual record failures
+- `--profile`, `-p` - Profile name
+- `--environment`, `-env` - Override environment URL
+- `--output-format`, `-f` - Output format (Text or Json)
+
+**Safety Features:**
+- All updates require confirmation by default (type `update N` where N is the count)
+- Use `--force` to bypass confirmation in scripts/CI
+- Use `--dry-run` to preview what would be updated
+
+#### Delete
+
+Delete records from a Dataverse entity. Supports single-record delete, bulk delete from file, and query-based delete.
+
+```bash
+# Single record by GUID
+ppds data delete --entity account --id 00000000-0000-0000-0000-000000000001
+
+# Single record by alternate key
+ppds data delete --entity account --key accountnumber=ACCT001
+
+# Bulk from CSV file
+ppds data delete --entity account --file ids.csv --id-column accountid
+
+# Query-based delete
+ppds data delete --entity account --filter "name like '%test%'"
+
+# Dry-run (preview without deleting)
+ppds data delete --entity account --filter "name like '%test%'" --dry-run
+
+# Non-interactive (for CI/CD)
+ppds data delete --entity account --filter "name like '%test%'" --force --limit 500
+```
+
+Options:
+- `--entity`, `-e` (required) - Target entity logical name
+- `--id` - Single record GUID to delete
+- `--key`, `-k` - Alternate key for lookup (field=value, comma-separated for composite)
+- `--file` - Path to file containing record IDs (JSON array or CSV)
+- `--id-column` - Column name for CSV file (default: entity primary key)
+- `--filter` - SQL-like filter expression to match records
+- `--force` - Skip confirmation prompt (required for non-interactive)
+- `--dry-run` - Preview records without deleting
+- `--limit` - Maximum records to delete (fails if query returns more)
+- `--batch-size` - Records per batch (default: 100)
+- `--bypass-plugins` - Bypass plugins: sync, async, or all
+- `--bypass-flows` - Bypass Power Automate flows
+- `--continue-on-error` - Continue on individual record failures
+- `--profile`, `-p` - Profile name
+- `--environment`, `-env` - Override environment URL
+- `--output-format`, `-f` - Output format (Text or Json)
+
+**Safety Features:**
+- All deletes require confirmation by default (type `delete N` where N is the count)
+- Use `--force` to bypass confirmation in scripts/CI
+- Use `--dry-run` to preview what would be deleted
+- Use `--limit` to cap the number of records (fails if query exceeds limit)
 
 ### `ppds query`
 
