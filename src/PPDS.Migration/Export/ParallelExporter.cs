@@ -344,11 +344,12 @@ namespace PPDS.Migration.Export
 
                 foreach (var rel in m2mRelationships)
                 {
+                    // Report message-only (no Entity) to avoid 0/0 display
+                    // Entity progress is reported inside ExportM2MRelationshipAsync with actual counts
                     progress?.Report(new ProgressEventArgs
                     {
                         Phase = MigrationPhase.Exporting,
-                        Entity = entitySchema.LogicalName,
-                        Message = $"Exporting M2M relationship {rel.Name}..."
+                        Message = $"Exporting {entitySchema.LogicalName} M2M {rel.Name}..."
                     });
 
                     try
