@@ -279,7 +279,7 @@ namespace PPDS.Migration.Formats
                 "datetime" => DateTime.TryParse(value, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out var dt) ? dt : null,
                 "guid" or "uniqueidentifier" => Guid.TryParse(value, out var g) ? g : null,
                 "lookup" or "customer" or "owner" or "entityreference" => ParseEntityReference(element),
-                "optionset" or "picklist" => ParseOptionSetValue(value),
+                "optionset" or "optionsetvalue" or "picklist" => ParseOptionSetValue(value),
                 "state" or "status" => ParseOptionSetValue(value),
                 _ => value // Return as string for unknown types
             };

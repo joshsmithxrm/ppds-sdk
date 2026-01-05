@@ -430,6 +430,13 @@ namespace PPDS.Migration.Import
                     ImportMode.Update => await _bulkExecutor.UpdateMultipleAsync(entityName, preparedRecords, bulkOptions, progressAdapter, cancellationToken).ConfigureAwait(false),
                     _ => await _bulkExecutor.UpsertMultipleAsync(entityName, preparedRecords, bulkOptions, progressAdapter, cancellationToken).ConfigureAwait(false)
                 };
+
+                // Check for bulk operation not supported - fallback to individual operations
+                if (IsBulkNotSupportedFailure(bulkResult, preparedRecords.Count))
+                {
+                    _logger?.LogWarning("Bulk operation not supported for {Entity}, falling back to individual operations", entityName);
+                    bulkResult = await ExecuteIndividualOperationsAsync(entityName, preparedRecords, options, cancellationToken).ConfigureAwait(false);
+                }
             }
             else
             {
@@ -590,6 +597,14 @@ namespace PPDS.Migration.Import
                 }
             }
 
+            // Force team.isdefault to false to prevent conflicts with existing default teams
+            // This matches CMT behavior - default teams should not be imported as defaults
+            if (record.LogicalName.Equals("team", StringComparison.OrdinalIgnoreCase) &&
+                prepared.Contains("isdefault"))
+            {
+                prepared["isdefault"] = false;
+            }
+
             return prepared;
         }
 
@@ -621,8 +636,15 @@ namespace PPDS.Migration.Import
                 {
                     return new EntityReference(er.LogicalName, mappedUserId);
                 }
-                // User mapping exists but no mapping found for this user
-                // Return original if no default, otherwise the default would have been returned
+
+                // No explicit mapping found - check for current user fallback
+                if (options.UserMappings.UseCurrentUserAsDefault && options.CurrentUserId.HasValue)
+                {
+                    _logger?.LogDebug("User {UserId} not found in mappings, using current user fallback", er.Id);
+                    return new EntityReference("systemuser", options.CurrentUserId.Value);
+                }
+
+                // User mapping exists but no mapping found and no fallback available
                 return new EntityReference(er.LogicalName, er.Id);
             }
 
@@ -640,6 +662,24 @@ namespace PPDS.Migration.Import
         {
             return entityLogicalName.Equals("systemuser", StringComparison.OrdinalIgnoreCase) ||
                    entityLogicalName.Equals("team", StringComparison.OrdinalIgnoreCase);
+        }
+
+        /// <summary>
+        /// Determines if a bulk operation failure indicates the entity doesn't support bulk operations.
+        /// </summary>
+        /// <remarks>
+        /// Some entities (like team) don't support CreateMultiple/UpdateMultiple/UpsertMultiple.
+        /// When detected, the importer should fallback to individual operations.
+        /// </remarks>
+        private static bool IsBulkNotSupportedFailure(BulkOperationResult result, int totalRecords)
+        {
+            // Only consider it a "not supported" failure if ALL records failed
+            if (result.FailureCount != totalRecords || result.Errors.Count == 0)
+                return false;
+
+            // Check if first error indicates bulk operation not supported
+            var firstError = result.Errors[0];
+            return firstError.Message?.Contains("is not enabled on the entity", StringComparison.OrdinalIgnoreCase) == true;
         }
     }
 }

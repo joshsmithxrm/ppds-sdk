@@ -1,8 +1,10 @@
 using System.CommandLine;
+using Microsoft.Crm.Sdk.Messages;
 using Microsoft.Extensions.DependencyInjection;
 using PPDS.Cli.Infrastructure;
 using PPDS.Cli.Infrastructure.Errors;
 using PPDS.Dataverse.BulkOperations;
+using PPDS.Dataverse.Pooling;
 using PPDS.Migration.Formats;
 using PPDS.Migration.Import;
 using PPDS.Migration.Models;
@@ -169,6 +171,12 @@ public static class ImportCommand
             }
 
             var importer = serviceProvider.GetRequiredService<IImporter>();
+            var connectionPool = serviceProvider.GetRequiredService<IDataverseConnectionPool>();
+
+            // Get current user ID for fallback when user mappings can't resolve a reference
+            var whoAmIResponse = (WhoAmIResponse)await connectionPool.ExecuteAsync(
+                new WhoAmIRequest(), cancellationToken);
+            var currentUserId = whoAmIResponse.UserId;
 
             UserMappingCollection? userMappings = null;
             if (userMappingFile != null)
@@ -188,6 +196,12 @@ public static class ImportCommand
                     Message = $"Loaded {userMappings.Mappings.Count} user mapping(s)."
                 });
             }
+            else if (stripOwnerFields)
+            {
+                // When stripping owner fields without explicit mapping, create a default mapping
+                // that will use the current user as fallback for any unresolved user references
+                userMappings = new UserMappingCollection { UseCurrentUserAsDefault = true };
+            }
 
             if (stripOwnerFields)
             {
@@ -206,7 +220,8 @@ public static class ImportCommand
                 Mode = mode,
                 UserMappings = userMappings,
                 StripOwnerFields = stripOwnerFields,
-                SkipMissingColumns = skipMissingColumns
+                SkipMissingColumns = skipMissingColumns,
+                CurrentUserId = currentUserId
             };
 
             var result = await importer.ImportAsync(

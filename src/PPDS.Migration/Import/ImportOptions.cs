@@ -111,6 +111,21 @@ namespace PPDS.Migration.Import
         /// </para>
         /// </remarks>
         public bool SkipMissingColumns { get; set; } = false;
+
+        /// <summary>
+        /// Gets or sets the current user's ID for fallback when user mappings can't resolve a reference.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// When <see cref="UserMappings"/> has <see cref="UserMappingCollection.UseCurrentUserAsDefault"/> set to true,
+        /// and a user reference cannot be resolved through explicit mappings, this ID is used as the fallback.
+        /// </para>
+        /// <para>
+        /// This should be set to the WhoAmI user ID of the importing service principal or user.
+        /// If not set and UseCurrentUserAsDefault is true, unmapped user references will be left unchanged.
+        /// </para>
+        /// </remarks>
+        public Guid? CurrentUserId { get; set; }
     }
 
     /// <summary>
