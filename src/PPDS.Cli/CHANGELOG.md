@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0-beta.9] - 2026-01-05
+
+### Changed
+
+- **Updated PPDS.Migration to v1.0.0-beta.4** - Includes CMT export compatibility fixes: boolean values now export as `True`/`False`, schema preserves relationships section, M2M export shows progress counts. ([#181](https://github.com/joshsmithxrm/ppds-sdk/issues/181), [#182](https://github.com/joshsmithxrm/ppds-sdk/issues/182), [#184](https://github.com/joshsmithxrm/ppds-sdk/issues/184))
+
 ## [1.0.0-beta.8] - 2026-01-05
 
 ### Added
@@ -216,7 +222,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Packaged as .NET global tool (`ppds`)
 - Targets: `net10.0`
 
-[Unreleased]: https://github.com/joshsmithxrm/ppds-sdk/compare/Cli-v1.0.0-beta.8...HEAD
+[Unreleased]: https://github.com/joshsmithxrm/ppds-sdk/compare/Cli-v1.0.0-beta.9...HEAD
+[1.0.0-beta.9]: https://github.com/joshsmithxrm/ppds-sdk/compare/Cli-v1.0.0-beta.8...Cli-v1.0.0-beta.9
 [1.0.0-beta.8]: https://github.com/joshsmithxrm/ppds-sdk/compare/Cli-v1.0.0-beta.7...Cli-v1.0.0-beta.8
 [1.0.0-beta.7]: https://github.com/joshsmithxrm/ppds-sdk/compare/Cli-v1.0.0-beta.6...Cli-v1.0.0-beta.7
 [1.0.0-beta.6]: https://github.com/joshsmithxrm/ppds-sdk/compare/Cli-v1.0.0-beta.5...Cli-v1.0.0-beta.6

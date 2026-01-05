@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0-beta.4] - 2026-01-05
+
 ### Fixed
 
 - **Boolean values now export as True/False** - CMT format uses `True`/`False` for boolean values; PPDS was incorrectly exporting `1`/`0`. This change ensures CMT import compatibility. ([#181](https://github.com/joshsmithxrm/ppds-sdk/issues/181))
@@ -55,7 +57,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - DI integration via `AddDataverseMigration()` extension method
 - Targets: `net8.0`, `net10.0`
 
-[Unreleased]: https://github.com/joshsmithxrm/ppds-sdk/compare/Migration-v1.0.0-beta.3...HEAD
+[Unreleased]: https://github.com/joshsmithxrm/ppds-sdk/compare/Migration-v1.0.0-beta.4...HEAD
+[1.0.0-beta.4]: https://github.com/joshsmithxrm/ppds-sdk/compare/Migration-v1.0.0-beta.3...Migration-v1.0.0-beta.4
 [1.0.0-beta.3]: https://github.com/joshsmithxrm/ppds-sdk/compare/Migration-v1.0.0-beta.2...Migration-v1.0.0-beta.3
 [1.0.0-beta.2]: https://github.com/joshsmithxrm/ppds-sdk/compare/Migration-v1.0.0-beta.1...Migration-v1.0.0-beta.2
 [1.0.0-beta.1]: https://github.com/joshsmithxrm/ppds-sdk/releases/tag/Migration-v1.0.0-beta.1
