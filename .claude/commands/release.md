@@ -105,9 +105,9 @@ The CLI package has additional automation beyond NuGet publishing. When the `Cli
 1. `publish-nuget.yml` publishes the CLI as a .NET tool to NuGet.org
 2. `release-cli.yml` builds and attaches self-contained binaries
 
-**If you create the release first via `/release`:** The workflow detects the existing release and uploads binaries to it.
+**If a release is created via `/release` before the tag is pushed:** The workflow detects the existing release and uploads binaries to it.
 
-**If the workflow runs first:** The workflow creates the release with auto-generated notes and attaches binaries.
+**If a tag is pushed without a pre-existing release:** The workflow creates the release with auto-generated notes and attaches binaries.
 
 Either order works - the binaries will be attached to the final release.
 
