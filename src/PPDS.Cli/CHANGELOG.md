@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0-beta.8] - 2026-01-05
+
 ### Added
 
 - **`ppds data update` command** - Update records in Dataverse entities ([#135](https://github.com/joshsmithxrm/ppds-sdk/issues/135))
@@ -214,7 +216,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Packaged as .NET global tool (`ppds`)
 - Targets: `net10.0`
 
-[Unreleased]: https://github.com/joshsmithxrm/ppds-sdk/compare/Cli-v1.0.0-beta.7...HEAD
+[Unreleased]: https://github.com/joshsmithxrm/ppds-sdk/compare/Cli-v1.0.0-beta.8...HEAD
+[1.0.0-beta.8]: https://github.com/joshsmithxrm/ppds-sdk/compare/Cli-v1.0.0-beta.7...Cli-v1.0.0-beta.8
 [1.0.0-beta.7]: https://github.com/joshsmithxrm/ppds-sdk/compare/Cli-v1.0.0-beta.6...Cli-v1.0.0-beta.7
 [1.0.0-beta.6]: https://github.com/joshsmithxrm/ppds-sdk/compare/Cli-v1.0.0-beta.5...Cli-v1.0.0-beta.6
 [1.0.0-beta.5]: https://github.com/joshsmithxrm/ppds-sdk/compare/Cli-v1.0.0-beta.4...Cli-v1.0.0-beta.5
