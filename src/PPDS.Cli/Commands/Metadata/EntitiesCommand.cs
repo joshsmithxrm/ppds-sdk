@@ -19,7 +19,7 @@ public static class EntitiesCommand
     {
         var filterOption = new Option<string?>("--filter")
         {
-            Description = "Filter entities by name pattern (supports * wildcard, e.g., 'account*')"
+            Description = "Filter by name. Without wildcards, matches names containing the text. Use * for patterns: 'foo*' (starts with), '*foo' (ends with)"
         };
 
         var customOnlyOption = new Option<bool>("--custom-only")

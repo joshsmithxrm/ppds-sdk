@@ -19,7 +19,7 @@ public static class OptionSetsCommand
     {
         var filterOption = new Option<string?>("--filter")
         {
-            Description = "Filter option sets by name pattern (supports * wildcard, e.g., 'new_*')"
+            Description = "Filter by name. Without wildcards, matches names containing the text. Use * for patterns: 'foo*' (starts with), '*foo' (ends with)"
         };
 
         var command = new Command("optionsets", "List global option sets")

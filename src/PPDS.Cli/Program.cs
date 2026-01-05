@@ -7,6 +7,7 @@ using PPDS.Cli.Commands.Plugins;
 using PPDS.Cli.Commands.Query;
 using PPDS.Cli.Commands.Internal;
 using PPDS.Cli.Commands.Serve;
+using PPDS.Cli.Commands;
 using PPDS.Cli.Infrastructure;
 
 namespace PPDS.Cli;
@@ -18,7 +19,10 @@ public static class Program
 {
     public static async Task<int> Main(string[] args)
     {
-        var rootCommand = new RootCommand("PPDS CLI - Power Platform Developer Suite command-line tool");
+        var rootCommand = new RootCommand(
+            "PPDS CLI - Power Platform Developer Suite command-line tool" + Environment.NewLine +
+            Environment.NewLine +
+            "Documentation: https://github.com/joshsmithxrm/ppds-sdk/blob/main/src/PPDS.Cli/README.md");
 
         // Add command groups
         rootCommand.Subcommands.Add(AuthCommandGroup.Create());
@@ -29,6 +33,7 @@ public static class Program
         rootCommand.Subcommands.Add(MetadataCommandGroup.Create());
         rootCommand.Subcommands.Add(QueryCommandGroup.Create());
         rootCommand.Subcommands.Add(ServeCommand.Create());
+        rootCommand.Subcommands.Add(DocsCommand.Create());
 
         // Internal/debug commands - only visible when PPDS_INTERNAL=1
         if (Environment.GetEnvironmentVariable("PPDS_INTERNAL") == "1")
