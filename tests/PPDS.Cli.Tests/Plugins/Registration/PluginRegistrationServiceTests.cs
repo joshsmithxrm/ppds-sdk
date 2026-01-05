@@ -310,4 +310,62 @@ public class PluginRegistrationServiceTests
     }
 
     #endregion
+
+    #region GetDefaultImagePropertyName Tests
+
+    [Theory]
+    [InlineData("Create", "id")]
+    [InlineData("CreateMultiple", "Ids")]
+    [InlineData("Update", "Target")]
+    [InlineData("UpdateMultiple", "Targets")]
+    [InlineData("Delete", "Target")]
+    [InlineData("Assign", "Target")]
+    [InlineData("SetState", "EntityMoniker")]
+    [InlineData("SetStateDynamicEntity", "EntityMoniker")]
+    [InlineData("Route", "Target")]
+    [InlineData("Send", "EmailId")]
+    [InlineData("DeliverIncoming", "EmailId")]
+    [InlineData("DeliverPromote", "EmailId")]
+    [InlineData("ExecuteWorkflow", "Target")]
+    [InlineData("Merge", "Target")]
+    public void GetDefaultImagePropertyName_ReturnsCorrectPropertyName_ForKnownMessages(string messageName, string expectedPropertyName)
+    {
+        // Act
+        var result = PluginRegistrationService.GetDefaultImagePropertyName(messageName);
+
+        // Assert
+        Assert.Equal(expectedPropertyName, result);
+    }
+
+    [Theory]
+    [InlineData("create")]
+    [InlineData("CREATE")]
+    [InlineData("SetState")]
+    [InlineData("SETSTATE")]
+    [InlineData("setstate")]
+    public void GetDefaultImagePropertyName_IsCaseInsensitive(string messageName)
+    {
+        // Act
+        var result = PluginRegistrationService.GetDefaultImagePropertyName(messageName);
+
+        // Assert
+        Assert.NotNull(result);
+    }
+
+    [Theory]
+    [InlineData("Retrieve")]
+    [InlineData("RetrieveMultiple")]
+    [InlineData("CustomAction")]
+    [InlineData("UnknownMessage")]
+    [InlineData("")]
+    public void GetDefaultImagePropertyName_ReturnsNull_ForUnsupportedMessages(string messageName)
+    {
+        // Act
+        var result = PluginRegistrationService.GetDefaultImagePropertyName(messageName);
+
+        // Assert
+        Assert.Null(result);
+    }
+
+    #endregion
 }
