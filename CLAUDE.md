@@ -117,6 +117,8 @@ dotnet pack -c Release -o ./nupkgs
 - [ ] **Constants centralized** - Magic numbers/strings that should be shared?
 - [ ] **Existing patterns checked** - Similar functionality to extend?
 
+**Anti-pattern:** Planning WHAT without WHERE. Always consider where shared logic should live to avoid expensive refactoring.
+
 ### Code Conventions
 
 - Use nullable reference types (`string?` not `string`)
