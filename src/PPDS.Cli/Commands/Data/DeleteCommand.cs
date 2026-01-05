@@ -571,8 +571,8 @@ public static class DeleteCommand
 
         if (lines.Length == 0) return ids;
 
-        // Parse header
-        var headers = lines[0].Split(',').Select(h => h.Trim().Trim('"')).ToList();
+        // Parse header using same CSV parser as data rows for consistency
+        var headers = ParseCsvLine(lines[0]).Select(h => h.Trim()).ToList();
 
         // Find ID column
         var idColIndex = -1;
@@ -600,7 +600,7 @@ public static class DeleteCommand
         // Parse data rows
         for (var i = 1; i < lines.Length; i++)
         {
-            var values = lines[i].Split(',').Select(v => v.Trim().Trim('"')).ToList();
+            var values = ParseCsvLine(lines[i]).Select(v => v.Trim()).ToList();
             if (values.Count > idColIndex && Guid.TryParse(values[idColIndex], out var id))
             {
                 ids.Add(id);
@@ -608,6 +608,34 @@ public static class DeleteCommand
         }
 
         return ids;
+    }
+
+    private static List<string> ParseCsvLine(string line)
+    {
+        var values = new List<string>();
+        var current = new System.Text.StringBuilder();
+        var inQuotes = false;
+
+        foreach (var c in line)
+        {
+            if (c == '"')
+            {
+                inQuotes = !inQuotes;
+                // Don't append quotes - just toggle state
+            }
+            else if (c == ',' && !inQuotes)
+            {
+                values.Add(current.ToString());
+                current.Clear();
+            }
+            else
+            {
+                current.Append(c);
+            }
+        }
+
+        values.Add(current.ToString());
+        return values;
     }
 
     private static async Task<List<Guid>> QueryIdsAsync(

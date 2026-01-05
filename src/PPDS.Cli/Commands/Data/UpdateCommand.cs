@@ -676,8 +676,8 @@ public static class UpdateCommand
         var lines = content.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries);
         if (lines.Length == 0) return new List<Entity>();
 
-        // Parse header
-        var headers = lines[0].Split(',').Select(h => h.Trim().Trim('"')).ToList();
+        // Parse header using same CSV parser as data rows for consistency
+        var headers = ParseCsvLine(lines[0]).Select(h => h.Trim()).ToList();
 
         // Find ID column
         var idColIndex = -1;

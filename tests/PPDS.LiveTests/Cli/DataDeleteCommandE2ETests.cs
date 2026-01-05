@@ -235,32 +235,24 @@ public class DataDeleteCommandE2ETests : CliE2ETestBase
         // Create a test record first
         var accountId = await CreateTestAccountAsync($"{_testPrefix}_DeleteById");
 
-        try
-        {
-            // Delete the record
-            var deleteResult = await RunCliAsync(
-                "data", "delete",
-                "--entity", "account",
-                "--id", accountId.ToString(),
-                "--force",
-                "--profile", _profileName!);
+        // Delete the record
+        var deleteResult = await RunCliAsync(
+            "data", "delete",
+            "--entity", "account",
+            "--id", accountId.ToString(),
+            "--force",
+            "--profile", _profileName!);
 
-            deleteResult.ExitCode.Should().Be(0, $"Delete failed: {deleteResult.StdErr}");
-            deleteResult.StdErr.Should().Contain("Deleted");
-            deleteResult.StdErr.Should().Contain("1");
+        deleteResult.ExitCode.Should().Be(0, $"Delete failed: {deleteResult.StdErr}");
+        deleteResult.StdErr.Should().Contain("Deleted");
+        deleteResult.StdErr.Should().Contain("1");
 
-            // Verify record was deleted
-            var exists = await RecordExistsAsync(accountId);
-            exists.Should().BeFalse("Record should have been deleted");
+        // Verify record was deleted
+        var exists = await RecordExistsAsync(accountId);
+        exists.Should().BeFalse("Record should have been deleted");
 
-            // Remove from cleanup list since it's already deleted
-            _createdAccountIds.Remove(accountId);
-        }
-        catch
-        {
-            // Leave in cleanup list if test fails
-            throw;
-        }
+        // Remove from cleanup list since it's already deleted
+        _createdAccountIds.Remove(accountId);
     }
 
     [CliE2EWithCredentials]
@@ -272,28 +264,21 @@ public class DataDeleteCommandE2ETests : CliE2ETestBase
         // Create a test record first
         var accountId = await CreateTestAccountAsync($"{_testPrefix}_DeleteByIdJson");
 
-        try
-        {
-            // Delete the record with JSON output
-            var deleteResult = await RunCliAsync(
-                "data", "delete",
-                "--entity", "account",
-                "--id", accountId.ToString(),
-                "--force",
-                "--output-format", "json",
-                "--profile", _profileName!);
+        // Delete the record with JSON output
+        var deleteResult = await RunCliAsync(
+            "data", "delete",
+            "--entity", "account",
+            "--id", accountId.ToString(),
+            "--force",
+            "--output-format", "json",
+            "--profile", _profileName!);
 
-            deleteResult.ExitCode.Should().Be(0, $"Delete failed: {deleteResult.StdErr}");
-            deleteResult.StdOut.Trim().Should().StartWith("{");
-            deleteResult.StdOut.Should().Contain("\"success\": true");
-            deleteResult.StdOut.Should().Contain("\"deletedCount\": 1");
+        deleteResult.ExitCode.Should().Be(0, $"Delete failed: {deleteResult.StdErr}");
+        deleteResult.StdOut.Trim().Should().StartWith("{");
+        deleteResult.StdOut.Should().Contain("\"success\": true");
+        deleteResult.StdOut.Should().Contain("\"deletedCount\": 1");
 
-            _createdAccountIds.Remove(accountId);
-        }
-        catch
-        {
-            throw;
-        }
+        _createdAccountIds.Remove(accountId);
     }
 
     [CliE2EWithCredentials]
@@ -307,31 +292,24 @@ public class DataDeleteCommandE2ETests : CliE2ETestBase
         var account1 = await CreateTestAccountAsync(filterValue + "_1");
         var account2 = await CreateTestAccountAsync(filterValue + "_2");
 
-        try
-        {
-            // Delete by filter
-            var deleteResult = await RunCliAsync(
-                "data", "delete",
-                "--entity", "account",
-                "--filter", $"name like '{filterValue}%'",
-                "--force",
-                "--profile", _profileName!);
+        // Delete by filter
+        var deleteResult = await RunCliAsync(
+            "data", "delete",
+            "--entity", "account",
+            "--filter", $"name like '{filterValue}%'",
+            "--force",
+            "--profile", _profileName!);
 
-            deleteResult.ExitCode.Should().Be(0, $"Delete failed: {deleteResult.StdErr}");
-            deleteResult.StdErr.Should().Contain("Deleted");
-            deleteResult.StdErr.Should().Contain("2");
+        deleteResult.ExitCode.Should().Be(0, $"Delete failed: {deleteResult.StdErr}");
+        deleteResult.StdErr.Should().Contain("Deleted");
+        deleteResult.StdErr.Should().Contain("2");
 
-            // Verify records were deleted
-            (await RecordExistsAsync(account1)).Should().BeFalse("First record should be deleted");
-            (await RecordExistsAsync(account2)).Should().BeFalse("Second record should be deleted");
+        // Verify records were deleted
+        (await RecordExistsAsync(account1)).Should().BeFalse("First record should be deleted");
+        (await RecordExistsAsync(account2)).Should().BeFalse("Second record should be deleted");
 
-            _createdAccountIds.Remove(account1);
-            _createdAccountIds.Remove(account2);
-        }
-        catch
-        {
-            throw;
-        }
+        _createdAccountIds.Remove(account1);
+        _createdAccountIds.Remove(account2);
     }
 
     [CliE2EWithCredentials]
@@ -349,32 +327,25 @@ public class DataDeleteCommandE2ETests : CliE2ETestBase
         var csvContent = $"accountid,name\n{account1},Test1\n{account2},Test2";
         await File.WriteAllTextAsync(csvPath, csvContent);
 
-        try
-        {
-            // Delete from file
-            var deleteResult = await RunCliAsync(
-                "data", "delete",
-                "--entity", "account",
-                "--file", csvPath,
-                "--id-column", "accountid",
-                "--force",
-                "--profile", _profileName!);
+        // Delete from file
+        var deleteResult = await RunCliAsync(
+            "data", "delete",
+            "--entity", "account",
+            "--file", csvPath,
+            "--id-column", "accountid",
+            "--force",
+            "--profile", _profileName!);
 
-            deleteResult.ExitCode.Should().Be(0, $"Delete failed: {deleteResult.StdErr}");
-            deleteResult.StdErr.Should().Contain("Deleted");
-            deleteResult.StdErr.Should().Contain("2");
+        deleteResult.ExitCode.Should().Be(0, $"Delete failed: {deleteResult.StdErr}");
+        deleteResult.StdErr.Should().Contain("Deleted");
+        deleteResult.StdErr.Should().Contain("2");
 
-            // Verify records were deleted
-            (await RecordExistsAsync(account1)).Should().BeFalse();
-            (await RecordExistsAsync(account2)).Should().BeFalse();
+        // Verify records were deleted
+        (await RecordExistsAsync(account1)).Should().BeFalse();
+        (await RecordExistsAsync(account2)).Should().BeFalse();
 
-            _createdAccountIds.Remove(account1);
-            _createdAccountIds.Remove(account2);
-        }
-        catch
-        {
-            throw;
-        }
+        _createdAccountIds.Remove(account1);
+        _createdAccountIds.Remove(account2);
     }
 
     [CliE2EWithCredentials]
@@ -392,31 +363,24 @@ public class DataDeleteCommandE2ETests : CliE2ETestBase
         var jsonContent = $"[\"{account1}\", \"{account2}\"]";
         await File.WriteAllTextAsync(jsonPath, jsonContent);
 
-        try
-        {
-            // Delete from file
-            var deleteResult = await RunCliAsync(
-                "data", "delete",
-                "--entity", "account",
-                "--file", jsonPath,
-                "--force",
-                "--profile", _profileName!);
+        // Delete from file
+        var deleteResult = await RunCliAsync(
+            "data", "delete",
+            "--entity", "account",
+            "--file", jsonPath,
+            "--force",
+            "--profile", _profileName!);
 
-            deleteResult.ExitCode.Should().Be(0, $"Delete failed: {deleteResult.StdErr}");
-            deleteResult.StdErr.Should().Contain("Deleted");
-            deleteResult.StdErr.Should().Contain("2");
+        deleteResult.ExitCode.Should().Be(0, $"Delete failed: {deleteResult.StdErr}");
+        deleteResult.StdErr.Should().Contain("Deleted");
+        deleteResult.StdErr.Should().Contain("2");
 
-            // Verify records were deleted
-            (await RecordExistsAsync(account1)).Should().BeFalse();
-            (await RecordExistsAsync(account2)).Should().BeFalse();
+        // Verify records were deleted
+        (await RecordExistsAsync(account1)).Should().BeFalse();
+        (await RecordExistsAsync(account2)).Should().BeFalse();
 
-            _createdAccountIds.Remove(account1);
-            _createdAccountIds.Remove(account2);
-        }
-        catch
-        {
-            throw;
-        }
+        _createdAccountIds.Remove(account1);
+        _createdAccountIds.Remove(account2);
     }
 
     [CliE2EWithCredentials]
@@ -429,30 +393,23 @@ public class DataDeleteCommandE2ETests : CliE2ETestBase
         var uniqueName = $"{_testPrefix}_KeyDelete_{Guid.NewGuid():N}";
         var accountId = await CreateTestAccountAsync(uniqueName);
 
-        try
-        {
-            // Delete by alternate key (name - though account doesn't have a true alternate key,
-            // the command uses query-based lookup for --key)
-            var deleteResult = await RunCliAsync(
-                "data", "delete",
-                "--entity", "account",
-                "--key", $"name={uniqueName}",
-                "--force",
-                "--profile", _profileName!);
+        // Delete by alternate key (name - though account doesn't have a true alternate key,
+        // the command uses query-based lookup for --key)
+        var deleteResult = await RunCliAsync(
+            "data", "delete",
+            "--entity", "account",
+            "--key", $"name={uniqueName}",
+            "--force",
+            "--profile", _profileName!);
 
-            deleteResult.ExitCode.Should().Be(0, $"Delete failed: {deleteResult.StdErr}");
-            deleteResult.StdErr.Should().Contain("Deleted");
-            deleteResult.StdErr.Should().Contain("1");
+        deleteResult.ExitCode.Should().Be(0, $"Delete failed: {deleteResult.StdErr}");
+        deleteResult.StdErr.Should().Contain("Deleted");
+        deleteResult.StdErr.Should().Contain("1");
 
-            // Verify record was deleted
-            (await RecordExistsAsync(accountId)).Should().BeFalse();
+        // Verify record was deleted
+        (await RecordExistsAsync(accountId)).Should().BeFalse();
 
-            _createdAccountIds.Remove(accountId);
-        }
-        catch
-        {
-            throw;
-        }
+        _createdAccountIds.Remove(accountId);
     }
 
     [CliE2EWithCredentials]

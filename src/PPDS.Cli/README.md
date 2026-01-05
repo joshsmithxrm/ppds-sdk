@@ -158,7 +158,7 @@ Options:
 - `--environment`, `-env` - Override environment URL
 - `--parallel` - Max concurrent entity exports (default: CPU * 2)
 - `--batch-size` - Records per API request (default: 5000)
-- `--output-format`, `-f` - Output format (Text or Json)
+- `--output-format`, `-o` - Output format (Text or Json)
 - `--verbose`, `-v` - Verbose logging
 - `--debug` - Diagnostic logging
 
@@ -179,7 +179,7 @@ Options:
 - `--bypass-plugins` - Bypass plugins: sync, async, or all
 - `--bypass-flows` - Bypass Power Automate flows
 - `--continue-on-error` - Continue on individual record failures
-- `--output-format`, `-f` - Output format (Text or Json)
+- `--output-format`, `-o` - Output format (Text or Json)
 - `--verbose`, `-v` - Verbose logging
 - `--debug` - Diagnostic logging
 
@@ -217,7 +217,7 @@ Options:
 - `--disable-plugins` - Set disableplugins=true on all entities
 - `--include-attributes`, `-a` - Whitelist specific attributes
 - `--exclude-attributes` - Blacklist specific attributes
-- `--output-format`, `-f` - Output format (Text or Json)
+- `--output-format`, `-o` - Output format (Text or Json)
 
 #### Users
 
@@ -237,7 +237,7 @@ Options:
 - `--source-profile`, `-sp` - Profile for source (default: active)
 - `--target-profile`, `-tp` - Profile for target (default: active)
 - `--analyze` - Preview without generating file
-- `--output-format`, `-f` - Output format (Text or Json)
+- `--output-format`, `-o` - Output format (Text or Json)
 
 Use the mapping file with import:
 ```bash
@@ -267,7 +267,7 @@ Options:
 - `--force` - Skip unmatched columns (when auto-mapping is incomplete)
 - `--profile`, `-p` - Profile name
 - `--environment`, `-env` - Override environment URL
-- `--output-format`, `-f` - Output format (Text or Json)
+- `--output-format`, `-o` - Output format (Text or Json)
 
 #### Update
 
@@ -314,7 +314,7 @@ Options:
 - `--continue-on-error` - Continue on individual record failures
 - `--profile`, `-p` - Profile name
 - `--environment`, `-env` - Override environment URL
-- `--output-format`, `-f` - Output format (Text or Json)
+- `--output-format`, `-o` - Output format (Text or Json)
 
 **Safety Features:**
 - All updates require confirmation by default (type `update N` where N is the count)
@@ -361,7 +361,7 @@ Options:
 - `--continue-on-error` - Continue on individual record failures
 - `--profile`, `-p` - Profile name
 - `--environment`, `-env` - Override environment URL
-- `--output-format`, `-f` - Output format (Text or Json)
+- `--output-format`, `-o` - Output format (Text or Json)
 
 **Safety Features:**
 - All deletes require confirmation by default (type `delete N` where N is the count)
@@ -531,7 +531,7 @@ Options:
 - `--filter` - Filter by name pattern (supports `*` wildcard, e.g., `*account*`)
 - `--custom-only` - Show only custom entities/attributes
 - `--type` - Filter attributes by type (String, Lookup, DateTime, etc.)
-- `--output-format`, `-f` - Output format (Text or Json)
+- `--output-format`, `-o` - Output format (Text or Json)
 
 ---
 
@@ -596,7 +596,7 @@ These options are available on all commands:
 
 | Option | Short | Description |
 |--------|-------|-------------|
-| `--output-format` | `-f` | Output format: `text` (default) or `json` |
+| `--output-format` | `-o` | Output format: `text` (default) or `json` |
 | `--quiet` | `-q` | Show only warnings and errors |
 | `--verbose` | `-v` | Show debug messages |
 | `--debug` | | Show trace-level diagnostics |
