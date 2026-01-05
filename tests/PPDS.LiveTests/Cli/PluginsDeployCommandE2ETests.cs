@@ -10,15 +10,15 @@ namespace PPDS.LiveTests.Cli;
 /// Tests only run on .NET 8.0 since CLI is spawned with --framework net8.0.
 /// </summary>
 /// <remarks>
-/// Tier 1 tests use --what-if and are safe for all environments.
+/// Tier 1 tests use --dry-run and are safe for all environments.
 /// Tier 2 tests (marked with DestructiveE2E trait) actually deploy plugins.
 /// </remarks>
 public class PluginsDeployCommandE2ETests : CliE2ETestBase
 {
-    #region Tier 1: Safe tests (--what-if)
+    #region Tier 1: Safe tests (--dry-run)
 
     [CliE2EWithCredentials]
-    public async Task Deploy_WhatIf_ShowsPlan()
+    public async Task Deploy_DryRun_ShowsPlan()
     {
         var profileName = GenerateTestProfileName();
         await RunCliAsync(
@@ -34,15 +34,15 @@ public class PluginsDeployCommandE2ETests : CliE2ETestBase
         var result = await RunCliAsync(
             "plugins", "deploy",
             "--config", TestRegistrationsPath,
-            "--what-if");
+            "--dry-run");
 
         result.ExitCode.Should().Be(0, $"StdErr: {result.StdErr}");
-        // What-if mode should indicate it's not making changes
-        result.StdErr.Should().Contain("What-If");
+        // Dry-run mode should indicate it's not making changes
+        result.StdErr.Should().Contain("Dry-Run");
     }
 
     [CliE2EWithCredentials]
-    public async Task Deploy_WhatIf_JsonFormat_ReturnsValidJson()
+    public async Task Deploy_DryRun_JsonFormat_ReturnsValidJson()
     {
         var profileName = GenerateTestProfileName();
         await RunCliAsync(
@@ -58,7 +58,7 @@ public class PluginsDeployCommandE2ETests : CliE2ETestBase
         var result = await RunCliAsync(
             "plugins", "deploy",
             "--config", TestRegistrationsPath,
-            "--what-if",
+            "--dry-run",
             "--output-format", "json");
 
         result.ExitCode.Should().Be(0, $"StdErr: {result.StdErr}");
@@ -72,7 +72,7 @@ public class PluginsDeployCommandE2ETests : CliE2ETestBase
         var result = await RunCliAsync(
             "plugins", "deploy",
             "--config", "nonexistent-config.json",
-            "--what-if");
+            "--dry-run");
 
         result.ExitCode.Should().NotBe(0);
         (result.StdOut + result.StdErr).Should().ContainAny("not found", "does not exist", "Error", "Could not find");
@@ -99,7 +99,7 @@ public class PluginsDeployCommandE2ETests : CliE2ETestBase
         var result = await RunCliAsync(
             "plugins", "deploy",
             "--config", invalidConfigPath,
-            "--what-if");
+            "--dry-run");
 
         result.ExitCode.Should().NotBe(0);
         (result.StdOut + result.StdErr).Should().ContainAny("Error", "invalid", "parse", "JSON");
@@ -108,7 +108,7 @@ public class PluginsDeployCommandE2ETests : CliE2ETestBase
     [CliE2EFact]
     public async Task Deploy_MissingConfigOption_FailsWithError()
     {
-        var result = await RunCliAsync("plugins", "deploy", "--what-if");
+        var result = await RunCliAsync("plugins", "deploy", "--dry-run");
 
         result.ExitCode.Should().NotBe(0);
         (result.StdOut + result.StdErr).Should().ContainAny("--config", "required", "-c");

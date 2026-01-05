@@ -31,7 +31,7 @@ Added comprehensive E2E test coverage for all 5 plugin CLI commands (extract, li
 
 | Pattern | Why It Worked |
 |---------|---------------|
-| Two-tier test strategy | Safe (--what-if) tests in CI, destructive tests with cleanup |
+| Two-tier test strategy | Safe (--dry-run) tests in CI, destructive tests with cleanup |
 | Test base classes | `CliE2ETestBase` handled isolation, cleanup automatically |
 | Bot review for real issues | Gemini caught missing try-finally cleanup |
 | Iterative fixing | Each CI run revealed next issue to fix |

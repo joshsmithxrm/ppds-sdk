@@ -87,9 +87,9 @@ public class DeployCommandTests : IDisposable
     }
 
     [Fact]
-    public void Create_HasOptionalWhatIfOption()
+    public void Create_HasOptionalDryRunOption()
     {
-        var option = _command.Options.FirstOrDefault(o => o.Name == "--what-if");
+        var option = _command.Options.FirstOrDefault(o => o.Name == "--dry-run");
         Assert.NotNull(option);
         Assert.False(option.Required);
     }
@@ -156,9 +156,9 @@ public class DeployCommandTests : IDisposable
     }
 
     [Fact]
-    public void Parse_WithOptionalWhatIf_Succeeds()
+    public void Parse_WithOptionalDryRun_Succeeds()
     {
-        var result = _command.Parse($"-c \"{_tempConfigFile}\" --what-if");
+        var result = _command.Parse($"-c \"{_tempConfigFile}\" --dry-run");
         Assert.Empty(result.Errors);
     }
 
@@ -178,7 +178,7 @@ public class DeployCommandTests : IDisposable
             "--environment https://org.crm.dynamics.com " +
             "--solution my_solution " +
             "--clean " +
-            "--what-if " +
+            "--dry-run " +
             "--output-format Json");
         Assert.Empty(result.Errors);
     }

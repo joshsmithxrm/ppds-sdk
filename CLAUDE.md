@@ -457,6 +457,12 @@ See [ADR-0005](docs/adr/0005_DOP_BASED_PARALLELISM.md) for details.
 | [0006](docs/adr/0006_CONNECTION_SOURCE_ABSTRACTION.md) | IConnectionSource for custom auth methods |
 | [0007](docs/adr/0007_UNIFIED_CLI_AND_AUTH.md) | Unified CLI and shared authentication profiles |
 | [0008](docs/adr/0008_CLI_OUTPUT_ARCHITECTURE.md) | CLI output architecture (structured errors, stdout/stderr separation) |
+| [0009](docs/adr/0009_CLI_COMMAND_TAXONOMY.md) | CLI command taxonomy and naming |
+| [0010](docs/adr/0010_PUBLISHED_UNPUBLISHED_DEFAULT.md) | Default to published content |
+| [0011](docs/adr/0011_DEPLOYMENT_SETTINGS_FORMAT.md) | Deployment settings JSON format |
+| [0012](docs/adr/0012_HYBRID_FILTER_DESIGN.md) | Hybrid filter design for diff commands |
+| [0013](docs/adr/0013_CLI_DRY_RUN_CONVENTION.md) | CLI uses --dry-run (Unix convention) |
+| [0014](docs/adr/0014_CSV_MAPPING_SCHEMA.md) | CSV mapping schema versioning |
 
 ---
 
@@ -703,6 +709,14 @@ PRs get reviewed by Copilot, Gemini, and CodeQL. **Not all findings are valid.**
 | `pre-commit-validate.py` | `git commit` | Build + unit tests (skips integration), blocks if failed |
 
 Hooks in `.claude/settings.json`. Pre-commit runs ~10s, keeps broken code out of commits.
+
+---
+
+## 📦 Consumer Templates
+
+Projects that USE PPDS (not contribute to it) can find Claude Code integration templates at:
+- `templates/claude/` - Best practices, settings, slash commands
+- Installation: [templates/claude/INSTALL.md](templates/claude/INSTALL.md)
 
 ---
 

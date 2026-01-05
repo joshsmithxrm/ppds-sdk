@@ -36,7 +36,7 @@ public static class CleanCommand
             Required = true
         }.AcceptExistingOnly();
 
-        var whatIfOption = new Option<bool>("--what-if")
+        var dryRunOption = new Option<bool>("--dry-run")
         {
             Description = "Preview deletions without applying",
             DefaultValueFactory = _ => false
@@ -47,7 +47,7 @@ public static class CleanCommand
             configOption,
             PluginsCommandGroup.ProfileOption,
             PluginsCommandGroup.EnvironmentOption,
-            whatIfOption
+            dryRunOption
         };
 
         // Add global options including output format
@@ -58,10 +58,10 @@ public static class CleanCommand
             var config = parseResult.GetValue(configOption)!;
             var profile = parseResult.GetValue(PluginsCommandGroup.ProfileOption);
             var environment = parseResult.GetValue(PluginsCommandGroup.EnvironmentOption);
-            var whatIf = parseResult.GetValue(whatIfOption);
+            var dryRun = parseResult.GetValue(dryRunOption);
             var globalOptions = GlobalOptions.GetValues(parseResult);
 
-            return await ExecuteAsync(config, profile, environment, whatIf, globalOptions, cancellationToken);
+            return await ExecuteAsync(config, profile, environment, dryRun, globalOptions, cancellationToken);
         });
 
         return command;
@@ -71,7 +71,7 @@ public static class CleanCommand
         FileInfo configFile,
         string? profile,
         string? environment,
-        bool whatIf,
+        bool dryRun,
         GlobalOptionValues globalOptions,
         CancellationToken cancellationToken)
     {
@@ -114,9 +114,9 @@ public static class CleanCommand
                 ConsoleHeader.WriteConnectedAs(connectionInfo);
                 Console.Error.WriteLine();
 
-                if (whatIf)
+                if (dryRun)
                 {
-                    Console.Error.WriteLine("[What-If Mode] No changes will be applied.");
+                    Console.Error.WriteLine("[Dry-Run Mode] No changes will be applied.");
                     Console.Error.WriteLine();
                 }
             }
@@ -130,7 +130,7 @@ public static class CleanCommand
                 var result = await CleanAssemblyAsync(
                     registrationService,
                     assemblyConfig,
-                    whatIf,
+                    dryRun,
                     globalOptions,
                     cancellationToken);
 
@@ -152,7 +152,7 @@ public static class CleanCommand
                 {
                     Console.Error.WriteLine("No orphaned registrations found.");
                 }
-                else if (whatIf)
+                else if (dryRun)
                 {
                     Console.Error.WriteLine($"Would delete: {totalOrphans} step(s), {totalTypesDeleted} orphaned type(s)");
                 }
@@ -175,7 +175,7 @@ public static class CleanCommand
     private static async Task<CleanResult> CleanAssemblyAsync(
         PluginRegistrationService service,
         PluginAssemblyConfig assemblyConfig,
-        bool whatIf,
+        bool dryRun,
         GlobalOptionValues globalOptions,
         CancellationToken cancellationToken)
     {
@@ -228,10 +228,10 @@ public static class CleanCommand
                     StepId = step.Id
                 });
 
-                if (whatIf)
+                if (dryRun)
                 {
                     if (!globalOptions.IsJsonMode)
-                        Console.Error.WriteLine($"  [What-If] Would delete step: {step.Name}");
+                        Console.Error.WriteLine($"  [Dry-Run] Would delete step: {step.Name}");
                 }
                 else
                 {
@@ -261,10 +261,10 @@ public static class CleanCommand
                         TypeId = existingType.Id
                     });
 
-                    if (whatIf)
+                    if (dryRun)
                     {
                         if (!globalOptions.IsJsonMode)
-                            Console.Error.WriteLine($"  [What-If] Would delete orphaned type: {existingType.TypeName}");
+                            Console.Error.WriteLine($"  [Dry-Run] Would delete orphaned type: {existingType.TypeName}");
                     }
                     else
                     {
