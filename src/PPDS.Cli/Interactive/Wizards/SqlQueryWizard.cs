@@ -96,7 +96,7 @@ internal static class SqlQueryWizard
                         fetchXml,
                         pageNumber: null,
                         pagingCookie: null,
-                        includeCount: true,
+                        includeCount: false,
                         cancellationToken);
                 });
 
