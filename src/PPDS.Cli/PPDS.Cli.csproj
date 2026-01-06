@@ -52,6 +52,7 @@
 
   <ItemGroup>
     <PackageReference Include="Nerdbank.Streams" Version="2.13.16" />
+    <PackageReference Include="ReadLine" Version="2.0.1" />
     <ProjectReference Include="..\PPDS.Auth\PPDS.Auth.csproj" />
     <ProjectReference Include="..\PPDS.Migration\PPDS.Migration.csproj" />
     <ProjectReference Include="..\PPDS.Dataverse\PPDS.Dataverse.csproj" />

@@ -4,6 +4,7 @@ using PPDS.Cli.Interactive.Components.QueryResults;
 using PPDS.Cli.Services.Query;
 using PPDS.Dataverse.Sql.Parsing;
 using Spectre.Console;
+using ReadLineLib = System.ReadLine;
 
 namespace PPDS.Cli.Interactive.Wizards;
 
@@ -49,16 +50,18 @@ internal static class SqlQueryWizard
             AnsiConsole.Write(headerPanel);
             AnsiConsole.WriteLine();
 
-            // Get SQL query from user (with pre-fill on error)
-            var prompt = new TextPrompt<string>("[grey]Enter SQL query (or 'back'/'exit'/'history'):[/]")
-                .AllowEmpty();
+            // Get SQL query from user using ReadLine for proper editing support
+            // (arrow keys, home/end, ctrl+A, etc.)
+            AnsiConsole.MarkupLine(Styles.MutedText("Enter SQL query (or 'back'/'exit'/'history'):"));
 
-            if (!string.IsNullOrEmpty(lastQuery))
+            // Sync QueryHistory to ReadLine's history
+            ReadLineLib.ClearHistory();
+            foreach (var historyItem in QueryHistory.Recent.Reverse())
             {
-                prompt.DefaultValue(lastQuery);
+                ReadLineLib.AddHistory(historyItem);
             }
 
-            var sql = AnsiConsole.Prompt(prompt);
+            var sql = ReadLineLib.Read("> ", lastQuery ?? string.Empty) ?? string.Empty;
 
             // Handle special commands
             if (string.IsNullOrWhiteSpace(sql) || sql.Equals("back", StringComparison.OrdinalIgnoreCase))
