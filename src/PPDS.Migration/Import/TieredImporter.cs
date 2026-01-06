@@ -39,6 +39,13 @@ namespace PPDS.Migration.Import
         private readonly ILogger<TieredImporter>? _logger;
 
         /// <summary>
+        /// Cache of entities that don't support bulk operations.
+        /// Used to avoid wasting records on probe attempts for known-unsupported entities.
+        /// Per-import-session scope - resets each import.
+        /// </summary>
+        private readonly ConcurrentDictionary<string, bool> _bulkNotSupportedEntities = new(StringComparer.OrdinalIgnoreCase);
+
+        /// <summary>
         /// Initializes a new instance of the <see cref="TieredImporter"/> class.
         /// </summary>
         public TieredImporter(
@@ -422,25 +429,59 @@ namespace PPDS.Migration.Import
             };
 
             BulkOperationResult bulkResult;
-            if (options.UseBulkApis)
+            if (options.UseBulkApis && !_bulkNotSupportedEntities.ContainsKey(entityName))
             {
-                bulkResult = options.Mode switch
+                // Probe with first record to detect bulk operation support
+                // This wastes only 1 record instead of the full batch if bulk ops aren't supported
+                var probeRecord = preparedRecords.Take(1).ToList();
+                var probeResult = options.Mode switch
                 {
-                    ImportMode.Create => await _bulkExecutor.CreateMultipleAsync(entityName, preparedRecords, bulkOptions, progressAdapter, cancellationToken).ConfigureAwait(false),
-                    ImportMode.Update => await _bulkExecutor.UpdateMultipleAsync(entityName, preparedRecords, bulkOptions, progressAdapter, cancellationToken).ConfigureAwait(false),
-                    _ => await _bulkExecutor.UpsertMultipleAsync(entityName, preparedRecords, bulkOptions, progressAdapter, cancellationToken).ConfigureAwait(false)
+                    ImportMode.Create => await _bulkExecutor.CreateMultipleAsync(entityName, probeRecord, bulkOptions, null, cancellationToken).ConfigureAwait(false),
+                    ImportMode.Update => await _bulkExecutor.UpdateMultipleAsync(entityName, probeRecord, bulkOptions, null, cancellationToken).ConfigureAwait(false),
+                    _ => await _bulkExecutor.UpsertMultipleAsync(entityName, probeRecord, bulkOptions, null, cancellationToken).ConfigureAwait(false)
                 };
 
-                // Check for bulk operation not supported - fallback to individual operations
-                if (IsBulkNotSupportedFailure(bulkResult, preparedRecords.Count))
+                if (IsBulkNotSupportedFailure(probeResult, 1))
                 {
-                    _logger?.LogWarning("Bulk operation not supported for {Entity}, falling back to individual operations", entityName);
+                    // Cache that this entity doesn't support bulk operations
+                    _bulkNotSupportedEntities[entityName] = true;
+                    _logger?.LogInformation("Entity {Entity} does not support bulk operations (detected via probe), using individual operations", entityName);
+
+                    // Fall back to individual operations for ALL records (including the probe record)
                     bulkResult = await ExecuteIndividualOperationsAsync(entityName, preparedRecords, options, cancellationToken).ConfigureAwait(false);
                 }
+                else
+                {
+                    // Probe succeeded - process remaining records in bulk
+                    if (preparedRecords.Count > 1)
+                    {
+                        var remainingRecords = preparedRecords.Skip(1).ToList();
+                        var remainingResult = options.Mode switch
+                        {
+                            ImportMode.Create => await _bulkExecutor.CreateMultipleAsync(entityName, remainingRecords, bulkOptions, progressAdapter, cancellationToken).ConfigureAwait(false),
+                            ImportMode.Update => await _bulkExecutor.UpdateMultipleAsync(entityName, remainingRecords, bulkOptions, progressAdapter, cancellationToken).ConfigureAwait(false),
+                            _ => await _bulkExecutor.UpsertMultipleAsync(entityName, remainingRecords, bulkOptions, progressAdapter, cancellationToken).ConfigureAwait(false)
+                        };
+
+                        // Merge probe result with remaining result
+                        bulkResult = MergeBulkResults(probeResult, remainingResult);
+                    }
+                    else
+                    {
+                        // Only had 1 record, probe was the entire batch
+                        bulkResult = probeResult;
+                    }
+                }
+            }
+            else if (_bulkNotSupportedEntities.ContainsKey(entityName))
+            {
+                // Already know bulk operations aren't supported for this entity
+                _logger?.LogDebug("Skipping bulk API for {Entity} (cached as unsupported)", entityName);
+                bulkResult = await ExecuteIndividualOperationsAsync(entityName, preparedRecords, options, cancellationToken).ConfigureAwait(false);
             }
             else
             {
-                // Fallback to individual operations
+                // UseBulkApis is false - use individual operations
                 bulkResult = await ExecuteIndividualOperationsAsync(entityName, preparedRecords, options, cancellationToken).ConfigureAwait(false);
             }
 
@@ -663,6 +704,37 @@ namespace PPDS.Migration.Import
         {
             return entityLogicalName.Equals("systemuser", StringComparison.OrdinalIgnoreCase) ||
                    entityLogicalName.Equals("team", StringComparison.OrdinalIgnoreCase);
+        }
+
+        /// <summary>
+        /// Merges two bulk operation results into one combined result.
+        /// Used when probe record is processed separately from remaining records.
+        /// </summary>
+        private static BulkOperationResult MergeBulkResults(BulkOperationResult probeResult, BulkOperationResult remainingResult)
+        {
+            // Adjust error indices in remaining result to account for probe record
+            var adjustedErrors = remainingResult.Errors
+                .Select(e => new BulkOperationError
+                {
+                    Index = e.Index + 1, // Offset by 1 for the probe record
+                    RecordId = e.RecordId,
+                    ErrorCode = e.ErrorCode,
+                    Message = e.Message,
+                    FieldName = e.FieldName,
+                    FieldValueDescription = e.FieldValueDescription
+                })
+                .ToList();
+
+            var allErrors = probeResult.Errors.Concat(adjustedErrors).ToList();
+
+            return new BulkOperationResult
+            {
+                SuccessCount = probeResult.SuccessCount + remainingResult.SuccessCount,
+                FailureCount = probeResult.FailureCount + remainingResult.FailureCount,
+                CreatedCount = probeResult.CreatedCount + remainingResult.CreatedCount,
+                UpdatedCount = probeResult.UpdatedCount + remainingResult.UpdatedCount,
+                Errors = allErrors
+            };
         }
 
         /// <summary>

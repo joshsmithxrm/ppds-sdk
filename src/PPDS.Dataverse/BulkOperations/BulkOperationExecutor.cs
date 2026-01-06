@@ -7,13 +7,14 @@ using System.Net.Http;
 using System.Net.Sockets;
 using System.ServiceModel;
 using System.ServiceModel.Security;
+using System.Text.Json;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Microsoft.Xrm.Sdk;
 using Microsoft.Xrm.Sdk.Messages;
-using System.Text.Json;
 using PPDS.Dataverse.DependencyInjection;
 using PPDS.Dataverse.Pooling;
 using PPDS.Dataverse.Progress;
@@ -1550,17 +1551,67 @@ namespace PPDS.Dataverse.BulkOperations
         }
 
         /// <summary>
+        /// Attempts to extract a field/attribute name from a Dataverse error message.
+        /// </summary>
+        /// <remarks>
+        /// Common patterns:
+        /// - "attribute 'fieldname'" or "field 'fieldname'"
+        /// - "Entity 'entityname' With Id = ..." (indicates a lookup field)
+        /// - "'fieldname' contains invalid data"
+        /// </remarks>
+        private static string? TryExtractFieldName(string message)
+        {
+            if (string.IsNullOrEmpty(message))
+                return null;
+
+            // Pattern: attribute 'fieldname' or field 'fieldname'
+            var match = Regex.Match(message, @"(?:attribute|field)\s*['""](\w+)['""]", RegexOptions.IgnoreCase);
+            if (match.Success)
+                return match.Groups[1].Value;
+
+            // Pattern: 'fieldname' contains invalid data
+            match = Regex.Match(message, @"['""](\w+)['""]\s+contains", RegexOptions.IgnoreCase);
+            if (match.Success)
+                return match.Groups[1].Value;
+
+            return null;
+        }
+
+        /// <summary>
+        /// Creates a safe description of a field value for logging (no PII).
+        /// </summary>
+        private static string? DescribeFieldValue(Entity entity, string? fieldName)
+        {
+            if (string.IsNullOrEmpty(fieldName) || !entity.Contains(fieldName))
+                return null;
+
+            var value = entity[fieldName];
+            return value switch
+            {
+                EntityReference er => $"{er.LogicalName}:{er.Id.ToString("D")[..8]}...",
+                OptionSetValue osv => $"OptionSet({osv.Value})",
+                Money m => $"Money({m.Value})",
+                null => "null",
+                _ => value.GetType().Name
+            };
+        }
+
+        /// <summary>
         /// Creates a failure result for a batch of entities that failed due to a non-retryable error.
         /// </summary>
         private static BulkOperationResult CreateFailureResultForEntities(List<Entity> batch, Exception ex)
         {
             var errorCode = ExtractErrorCode(ex);
+            var fieldName = TryExtractFieldName(ex.Message);
+
             var errors = batch.Select((e, i) => new BulkOperationError
             {
                 Index = i,
                 RecordId = e.Id != Guid.Empty ? e.Id : null,
                 ErrorCode = errorCode,
-                Message = ex.Message
+                Message = ex.Message,
+                FieldName = fieldName,
+                FieldValueDescription = DescribeFieldValue(e, fieldName)
             }).ToList();
 
             return new BulkOperationResult
@@ -1578,12 +1629,16 @@ namespace PPDS.Dataverse.BulkOperations
         private static BulkOperationResult CreateFailureResultForIds(List<Guid> batch, Exception ex)
         {
             var errorCode = ExtractErrorCode(ex);
+            var fieldName = TryExtractFieldName(ex.Message);
+
             var errors = batch.Select((id, i) => new BulkOperationError
             {
                 Index = i,
                 RecordId = id,
                 ErrorCode = errorCode,
-                Message = ex.Message
+                Message = ex.Message,
+                FieldName = fieldName
+                // FieldValueDescription not available when only IDs are provided
             }).ToList();
 
             return new BulkOperationResult

@@ -10,8 +10,11 @@ namespace PPDS.Migration.Progress
     {
         /// <summary>
         /// Gets or sets the schema version of this report.
+        /// Version history:
+        /// - 1.0: Initial schema
+        /// - 1.1: Added ExecutionContext for version/environment diagnostics
         /// </summary>
-        public string Version { get; set; } = "1.0";
+        public string Version { get; set; } = "1.1";
 
         /// <summary>
         /// Gets or sets the timestamp when this report was generated.
@@ -27,6 +30,12 @@ namespace PPDS.Migration.Progress
         /// Gets or sets the target environment URL.
         /// </summary>
         public string? TargetEnvironment { get; set; }
+
+        /// <summary>
+        /// Gets or sets the execution context for diagnostic purposes.
+        /// Added in schema version 1.1.
+        /// </summary>
+        public ImportExecutionContext? ExecutionContext { get; set; }
 
         /// <summary>
         /// Gets or sets the import summary statistics.
@@ -47,6 +56,53 @@ namespace PPDS.Migration.Progress
         /// Gets or sets the retry manifest for failed records.
         /// </summary>
         public RetryManifest? RetryManifest { get; set; }
+    }
+
+    /// <summary>
+    /// Execution context capturing version and environment information for diagnostics.
+    /// Helps correlate import issues to specific CLI/SDK versions.
+    /// </summary>
+    public class ImportExecutionContext
+    {
+        /// <summary>
+        /// Gets or sets the CLI tool version (e.g., "1.2.3").
+        /// </summary>
+        public string CliVersion { get; set; } = string.Empty;
+
+        /// <summary>
+        /// Gets or sets the SDK version (PPDS.Dataverse, e.g., "1.2.3").
+        /// </summary>
+        public string SdkVersion { get; set; } = string.Empty;
+
+        /// <summary>
+        /// Gets or sets the .NET runtime version (e.g., "8.0.1").
+        /// </summary>
+        public string RuntimeVersion { get; set; } = string.Empty;
+
+        /// <summary>
+        /// Gets or sets the platform description (e.g., "Windows 10.0.22631").
+        /// </summary>
+        public string Platform { get; set; } = string.Empty;
+
+        /// <summary>
+        /// Gets or sets the import mode used (e.g., "Create", "Update", "Upsert").
+        /// </summary>
+        public string ImportMode { get; set; } = string.Empty;
+
+        /// <summary>
+        /// Gets or sets whether owner fields were stripped during import.
+        /// </summary>
+        public bool StripOwnerFields { get; set; }
+
+        /// <summary>
+        /// Gets or sets whether plugins were bypassed during import.
+        /// </summary>
+        public bool BypassPlugins { get; set; }
+
+        /// <summary>
+        /// Gets or sets whether a user mapping file was provided.
+        /// </summary>
+        public bool UserMappingProvided { get; set; }
     }
 
     /// <summary>

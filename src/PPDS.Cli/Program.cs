@@ -23,8 +23,22 @@ namespace PPDS.Cli;
 /// </summary>
 public static class Program
 {
+    /// <summary>
+    /// Arguments that should skip the version header (help/version output).
+    /// </summary>
+    private static readonly HashSet<string> SkipVersionHeaderArgs = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "--help", "-h", "-?", "--version"
+    };
+
     public static async Task<int> Main(string[] args)
     {
+        // Write version header for diagnostic context (skip for help/version/interactive)
+        if (args.Length > 0 && !args.Any(a => SkipVersionHeaderArgs.Contains(a)) && !IsInteractiveMode(args))
+        {
+            ErrorOutput.WriteVersionHeader();
+        }
+
         // Check for interactive mode before invoking System.CommandLine
         // This allows a parallel execution path for the TUI
         if (IsInteractiveMode(args))

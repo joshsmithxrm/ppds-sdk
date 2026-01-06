@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Error report v1.1 with execution context** - Import error reports now include `executionContext` object with CLI/SDK versions, runtime, platform, import mode, and option flags. Enables reproducing and troubleshooting imports after the fact. Version bumped from "1.0" to "1.1". See [ADR-0018](../../docs/adr/0018_IMPORT_DIAGNOSTICS_ARCHITECTURE.md).
+- **Bulk operation probe-once optimization** - When detecting if an entity supports bulk operations (UpsertMultiple), now probes with 1 record first instead of sending the full batch. Reduces wasted records from N to 1 for unsupported entities (e.g., `team` entity). Cache is per-import-session. See [ADR-0018](../../docs/adr/0018_IMPORT_DIAGNOSTICS_ARCHITECTURE.md).
+
 ### Fixed
 
 - **CMT import compatibility: Added `number` type alias** - CMT exports integer fields with `type="number"`, but PPDS only recognized `int`/`integer`. Unrecognized types were treated as strings, causing import failures. ([#187](https://github.com/joshsmithxrm/ppds-sdk/issues/187))

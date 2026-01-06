@@ -1,4 +1,5 @@
 using System.CommandLine;
+using System.Runtime.InteropServices;
 using Microsoft.Crm.Sdk.Messages;
 using Microsoft.Extensions.DependencyInjection;
 using PPDS.Cli.Infrastructure;
@@ -242,11 +243,23 @@ public static class ImportCommand
             if (errorReport != null && result.Errors.Count > 0)
             {
                 var connectionInfo = serviceProvider.GetRequiredService<ResolvedConnectionInfo>();
+                var executionContext = new ImportExecutionContext
+                {
+                    CliVersion = ErrorOutput.Version,
+                    SdkVersion = ErrorOutput.SdkVersion,
+                    RuntimeVersion = Environment.Version.ToString(),
+                    Platform = RuntimeInformation.OSDescription,
+                    ImportMode = importOptions.Mode.ToString(),
+                    StripOwnerFields = importOptions.StripOwnerFields,
+                    BypassPlugins = importOptions.BypassCustomPlugins != CustomLogicBypass.None,
+                    UserMappingProvided = importOptions.UserMappings != null
+                };
                 await ErrorReportWriter.WriteAsync(
                     errorReport.FullName,
                     result,
                     data.FullName,
                     connectionInfo.EnvironmentUrl,
+                    executionContext,
                     cancellationToken);
                 Console.Error.WriteLine($"Error report written to: {errorReport.FullName}");
             }

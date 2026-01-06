@@ -31,15 +31,17 @@ namespace PPDS.Migration.Progress
         /// <param name="result">The import result.</param>
         /// <param name="sourceFile">The source data file path.</param>
         /// <param name="targetEnvironment">The target environment URL.</param>
+        /// <param name="executionContext">Optional execution context for diagnostic info.</param>
         /// <param name="cancellationToken">The cancellation token.</param>
         public static async Task WriteAsync(
             string filePath,
             ImportResult result,
             string? sourceFile,
             string? targetEnvironment,
+            ImportExecutionContext? executionContext = null,
             CancellationToken cancellationToken = default)
         {
-            var report = BuildReport(result, sourceFile, targetEnvironment);
+            var report = BuildReport(result, sourceFile, targetEnvironment, executionContext);
             var json = JsonSerializer.Serialize(report, JsonOptions);
             await File.WriteAllTextAsync(filePath, json, cancellationToken);
         }
@@ -50,7 +52,8 @@ namespace PPDS.Migration.Progress
         private static ImportErrorReport BuildReport(
             ImportResult result,
             string? sourceFile,
-            string? targetEnvironment)
+            string? targetEnvironment,
+            ImportExecutionContext? executionContext)
         {
             var errors = result.Errors ?? Array.Empty<MigrationError>();
             var patterns = DetectErrorPatterns(errors);
@@ -60,6 +63,7 @@ namespace PPDS.Migration.Progress
                 GeneratedAt = DateTime.UtcNow,
                 SourceFile = sourceFile,
                 TargetEnvironment = targetEnvironment,
+                ExecutionContext = executionContext,
                 Summary = new ImportErrorSummary
                 {
                     TotalRecords = result.RecordsImported + result.RecordsUpdated + errors.Count,
