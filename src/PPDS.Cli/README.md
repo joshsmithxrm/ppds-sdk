@@ -29,13 +29,36 @@ ppds data export --schema schema.xml --output data.zip
 
 ```
 ppds
-├── auth      Authentication profile management
-├── env       Environment discovery and selection
-├── data      Data operations (export, import, copy, load, update, delete, schema, users)
-├── plugins   Plugin registration management
-├── query     Execute FetchXML and SQL queries
-└── metadata  Browse entity and attribute metadata
+├── interactive  Launch interactive TUI mode (-i, --interactive)
+├── auth         Authentication profile management
+├── env          Environment discovery and selection
+├── data         Data operations (export, import, copy, load, update, delete, schema, users)
+├── plugins      Plugin registration management
+├── query        Execute FetchXML and SQL queries
+├── metadata     Browse entity and attribute metadata
+├── solutions    Manage Power Platform solutions
+├── users        Manage system users
+└── roles        Manage security roles
 ```
+
+---
+
+## Interactive Mode
+
+Launch the interactive TUI for guided profile/environment selection and SQL querying:
+
+```bash
+ppds interactive    # or ppds -i / ppds --interactive
+```
+
+**Features:**
+- **Profile & Environment Selection** - Browse and switch profiles, discover environments via Global Discovery
+- **SQL Query Wizard** - Write SQL queries with results displayed in an interactive table
+- **Keyboard Navigation** - Arrow keys to navigate results, `O` to open in browser, `C` to copy URL
+- **Query History** - Use up/down arrows to recall previous queries
+- **Session Connection Pooling** - Fast subsequent queries within the same session
+
+**Note:** Requires a TTY terminal. Use standard CLI commands in CI/CD pipelines.
 
 ---
 

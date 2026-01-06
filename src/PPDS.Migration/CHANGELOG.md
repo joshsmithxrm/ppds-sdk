@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0-beta.5] - 2026-01-06
+
 ### Added
 
 - **Error report v1.1 with execution context** - Import error reports now include `executionContext` object with CLI/SDK versions, runtime, platform, import mode, and option flags. Enables reproducing and troubleshooting imports after the fact. Version bumped from "1.0" to "1.1". See [ADR-0022](../../docs/adr/0022_IMPORT_DIAGNOSTICS_ARCHITECTURE.md).
@@ -75,7 +77,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - DI integration via `AddDataverseMigration()` extension method
 - Targets: `net8.0`, `net10.0`
 
-[Unreleased]: https://github.com/joshsmithxrm/ppds-sdk/compare/Migration-v1.0.0-beta.4...HEAD
+[Unreleased]: https://github.com/joshsmithxrm/ppds-sdk/compare/Migration-v1.0.0-beta.5...HEAD
+[1.0.0-beta.5]: https://github.com/joshsmithxrm/ppds-sdk/compare/Migration-v1.0.0-beta.4...Migration-v1.0.0-beta.5
 [1.0.0-beta.4]: https://github.com/joshsmithxrm/ppds-sdk/compare/Migration-v1.0.0-beta.3...Migration-v1.0.0-beta.4
 [1.0.0-beta.3]: https://github.com/joshsmithxrm/ppds-sdk/compare/Migration-v1.0.0-beta.2...Migration-v1.0.0-beta.3
 [1.0.0-beta.2]: https://github.com/joshsmithxrm/ppds-sdk/compare/Migration-v1.0.0-beta.1...Migration-v1.0.0-beta.2

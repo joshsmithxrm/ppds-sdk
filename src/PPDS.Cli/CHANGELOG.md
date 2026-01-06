@@ -7,8 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0-beta.10] - 2026-01-06
+
 ### Added
 
+- **`ppds interactive` command** - Launch interactive TUI mode for profile/environment selection and SQL queries ([#192](https://github.com/joshsmithxrm/ppds-sdk/issues/192)):
+  - Entry points: `ppds interactive`, `ppds -i`, `ppds --interactive`
+  - Profile and environment selection with Global Discovery integration
+  - SQL query wizard with results displayed in interactive table view
+  - Arrow key navigation for query results (up/down for rows, left/right for columns)
+  - Open record in browser (`O`) or copy URL to clipboard (`C`)
+  - Query history with up/down arrow recall
+  - Session-scoped connection pooling for faster subsequent queries
+  - Graceful degradation when not in a TTY environment
 - **Version header at startup** - CLI now outputs diagnostic header to stderr: version info (CLI, SDK, .NET runtime) and platform. Enables correlating issues to specific builds. Skipped for `--help`, `--version`, or no arguments. See [ADR-0022](../../docs/adr/0022_IMPORT_DIAGNOSTICS_ARCHITECTURE.md).
 - **`ppds solutions` command group** - Manage Power Platform solutions ([#137](https://github.com/joshsmithxrm/ppds-sdk/issues/137)):
   - `ppds solutions list` - List solutions in environment (supports `--include-managed`, `--filter`)
@@ -266,7 +277,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Packaged as .NET global tool (`ppds`)
 - Targets: `net10.0`
 
-[Unreleased]: https://github.com/joshsmithxrm/ppds-sdk/compare/Cli-v1.0.0-beta.9...HEAD
+[Unreleased]: https://github.com/joshsmithxrm/ppds-sdk/compare/Cli-v1.0.0-beta.10...HEAD
+[1.0.0-beta.10]: https://github.com/joshsmithxrm/ppds-sdk/compare/Cli-v1.0.0-beta.9...Cli-v1.0.0-beta.10
 [1.0.0-beta.9]: https://github.com/joshsmithxrm/ppds-sdk/compare/Cli-v1.0.0-beta.8...Cli-v1.0.0-beta.9
 [1.0.0-beta.8]: https://github.com/joshsmithxrm/ppds-sdk/compare/Cli-v1.0.0-beta.7...Cli-v1.0.0-beta.8
 [1.0.0-beta.7]: https://github.com/joshsmithxrm/ppds-sdk/compare/Cli-v1.0.0-beta.6...Cli-v1.0.0-beta.7
