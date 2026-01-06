@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **CMT import compatibility: Added `number` type alias** - CMT exports integer fields with `type="number"`, but PPDS only recognized `int`/`integer`. Unrecognized types were treated as strings, causing import failures. ([#187](https://github.com/joshsmithxrm/ppds-sdk/issues/187))
+- **CMT import compatibility: Added `bigint` type support** - 64-bit integer fields now parse correctly instead of falling back to string. ([#187](https://github.com/joshsmithxrm/ppds-sdk/issues/187))
+- **CMT import compatibility: Added `partylist` type handling** - Email participant fields now parse as EntityReference like other lookup types. ([#187](https://github.com/joshsmithxrm/ppds-sdk/issues/187))
+
 ## [1.0.0-beta.4] - 2026-01-05
 
 ### Fixed
