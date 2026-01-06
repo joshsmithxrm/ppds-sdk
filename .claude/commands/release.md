@@ -82,7 +82,7 @@ For each package with untagged versions:
    gh release create Cli-v{version} \
      --title "PPDS CLI v{version}" \
      --notes "{changelog_content}" \
-     --prerelease \
+     --prerelease \  # only if version contains -alpha, -beta, or -rc
      --draft
    ```
    Report: "Draft release created. The release-cli.yml workflow will add binaries and publish."
