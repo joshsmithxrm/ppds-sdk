@@ -253,15 +253,12 @@ internal static class RecordView
             Action = RecordAction.ToggleNulls
         });
 
-        // Only show table view option if we have few enough columns
-        if (state.Columns.Count <= QueryResultsViewer.TableViewMaxColumns)
+        // Always allow switching to table view - user can scroll horizontally if needed
+        choices.Add(new RecordNavigationChoice
         {
-            choices.Add(new RecordNavigationChoice
-            {
-                Label = "View as Table",
-                Action = RecordAction.SwitchToTableView
-            });
-        }
+            Label = "View as Table",
+            Action = RecordAction.SwitchToTableView
+        });
 
         choices.Add(new RecordNavigationChoice
         {
