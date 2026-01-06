@@ -2,6 +2,7 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
@@ -56,29 +57,56 @@ namespace PPDS.Migration.Import
             }
 
             var stopwatch = Stopwatch.StartNew();
-            var totalProcessed = 0;
+
+            // Flatten all M2M operations into a list for parallel processing
+            var allOperations = context.Data.RelationshipData
+                .SelectMany(kvp => kvp.Value.Select(m2m => (EntityName: kvp.Key, Data: m2m)))
+                .ToList();
+
+            // Calculate total target associations for progress reporting
+            var totalTargetAssociations = allOperations.Sum(op => op.Data.TargetIds.Count);
+
+            // Pre-load relationship metadata cache before parallel processing
+            // This ensures thread-safe access during parallel operations
+            await LoadRelationshipMetadataCacheAsync(cancellationToken).ConfigureAwait(false);
+
+            // Thread-safe counters for progress tracking
+            var processedAssociations = 0;
+            var successCount = 0;
             var failureCount = 0;
 
-            foreach (var (entityName, m2mDataList) in context.Data.RelationshipData)
-            {
-                foreach (var m2mData in m2mDataList)
-                {
-                    cancellationToken.ThrowIfCancellationRequested();
+            // Get parallelism from connection pool
+            var parallelism = _connectionPool.GetTotalRecommendedParallelism();
+            _logger?.LogDebug("Processing {Count} M2M operations with parallelism {DOP}",
+                allOperations.Count, parallelism);
 
-                    context.Progress?.Report(new ProgressEventArgs
+            // Track first exception for non-ContinueOnError mode
+            Exception? firstException = null;
+            var shouldStop = false;
+
+            await Parallel.ForEachAsync(
+                allOperations,
+                new ParallelOptions
+                {
+                    MaxDegreeOfParallelism = parallelism,
+                    CancellationToken = cancellationToken
+                },
+                async (operation, ct) =>
+                {
+                    // Check if we should stop (non-ContinueOnError mode hit an error)
+                    if (shouldStop)
                     {
-                        Phase = MigrationPhase.ProcessingRelationships,
-                        Entity = entityName,
-                        Relationship = m2mData.RelationshipName,
-                        Message = $"Processing {m2mData.RelationshipName}..."
-                    });
+                        return;
+                    }
+
+                    var (entityName, m2mData) = operation;
 
                     // Get mapped source ID
                     if (!context.IdMappings.TryGetNewId(entityName, m2mData.SourceId, out var sourceNewId))
                     {
                         _logger?.LogDebug("Skipping M2M for unmapped source {Entity}:{Id}",
                             entityName, m2mData.SourceId);
-                        continue;
+                        return;
                     }
 
                     // Map target IDs - special handling for role entity
@@ -97,7 +125,7 @@ namespace PPDS.Migration.Import
                         // For role entity, check if same ID exists in target
                         else if (isRoleTarget)
                         {
-                            mappedId = await LookupRoleByIdAsync(targetId, cancellationToken).ConfigureAwait(false);
+                            mappedId = await LookupRoleByIdAsync(targetId, ct).ConfigureAwait(false);
                         }
 
                         if (mappedId.HasValue)
@@ -113,14 +141,14 @@ namespace PPDS.Migration.Import
 
                     if (mappedTargetIds.Count == 0)
                     {
-                        continue;
+                        return;
                     }
 
-                    // Resolve relationship name (handles case where schema has intersect entity name instead of SchemaName)
-                    var resolvedRelationshipName = await ResolveRelationshipNameAsync(m2mData.RelationshipName, cancellationToken).ConfigureAwait(false);
+                    // Resolve relationship name (cache is already loaded and thread-safe)
+                    var resolvedRelationshipName = await ResolveRelationshipNameAsync(m2mData.RelationshipName, ct).ConfigureAwait(false);
 
-                    // Create association request
-                    await using var client = await _connectionPool.GetClientAsync(null, cancellationToken: cancellationToken).ConfigureAwait(false);
+                    // Get client from pool - each parallel operation gets its own client
+                    await using var client = await _connectionPool.GetClientAsync(null, cancellationToken: ct).ConfigureAwait(false);
 
                     var relatedEntities = new EntityReferenceCollection();
                     foreach (var targetId in mappedTargetIds)
@@ -138,32 +166,51 @@ namespace PPDS.Migration.Import
                     try
                     {
                         await client.ExecuteAsync(request).ConfigureAwait(false);
-                        totalProcessed += mappedTargetIds.Count;
+                        var newSuccess = Interlocked.Add(ref successCount, mappedTargetIds.Count);
+                        var current = Interlocked.Add(ref processedAssociations, mappedTargetIds.Count);
+
+                        // Report progress
+                        context.Progress?.Report(new ProgressEventArgs
+                        {
+                            Phase = MigrationPhase.ProcessingRelationships,
+                            Entity = entityName,
+                            Relationship = resolvedRelationshipName,
+                            Current = current,
+                            Total = totalTargetAssociations,
+                            SuccessCount = newSuccess,
+                            Message = $"[M2M] {resolvedRelationshipName}"
+                        });
                     }
                     catch (Exception ex)
                     {
                         // M2M associations may fail if already exists - log but continue
                         _logger?.LogDebug(ex, "Failed to associate {Source} with {TargetCount} targets via {Relationship}",
                             sourceNewId, mappedTargetIds.Count, m2mData.RelationshipName);
-                        failureCount++;
+                        Interlocked.Increment(ref failureCount);
 
                         if (!context.Options.ContinueOnError)
                         {
-                            throw;
+                            shouldStop = true;
+                            firstException ??= ex;
                         }
                     }
-                }
+                }).ConfigureAwait(false);
+
+            // If we stopped due to an error in non-ContinueOnError mode, rethrow
+            if (firstException != null)
+            {
+                throw firstException;
             }
 
             stopwatch.Stop();
-            _logger?.LogInformation("Processed {Count} M2M associations in {Duration}ms",
-                totalProcessed, stopwatch.ElapsedMilliseconds);
+            _logger?.LogInformation("Processed {Count} M2M associations in {Duration}ms (parallelism: {DOP})",
+                successCount, stopwatch.ElapsedMilliseconds, parallelism);
 
             return new PhaseResult
             {
                 Success = failureCount == 0,
-                RecordsProcessed = totalProcessed + failureCount,
-                SuccessCount = totalProcessed,
+                RecordsProcessed = successCount + failureCount,
+                SuccessCount = successCount,
                 FailureCount = failureCount,
                 Duration = stopwatch.Elapsed
             };
