@@ -127,6 +127,32 @@ public class CmtDataReaderTests
         entityRef.Id.Should().Be(new Guid(targetId));
     }
 
+    [Fact]
+    public async Task ReadAsync_InfersLookupTypeFromLookupEntityAttribute()
+    {
+        // Arrange - simulates transactioncurrencyid: has lookupentity but no type and not in schema
+        var targetId = "aadd107e-684d-e911-a958-000d3a34eaec";
+        var stream = CreateTestArchive(
+            schemaXml: @"<entities><entity name=""et_promocode"" displayname=""Promo Code""><fields><field name=""et_name"" type=""string"" displayname=""Name"" /></fields></entity></entities>",
+            dataXml: $@"<entities><entity name=""et_promocode""><records><record id=""11111111-1111-1111-1111-111111111111""><field name=""transactioncurrencyid"" value=""{targetId}"" lookupentity=""transactioncurrency"" lookupentityname=""US Dollar"" /></record></records></entity></entities>"
+        );
+
+        var schemaReader = new CmtSchemaReader();
+        var reader = new CmtDataReader(schemaReader);
+
+        // Act
+        var result = await reader.ReadAsync(stream);
+
+        // Assert
+        result.EntityData.Should().ContainKey("et_promocode");
+        var record = result.EntityData["et_promocode"].First();
+        record["transactioncurrencyid"].Should().BeOfType<EntityReference>();
+        var entityRef = (EntityReference)record["transactioncurrencyid"];
+        entityRef.LogicalName.Should().Be("transactioncurrency");
+        entityRef.Id.Should().Be(new Guid(targetId));
+        entityRef.Name.Should().Be("US Dollar");
+    }
+
     [Theory]
     [InlineData("optionset", "100000000")]
     [InlineData("optionsetvalue", "100000001")] // CMT format

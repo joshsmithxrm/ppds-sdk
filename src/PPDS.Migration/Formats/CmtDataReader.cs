@@ -267,6 +267,12 @@ namespace PPDS.Migration.Formats
                 return null;
             }
 
+            // Infer lookup type from lookupentity attribute when type is missing
+            if (string.IsNullOrEmpty(type) && element.Attribute("lookupentity") != null)
+            {
+                type = "lookup";
+            }
+
             type = type?.ToLowerInvariant();
 
             return type switch

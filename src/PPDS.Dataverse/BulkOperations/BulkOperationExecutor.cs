@@ -137,8 +137,8 @@ namespace PPDS.Dataverse.BulkOperations
             }
             else
             {
-                // Adaptive execution respects per-source DOP limits
-                result = await ExecuteBatchesAdaptiveAsync(
+                // Pool-managed parallel execution - pool semaphore limits concurrency
+                result = await ExecuteBatchesParallelAsync(
                     batches,
                     (batch, ct) => ExecuteCreateMultipleBatchAsync(entityLogicalName, batch, options, ct),
                     tracker,
@@ -200,8 +200,8 @@ namespace PPDS.Dataverse.BulkOperations
             }
             else
             {
-                // Adaptive execution respects per-source DOP limits
-                result = await ExecuteBatchesAdaptiveAsync(
+                // Pool-managed parallel execution - pool semaphore limits concurrency
+                result = await ExecuteBatchesParallelAsync(
                     batches,
                     (batch, ct) => ExecuteUpdateMultipleBatchAsync(entityLogicalName, batch, options, ct),
                     tracker,
@@ -263,8 +263,8 @@ namespace PPDS.Dataverse.BulkOperations
             }
             else
             {
-                // Adaptive execution respects per-source DOP limits
-                result = await ExecuteBatchesAdaptiveAsync(
+                // Pool-managed parallel execution - pool semaphore limits concurrency
+                result = await ExecuteBatchesParallelAsync(
                     batches,
                     (batch, ct) => ExecuteUpsertMultipleBatchAsync(entityLogicalName, batch, options, ct),
                     tracker,
@@ -326,8 +326,8 @@ namespace PPDS.Dataverse.BulkOperations
             }
             else
             {
-                // Adaptive execution respects per-source DOP limits
-                result = await ExecuteBatchesAdaptiveAsync(batches, executeBatch, tracker, progress, cancellationToken);
+                // Pool-managed parallel execution - pool semaphore limits concurrency
+                result = await ExecuteBatchesParallelAsync(batches, executeBatch, tracker, progress, cancellationToken);
             }
 
             stopwatch.Stop();
@@ -1384,11 +1384,25 @@ namespace PPDS.Dataverse.BulkOperations
         }
 
         /// <summary>
-        /// Executes batches with adaptive DOP control.
-        /// Reads live DOP from the pool and limits concurrency accordingly.
-        /// Pool's selection strategy handles per-source distribution.
+        /// Executes batches in parallel with pool-managed concurrency.
         /// </summary>
-        private async Task<BulkOperationResult> ExecuteBatchesAdaptiveAsync<T>(
+        /// <remarks>
+        /// <para>
+        /// Uses Parallel.ForEachAsync with a high local limit, relying on
+        /// the connection pool's semaphore to naturally limit concurrency. Tasks block on
+        /// <see cref="IDataverseConnectionPool.GetClientAsync"/> when the pool is at capacity.
+        /// </para>
+        /// <para>
+        /// This approach enables fair sharing between multiple concurrent consumers (e.g.,
+        /// multiple entities importing in parallel, or multiple CLI commands sharing a pool).
+        /// Each consumer's tasks queue on the pool semaphore rather than each consumer
+        /// assuming it can use the full pool capacity.
+        /// </para>
+        /// <para>
+        /// See ADR-0015 for architectural rationale.
+        /// </para>
+        /// </remarks>
+        private async Task<BulkOperationResult> ExecuteBatchesParallelAsync<T>(
             List<List<T>> batches,
             Func<List<T>, CancellationToken, Task<BulkOperationResult>> executeBatch,
             ProgressTracker tracker,
@@ -1403,73 +1417,49 @@ namespace PPDS.Dataverse.BulkOperations
             var updatedCount = 0;
             var hasUpsertCounts = 0; // 0 = false, 1 = true (for thread-safe flag)
 
-            var pending = new Queue<List<T>>(batches);
-            var inFlight = new List<Task<(BulkOperationResult result, List<T> batch)>>();
-
-            while (pending.Count > 0 || inFlight.Count > 0)
-            {
-                cancellationToken.ThrowIfCancellationRequested();
-
-                // Get current recommended parallelism (live value from pool)
-                // This reads from seed clients, so it reflects server's current recommendation
-                var maxParallelism = _connectionPool.GetTotalRecommendedParallelism();
-
-                // Start new batches while under the DOP limit
-                while (pending.Count > 0 && inFlight.Count < maxParallelism)
+            // Let the pool semaphore naturally limit concurrency.
+            // Tasks block on GetClientAsync() when pool is full.
+            // No need to pre-calculate parallelism - pool handles it.
+            // The CPU-bound limit prevents excessive task scheduling overhead.
+            await Parallel.ForEachAsync(
+                batches,
+                new ParallelOptions
                 {
-                    var batch = pending.Dequeue();
-                    var task = ExecuteBatchWithResultAsync(batch, executeBatch, cancellationToken);
-                    inFlight.Add(task);
-                }
-
-                if (inFlight.Count == 0)
+                    MaxDegreeOfParallelism = Math.Max(Environment.ProcessorCount * 4, 32),
+                    CancellationToken = cancellationToken
+                },
+                async (batch, ct) =>
                 {
-                    // DOP is 0 or no batches - shouldn't happen but handle gracefully
-                    if (pending.Count > 0)
+                    var batchResult = await executeBatch(batch, ct);
+
+                    // Aggregate results (thread-safe)
+                    Interlocked.Add(ref successCount, batchResult.SuccessCount);
+                    Interlocked.Add(ref failureCount, batchResult.FailureCount);
+
+                    foreach (var error in batchResult.Errors)
+                        allErrors.Add(error);
+
+                    if (batchResult.CreatedIds != null)
                     {
-                        await Task.Delay(100, cancellationToken);
+                        foreach (var id in batchResult.CreatedIds)
+                            allCreatedIds.Add(id);
                     }
-                    continue;
-                }
 
-                // Wait for any batch to complete
-                var completedTask = await Task.WhenAny(inFlight);
-                inFlight.Remove(completedTask);
-
-                var (batchResult, _) = await completedTask;
-
-                // Aggregate results
-                Interlocked.Add(ref successCount, batchResult.SuccessCount);
-                Interlocked.Add(ref failureCount, batchResult.FailureCount);
-
-                foreach (var error in batchResult.Errors)
-                {
-                    allErrors.Add(error);
-                }
-
-                if (batchResult.CreatedIds != null)
-                {
-                    foreach (var id in batchResult.CreatedIds)
+                    if (batchResult.CreatedCount.HasValue)
                     {
-                        allCreatedIds.Add(id);
+                        Interlocked.Exchange(ref hasUpsertCounts, 1);
+                        Interlocked.Add(ref createdCount, batchResult.CreatedCount.Value);
                     }
-                }
+                    if (batchResult.UpdatedCount.HasValue)
+                    {
+                        Interlocked.Exchange(ref hasUpsertCounts, 1);
+                        Interlocked.Add(ref updatedCount, batchResult.UpdatedCount.Value);
+                    }
 
-                if (batchResult.CreatedCount.HasValue)
-                {
-                    Interlocked.Exchange(ref hasUpsertCounts, 1);
-                    Interlocked.Add(ref createdCount, batchResult.CreatedCount.Value);
-                }
-                if (batchResult.UpdatedCount.HasValue)
-                {
-                    Interlocked.Exchange(ref hasUpsertCounts, 1);
-                    Interlocked.Add(ref updatedCount, batchResult.UpdatedCount.Value);
-                }
-
-                // Report progress
-                tracker.RecordProgress(batchResult.SuccessCount, batchResult.FailureCount);
-                progress?.Report(tracker.GetSnapshot());
-            }
+                    // Report progress
+                    tracker.RecordProgress(batchResult.SuccessCount, batchResult.FailureCount);
+                    progress?.Report(tracker.GetSnapshot());
+                });
 
             return new BulkOperationResult
             {
@@ -1481,15 +1471,6 @@ namespace PPDS.Dataverse.BulkOperations
                 CreatedCount = hasUpsertCounts == 1 ? createdCount : null,
                 UpdatedCount = hasUpsertCounts == 1 ? updatedCount : null
             };
-        }
-
-        private static async Task<(BulkOperationResult result, List<T> batch)> ExecuteBatchWithResultAsync<T>(
-            List<T> batch,
-            Func<List<T>, CancellationToken, Task<BulkOperationResult>> executeBatch,
-            CancellationToken cancellationToken)
-        {
-            var result = await executeBatch(batch, cancellationToken);
-            return (result, batch);
         }
 
         /// <summary>
