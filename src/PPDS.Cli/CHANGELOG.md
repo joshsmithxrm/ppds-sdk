@@ -7,20 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [1.0.0-beta.10] - 2026-01-06
+## [1.0.0-beta.11] - 2026-01-06
 
 ### Added
 
-- **`ppds interactive` command** - Launch interactive TUI mode for profile/environment selection and SQL queries ([#192](https://github.com/joshsmithxrm/ppds-sdk/issues/192)):
-  - Entry points: `ppds interactive`, `ppds -i`, `ppds --interactive`
-  - Profile and environment selection with Global Discovery integration
-  - SQL query wizard with results displayed in interactive table view
-  - Arrow key navigation for query results (up/down for rows, left/right for columns)
-  - Open record in browser (`O`) or copy URL to clipboard (`C`)
-  - Query history with up/down arrow recall
-  - Session-scoped connection pooling for faster subsequent queries
-  - Graceful degradation when not in a TTY environment
-- **Version header at startup** - CLI now outputs diagnostic header to stderr: version info (CLI, SDK, .NET runtime) and platform. Enables correlating issues to specific builds. Skipped for `--help`, `--version`, or no arguments. See [ADR-0022](../../docs/adr/0022_IMPORT_DIAGNOSTICS_ARCHITECTURE.md).
 - **`ppds flows` command group** - Manage cloud flows ([#142](https://github.com/joshsmithxrm/ppds-sdk/issues/142)):
   - `ppds flows list` - List cloud flows (supports `--solution`, `--state`)
   - `ppds flows get <name>` - Get flow details by unique name
@@ -38,6 +28,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `ppds deployment-settings generate` - Generate deployment settings file from current environment
   - `ppds deployment-settings sync` - Sync existing file with solution (preserves values, adds new entries, removes stale)
   - `ppds deployment-settings validate` - Validate deployment settings file against solution
+
+### Changed
+
+- **Enhanced interactive table view** - Cell-level navigation with left/right arrows, improved keyboard handling, and better UX in SQL query wizard ([#225](https://github.com/joshsmithxrm/ppds-sdk/pull/225))
+- **Release workflow uses draft-first flow** - CLI releases now create draft releases first, upload binaries, then publish. Fixes binary attachment failures due to GitHub's immutable releases. See [ADR-0023](../../docs/adr/0023_CLI_BINARY_RELEASE_PROCESS.md).
+
+## [1.0.0-beta.10] - 2026-01-06
+
+### Added
+
+- **`ppds interactive` command** - Launch interactive TUI mode for profile/environment selection and SQL queries ([#192](https://github.com/joshsmithxrm/ppds-sdk/issues/192)):
+  - Entry points: `ppds interactive`, `ppds -i`, `ppds --interactive`
+  - Profile and environment selection with Global Discovery integration
+  - SQL query wizard with results displayed in interactive table view
+  - Arrow key navigation for query results (up/down for rows, left/right for columns)
+  - Open record in browser (`O`) or copy URL to clipboard (`C`)
+  - Query history with up/down arrow recall
+  - Session-scoped connection pooling for faster subsequent queries
+  - Graceful degradation when not in a TTY environment
+- **Version header at startup** - CLI now outputs diagnostic header to stderr: version info (CLI, SDK, .NET runtime) and platform. Enables correlating issues to specific builds. Skipped for `--help`, `--version`, or no arguments. See [ADR-0022](../../docs/adr/0022_IMPORT_DIAGNOSTICS_ARCHITECTURE.md).
 - **`ppds solutions` command group** - Manage Power Platform solutions ([#137](https://github.com/joshsmithxrm/ppds-sdk/issues/137)):
   - `ppds solutions list` - List solutions in environment (supports `--include-managed`, `--filter`)
   - `ppds solutions get <name>` - Get solution details by unique name

@@ -29,16 +29,22 @@ ppds data export --schema schema.xml --output data.zip
 
 ```
 ppds
-├── interactive  Launch interactive TUI mode (-i, --interactive)
-├── auth         Authentication profile management
-├── env          Environment discovery and selection
-├── data         Data operations (export, import, copy, load, update, delete, schema, users)
-├── plugins      Plugin registration management
-├── query        Execute FetchXML and SQL queries
-├── metadata     Browse entity and attribute metadata
-├── solutions    Manage Power Platform solutions
-├── users        Manage system users
-└── roles        Manage security roles
+├── interactive           Launch interactive TUI mode (-i, --interactive)
+├── auth                  Authentication profile management
+├── env                   Environment discovery and selection
+├── data                  Data operations (export, import, copy, load, update, delete, schema, users)
+├── plugins               Plugin registration management
+├── query                 Execute FetchXML and SQL queries
+├── metadata              Browse entity and attribute metadata
+├── solutions             Manage Power Platform solutions
+├── importjobs            Monitor solution import jobs
+├── environmentvariables  Manage environment variables
+├── flows                 Manage cloud flows
+├── connections           List Power Platform connections
+├── connectionreferences  Manage connection references
+├── deployment-settings   Generate and sync deployment settings
+├── users                 Manage system users
+└── roles                 Manage security roles
 ```
 
 ---
@@ -597,6 +603,106 @@ Options:
 - `--custom-only` - Show only custom entities/attributes
 - `--type` - Filter attributes by type (String, Lookup, DateTime, etc.)
 - `--output-format`, `-o` - Output format (Text or Json)
+
+### `ppds solutions`
+
+Manage Power Platform solutions.
+
+| Command | Description |
+|---------|-------------|
+| `ppds solutions list` | List solutions (supports `--include-managed`, `--filter`) |
+| `ppds solutions get <name>` | Get solution details by unique name |
+| `ppds solutions export <name>` | Export solution as ZIP file (supports `--managed`) |
+| `ppds solutions import <file>` | Import solution ZIP file |
+| `ppds solutions components <name>` | List solution components (supports `--type`) |
+| `ppds solutions publish` | Publish all customizations |
+| `ppds solutions url <name>` | Get Maker portal URL for a solution |
+
+### `ppds importjobs`
+
+Monitor solution import jobs.
+
+| Command | Description |
+|---------|-------------|
+| `ppds importjobs list` | List recent import jobs (supports `--solution`, `--top`) |
+| `ppds importjobs get <id>` | Get import job details |
+| `ppds importjobs data <id>` | Get raw XML data for an import job |
+| `ppds importjobs wait <id>` | Wait for import job to complete |
+| `ppds importjobs url <id>` | Get Maker portal URL for an import job |
+
+### `ppds environmentvariables`
+
+Manage environment variables.
+
+| Command | Description |
+|---------|-------------|
+| `ppds environmentvariables list` | List environment variables (supports `--solution`) |
+| `ppds environmentvariables get <name>` | Get environment variable details |
+| `ppds environmentvariables set <name> <value>` | Set environment variable value |
+| `ppds environmentvariables export` | Export for deployment settings |
+| `ppds environmentvariables url <name>` | Get Maker portal URL |
+
+### `ppds flows`
+
+Manage cloud flows.
+
+| Command | Description |
+|---------|-------------|
+| `ppds flows list` | List cloud flows (supports `--solution`, `--state`) |
+| `ppds flows get <name>` | Get flow details by unique name |
+| `ppds flows url <name>` | Get Power Automate maker URL for a flow |
+
+### `ppds connections`
+
+List Power Platform connections.
+
+| Command | Description |
+|---------|-------------|
+| `ppds connections list` | List connections (supports `--connector`) |
+| `ppds connections get <id>` | Get connection details by ID |
+
+### `ppds connectionreferences`
+
+Manage connection references with orphan detection.
+
+| Command | Description |
+|---------|-------------|
+| `ppds connectionreferences list` | List connection references (supports `--solution`, `--orphaned`) |
+| `ppds connectionreferences get <name>` | Get connection reference details |
+| `ppds connectionreferences flows <name>` | List flows using a connection reference |
+| `ppds connectionreferences connections <name>` | Show bound connection details |
+| `ppds connectionreferences analyze` | Analyze flow-to-connection-reference relationships |
+
+### `ppds deployment-settings`
+
+Generate and sync deployment settings files.
+
+| Command | Description |
+|---------|-------------|
+| `ppds deployment-settings generate` | Generate settings from current environment |
+| `ppds deployment-settings sync` | Sync existing file with solution |
+| `ppds deployment-settings validate` | Validate settings against solution |
+
+### `ppds users`
+
+Manage system users.
+
+| Command | Description |
+|---------|-------------|
+| `ppds users list` | List users (supports `--filter`, `--include-disabled`) |
+| `ppds users show <user>` | Show user details (by GUID or domain name) |
+| `ppds users roles <user>` | List roles assigned to a user |
+
+### `ppds roles`
+
+Manage security roles.
+
+| Command | Description |
+|---------|-------------|
+| `ppds roles list` | List security roles (supports `--filter`) |
+| `ppds roles show <role>` | Show role details and assigned users |
+| `ppds roles assign <role> --user <user>` | Assign a role to a user |
+| `ppds roles remove <role> --user <user>` | Remove a role from a user |
 
 ---
 
