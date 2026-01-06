@@ -4,6 +4,7 @@ using Microsoft.Extensions.Options;
 using PPDS.Auth.Credentials;
 using PPDS.Auth.Pooling;
 using PPDS.Auth.Profiles;
+using PPDS.Cli.Services;
 using PPDS.Dataverse.Configuration;
 using PPDS.Dataverse.DependencyInjection;
 using PPDS.Dataverse.Pooling;
@@ -270,6 +271,10 @@ public static class ProfileServiceFactory
         // Register shared services (IThrottleTracker, IBulkOperationExecutor, IMetadataService)
         // This method is shared with PPDS.Dataverse to prevent DI registration divergence
         services.RegisterDataverseServices();
+
+        // Register CLI application services (ISqlQueryService, etc.)
+        // See ADR-0015 for architectural context
+        services.AddCliApplicationServices();
 
         // Connection pool - CLI uses factory delegate because it gets IConnectionSource[] from auth profiles
         // (Library uses direct type registration from configuration)

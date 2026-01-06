@@ -2,9 +2,9 @@ using Microsoft.Extensions.DependencyInjection;
 using PPDS.Auth.Profiles;
 using PPDS.Cli.Infrastructure;
 using PPDS.Cli.Interactive.Components;
+using PPDS.Cli.Services.Query;
 using PPDS.Dataverse.Query;
 using PPDS.Dataverse.Sql.Parsing;
-using PPDS.Dataverse.Sql.Transpilation;
 using Spectre.Console;
 
 namespace PPDS.Cli.Interactive.Wizards;
@@ -66,21 +66,9 @@ internal static class SqlQueryWizard
     {
         try
         {
-            // Parse and transpile SQL
+            // Execute query via ISqlQueryService
             AnsiConsole.WriteLine();
-            var fetchXml = await AnsiConsole.Status()
-                .Spinner(Spinner.Known.Dots)
-                .SpinnerStyle(Styles.Primary)
-                .StartAsync("Parsing SQL...", _ =>
-                {
-                    var parser = new SqlParser(sql);
-                    var ast = parser.Parse();
-                    var transpiler = new SqlToFetchXmlTranspiler();
-                    return Task.FromResult(transpiler.Transpile(ast));
-                });
-
-            // Execute query
-            var result = await AnsiConsole.Status()
+            var queryResult = await AnsiConsole.Status()
                 .Spinner(Spinner.Known.Dots)
                 .SpinnerStyle(Styles.Primary)
                 .StartAsync("Executing query...", async ctx =>
@@ -91,22 +79,23 @@ internal static class SqlQueryWizard
                         deviceCodeCallback: ProfileServiceFactory.DefaultDeviceCodeCallback,
                         cancellationToken: cancellationToken);
 
-                    var queryExecutor = serviceProvider.GetRequiredService<IQueryExecutor>();
-                    return await queryExecutor.ExecuteFetchXmlAsync(
-                        fetchXml,
-                        pageNumber: null,
-                        pagingCookie: null,
-                        includeCount: false,
-                        cancellationToken);
+                    var sqlQueryService = serviceProvider.GetRequiredService<ISqlQueryService>();
+                    var request = new SqlQueryRequest
+                    {
+                        Sql = sql,
+                        IncludeCount = false
+                    };
+
+                    return await sqlQueryService.ExecuteAsync(request, cancellationToken);
                 });
 
             // Display results
-            DisplayResults(result);
+            DisplayResults(queryResult.Result);
 
             // Handle paging
-            if (result.MoreRecords && !string.IsNullOrEmpty(result.PagingCookie))
+            if (queryResult.Result.MoreRecords && !string.IsNullOrEmpty(queryResult.Result.PagingCookie))
             {
-                await HandlePagingAsync(profile, fetchXml, result, cancellationToken);
+                await HandlePagingAsync(profile, queryResult, cancellationToken);
             }
             else
             {
@@ -210,13 +199,13 @@ internal static class SqlQueryWizard
 
     private static async Task HandlePagingAsync(
         AuthProfile profile,
-        string fetchXml,
-        QueryResult currentResult,
+        SqlQueryResult initialQueryResult,
         CancellationToken cancellationToken)
     {
         var page = 1;
-        var pagingCookie = currentResult.PagingCookie;
-        var hasMore = currentResult.MoreRecords;
+        var pagingCookie = initialQueryResult.Result.PagingCookie;
+        var hasMore = initialQueryResult.Result.MoreRecords;
+        var originalSql = initialQueryResult.OriginalSql;
 
         while (hasMore && !cancellationToken.IsCancellationRequested)
         {
@@ -237,7 +226,7 @@ internal static class SqlQueryWizard
                 break;
             }
 
-            // Fetch next page
+            // Fetch next page via ISqlQueryService
             page++;
             var result = await AnsiConsole.Status()
                 .Spinner(Spinner.Known.Dots)
@@ -250,20 +239,23 @@ internal static class SqlQueryWizard
                         deviceCodeCallback: ProfileServiceFactory.DefaultDeviceCodeCallback,
                         cancellationToken: cancellationToken);
 
-                    var queryExecutor = serviceProvider.GetRequiredService<IQueryExecutor>();
-                    return await queryExecutor.ExecuteFetchXmlAsync(
-                        fetchXml,
-                        pageNumber: page,
-                        pagingCookie: pagingCookie,
-                        includeCount: false,
-                        cancellationToken);
+                    var sqlQueryService = serviceProvider.GetRequiredService<ISqlQueryService>();
+                    var request = new SqlQueryRequest
+                    {
+                        Sql = originalSql,
+                        PageNumber = page,
+                        PagingCookie = pagingCookie,
+                        IncludeCount = false
+                    };
+
+                    return await sqlQueryService.ExecuteAsync(request, cancellationToken);
                 });
 
             AnsiConsole.Clear();
-            DisplayResults(result);
+            DisplayResults(result.Result);
 
-            pagingCookie = result.PagingCookie;
-            hasMore = result.MoreRecords;
+            pagingCookie = result.Result.PagingCookie;
+            hasMore = result.Result.MoreRecords;
         }
 
         if (!hasMore)

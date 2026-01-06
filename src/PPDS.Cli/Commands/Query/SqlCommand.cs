@@ -3,9 +3,9 @@ using Microsoft.Extensions.DependencyInjection;
 using PPDS.Cli.Infrastructure;
 using PPDS.Cli.Infrastructure.Errors;
 using PPDS.Cli.Infrastructure.Output;
+using PPDS.Cli.Services.Query;
 using PPDS.Dataverse.Query;
 using PPDS.Dataverse.Sql.Parsing;
-using PPDS.Dataverse.Sql.Transpilation;
 
 namespace PPDS.Cli.Commands.Query;
 
@@ -122,27 +122,27 @@ public static class SqlCommand
             // Get the SQL from the appropriate source
             var query = await GetSqlAsync(sql, file, stdin, cancellationToken);
 
-            // Parse and transpile SQL to FetchXML
-            if (globalOptions.OutputFormat == OutputFormat.Text && !showFetchXml)
-            {
-                Console.Error.WriteLine("Parsing SQL...");
-            }
+            // Create service provider to get ISqlQueryService
+            await using var serviceProvider = await ProfileServiceFactory.CreateFromProfileAsync(
+                profile,
+                environment,
+                globalOptions.Verbose,
+                globalOptions.Debug,
+                ProfileServiceFactory.DefaultDeviceCodeCallback,
+                cancellationToken: cancellationToken);
 
-            var parser = new SqlParser(query);
-            var ast = parser.Parse();
+            var sqlQueryService = serviceProvider.GetRequiredService<ISqlQueryService>();
 
-            // Override top if specified
-            if (top.HasValue)
-            {
-                ast = ast.WithTop(top.Value);
-            }
-
-            var transpiler = new SqlToFetchXmlTranspiler();
-            var fetchXml = transpiler.Transpile(ast);
-
-            // If --show-fetchxml, output and exit
+            // If --show-fetchxml, transpile only (no execution)
             if (showFetchXml)
             {
+                if (globalOptions.OutputFormat == OutputFormat.Text)
+                {
+                    Console.Error.WriteLine("Parsing SQL...");
+                }
+
+                var fetchXml = sqlQueryService.TranspileSql(query, top);
+
                 if (globalOptions.OutputFormat == OutputFormat.Json)
                 {
                     writer.WriteSuccess(new { sql = query, fetchXml });
@@ -155,16 +155,7 @@ public static class SqlCommand
                 return ExitCodes.Success;
             }
 
-            await using var serviceProvider = await ProfileServiceFactory.CreateFromProfileAsync(
-                profile,
-                environment,
-                globalOptions.Verbose,
-                globalOptions.Debug,
-                ProfileServiceFactory.DefaultDeviceCodeCallback,
-                cancellationToken: cancellationToken);
-
-            var queryExecutor = serviceProvider.GetRequiredService<IQueryExecutor>();
-
+            // Execute query via service
             if (globalOptions.OutputFormat == OutputFormat.Text)
             {
                 var connectionInfo = serviceProvider.GetRequiredService<ResolvedConnectionInfo>();
@@ -173,23 +164,27 @@ public static class SqlCommand
                 Console.Error.WriteLine("Executing query...");
             }
 
-            var result = await queryExecutor.ExecuteFetchXmlAsync(
-                fetchXml,
-                page,
-                pagingCookie,
-                count,
-                cancellationToken);
+            var request = new SqlQueryRequest
+            {
+                Sql = query,
+                TopOverride = top,
+                PageNumber = page,
+                PagingCookie = pagingCookie,
+                IncludeCount = count
+            };
+
+            var queryResult = await sqlQueryService.ExecuteAsync(request, cancellationToken);
 
             switch (globalOptions.OutputFormat)
             {
                 case OutputFormat.Json:
-                    writer.WriteSuccess(result);
+                    writer.WriteSuccess(queryResult.Result);
                     break;
                 case OutputFormat.Csv:
-                    WriteCsvOutput(result);
+                    WriteCsvOutput(queryResult.Result);
                     break;
                 default:
-                    WriteTableOutput(result, fetchXml, globalOptions.Verbose);
+                    WriteTableOutput(queryResult.Result, queryResult.TranspiledFetchXml, globalOptions.Verbose);
                     break;
             }
 
