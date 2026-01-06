@@ -52,7 +52,7 @@ internal static class SqlQueryWizard
 
             // Get SQL query from user using RadLine for proper editing support
             // (arrow keys, home/end, ctrl+arrows for word nav, up/down for history)
-            AnsiConsole.MarkupLine(Styles.MutedText("Enter SQL query (Up/Down for history, 'back' or 'exit'):"));
+            AnsiConsole.MarkupLine(Styles.MutedText("Enter SQL query (Up/Down for history, Esc to go back):"));
 
             // Build RadLine editor with history
             var editor = new LineEditor(AnsiConsole.Console)
@@ -61,6 +61,14 @@ internal static class SqlQueryWizard
                 Text = lastQuery ?? string.Empty
             };
 
+            // Track if Escape was pressed (RadLine default clears line, we want to go back)
+            var escapePressed = false;
+            editor.KeyBindings.Add(ConsoleKey.Escape, () =>
+            {
+                escapePressed = true;
+                return new SubmitCommand();
+            });
+
             // Sync QueryHistory to RadLine's history for up/down arrow navigation
             foreach (var historyItem in QueryHistory.Recent.Reverse())
             {
@@ -68,6 +76,12 @@ internal static class SqlQueryWizard
             }
 
             var sql = await editor.ReadLine(cancellationToken) ?? string.Empty;
+
+            // If Escape was pressed, go back regardless of input
+            if (escapePressed)
+            {
+                return WizardResult.Continue;
+            }
 
             // Handle special commands
             if (string.IsNullOrWhiteSpace(sql) || sql.Equals("back", StringComparison.OrdinalIgnoreCase))
