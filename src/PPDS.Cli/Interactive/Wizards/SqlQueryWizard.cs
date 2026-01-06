@@ -2,6 +2,7 @@ using Microsoft.Extensions.DependencyInjection;
 using PPDS.Auth.Profiles;
 using PPDS.Cli.Infrastructure;
 using PPDS.Cli.Interactive.Components;
+using PPDS.Cli.Interactive.Components.QueryResults;
 using PPDS.Cli.Services.Query;
 using PPDS.Dataverse.Query;
 using PPDS.Dataverse.Sql.Parsing;
@@ -54,12 +55,16 @@ internal static class SqlQueryWizard
                 return;
             }
 
-            // Execute the query
-            await ExecuteQueryAsync(profile, sql, cancellationToken);
+            // Execute the query - returns true if user wants to enter another query
+            var wantsNewQuery = await ExecuteQueryAsync(profile, sql, cancellationToken);
+            if (!wantsNewQuery)
+            {
+                return; // User chose to go back
+            }
         }
     }
 
-    private static async Task ExecuteQueryAsync(
+    private static async Task<bool> ExecuteQueryAsync(
         AuthProfile profile,
         string sql,
         CancellationToken cancellationToken)
@@ -89,18 +94,34 @@ internal static class SqlQueryWizard
                     return await sqlQueryService.ExecuteAsync(request, cancellationToken);
                 });
 
-            // Display results
-            DisplayResults(queryResult.Result);
+            // Display results with the new viewer
+            var showResult = await QueryResultsViewer.ShowAsync(
+                queryResult.Result,
+                async (pageNumber, pagingCookie) =>
+                {
+                    // Fetch additional pages on demand
+                    await using var serviceProvider = await ProfileServiceFactory.CreateFromProfileAsync(
+                        profile.Name,
+                        profile.Environment!.Url,
+                        deviceCodeCallback: ProfileServiceFactory.DefaultDeviceCodeCallback,
+                        cancellationToken: cancellationToken);
 
-            // Handle paging
-            if (queryResult.Result.MoreRecords && !string.IsNullOrEmpty(queryResult.Result.PagingCookie))
-            {
-                await HandlePagingAsync(profile, queryResult, cancellationToken);
-            }
-            else
-            {
-                WaitForKey();
-            }
+                    var sqlQueryService = serviceProvider.GetRequiredService<ISqlQueryService>();
+                    var request = new SqlQueryRequest
+                    {
+                        Sql = sql,
+                        PageNumber = pageNumber,
+                        PagingCookie = pagingCookie,
+                        IncludeCount = false
+                    };
+
+                    var result = await sqlQueryService.ExecuteAsync(request, cancellationToken);
+                    return result.Result;
+                },
+                cancellationToken);
+
+            // Return whether the user wants a new query (true) or to go back (false)
+            return showResult == QueryResultsViewer.ShowResult.NewQuery;
         }
         catch (SqlParseException ex)
         {
@@ -113,154 +134,14 @@ internal static class SqlQueryWizard
                 AnsiConsole.MarkupLine(Styles.MutedText($"Near: {ex.ContextSnippet}"));
             }
             WaitForKey();
+            return true; // Allow user to try another query
         }
         catch (Exception ex)
         {
             AnsiConsole.WriteLine();
             AnsiConsole.MarkupLine(Styles.ErrorText($"Error: {ex.Message}"));
             WaitForKey();
-        }
-    }
-
-    private static void DisplayResults(QueryResult result)
-    {
-        AnsiConsole.WriteLine();
-
-        if (result.Count == 0)
-        {
-            AnsiConsole.MarkupLine(Styles.WarningText("No records found."));
-            return;
-        }
-
-        // Create table
-        var table = new Table()
-            .Border(TableBorder.Rounded)
-            .BorderColor(Styles.Primary);
-
-        // Add columns
-        foreach (var column in result.Columns)
-        {
-            var header = column.Alias ?? column.LogicalName;
-            table.AddColumn(new TableColumn(Markup.Escape(header)).Centered());
-        }
-
-        // Add rows (limit to 50 for display)
-        var displayCount = Math.Min(result.Count, 50);
-        foreach (var record in result.Records.Take(displayCount))
-        {
-            var cells = new List<string>();
-            foreach (var column in result.Columns)
-            {
-                var key = column.Alias ?? column.LogicalName;
-                if (record.TryGetValue(key, out var queryValue) && queryValue != null)
-                {
-                    var displayValue = queryValue.FormattedValue ?? queryValue.Value?.ToString() ?? "";
-                    // Truncate long values
-                    if (displayValue.Length > 40)
-                    {
-                        displayValue = displayValue[..37] + "...";
-                    }
-                    cells.Add(Markup.Escape(displayValue));
-                }
-                else
-                {
-                    cells.Add(Styles.MutedText("-"));
-                }
-            }
-            table.AddRow(cells.ToArray());
-        }
-
-        AnsiConsole.Write(table);
-
-        // Summary
-        AnsiConsole.WriteLine();
-        var summary = $"Entity: {Markup.Escape(result.EntityLogicalName)} | " +
-                     $"Records: {result.Count}";
-
-        if (result.TotalCount.HasValue && result.TotalCount != result.Count)
-        {
-            summary += $" of {result.TotalCount}";
-        }
-
-        summary += $" | Time: {result.ExecutionTimeMs}ms";
-
-        if (result.Count > displayCount)
-        {
-            summary += $" | Showing first {displayCount}";
-        }
-
-        AnsiConsole.MarkupLine(Styles.MutedText(summary));
-
-        if (result.MoreRecords)
-        {
-            AnsiConsole.MarkupLine(Styles.PrimaryText("More records available..."));
-        }
-    }
-
-    private static async Task HandlePagingAsync(
-        AuthProfile profile,
-        SqlQueryResult initialQueryResult,
-        CancellationToken cancellationToken)
-    {
-        var page = 1;
-        var pagingCookie = initialQueryResult.Result.PagingCookie;
-        var hasMore = initialQueryResult.Result.MoreRecords;
-        var originalSql = initialQueryResult.OriginalSql;
-
-        while (hasMore && !cancellationToken.IsCancellationRequested)
-        {
-            AnsiConsole.WriteLine();
-            var action = AnsiConsole.Prompt(
-                new SelectionPrompt<string>()
-                    .Title("[grey]What would you like to do?[/]")
-                    .HighlightStyle(Styles.SelectionHighlight)
-                    .AddChoices("Next page", "New query", "Back to menu"));
-
-            if (action == "Back to menu")
-            {
-                return;
-            }
-
-            if (action == "New query")
-            {
-                break;
-            }
-
-            // Fetch next page via ISqlQueryService
-            page++;
-            var result = await AnsiConsole.Status()
-                .Spinner(Spinner.Known.Dots)
-                .SpinnerStyle(Styles.Primary)
-                .StartAsync($"Fetching page {page}...", async ctx =>
-                {
-                    await using var serviceProvider = await ProfileServiceFactory.CreateFromProfileAsync(
-                        profile.Name,
-                        profile.Environment!.Url,
-                        deviceCodeCallback: ProfileServiceFactory.DefaultDeviceCodeCallback,
-                        cancellationToken: cancellationToken);
-
-                    var sqlQueryService = serviceProvider.GetRequiredService<ISqlQueryService>();
-                    var request = new SqlQueryRequest
-                    {
-                        Sql = originalSql,
-                        PageNumber = page,
-                        PagingCookie = pagingCookie,
-                        IncludeCount = false
-                    };
-
-                    return await sqlQueryService.ExecuteAsync(request, cancellationToken);
-                });
-
-            AnsiConsole.Clear();
-            DisplayResults(result.Result);
-
-            pagingCookie = result.Result.PagingCookie;
-            hasMore = result.Result.MoreRecords;
-        }
-
-        if (!hasMore)
-        {
-            WaitForKey();
+            return true; // Allow user to try another query
         }
     }
 
