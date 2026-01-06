@@ -1553,6 +1553,21 @@ namespace PPDS.Dataverse.BulkOperations
         }
 
         /// <summary>
+        /// Extracts the most useful error message from an exception.
+        /// For FaultException, uses Detail.Message which contains the actual Dataverse error.
+        /// Falls back to ex.Message for other exception types.
+        /// </summary>
+        private static string GetExceptionMessage(Exception ex)
+        {
+            if (ex is FaultException<OrganizationServiceFault> faultEx
+                && faultEx.Detail?.Message != null)
+            {
+                return faultEx.Detail.Message;
+            }
+            return ex.Message;
+        }
+
+        /// <summary>
         /// Attempts to extract a field/attribute name from a Dataverse error message.
         /// </summary>
         /// <remarks>
@@ -1604,14 +1619,15 @@ namespace PPDS.Dataverse.BulkOperations
         private static BulkOperationResult CreateFailureResultForEntities(List<Entity> batch, Exception ex)
         {
             var errorCode = ExtractErrorCode(ex);
-            var fieldName = TryExtractFieldName(ex.Message);
+            var message = GetExceptionMessage(ex);
+            var fieldName = TryExtractFieldName(message);
 
             var errors = batch.Select((e, i) => new BulkOperationError
             {
                 Index = i,
                 RecordId = e.Id != Guid.Empty ? e.Id : null,
                 ErrorCode = errorCode,
-                Message = ex.Message,
+                Message = message,
                 FieldName = fieldName,
                 FieldValueDescription = DescribeFieldValue(e, fieldName)
             }).ToList();
@@ -1631,14 +1647,15 @@ namespace PPDS.Dataverse.BulkOperations
         private static BulkOperationResult CreateFailureResultForIds(List<Guid> batch, Exception ex)
         {
             var errorCode = ExtractErrorCode(ex);
-            var fieldName = TryExtractFieldName(ex.Message);
+            var message = GetExceptionMessage(ex);
+            var fieldName = TryExtractFieldName(message);
 
             var errors = batch.Select((id, i) => new BulkOperationError
             {
                 Index = i,
                 RecordId = id,
                 ErrorCode = errorCode,
-                Message = ex.Message,
+                Message = message,
                 FieldName = fieldName
                 // FieldValueDescription not available when only IDs are provided
             }).ToList();

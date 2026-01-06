@@ -332,6 +332,13 @@ namespace PPDS.Migration.Import
                 var safeMessage = ConnectionStringRedactor.RedactExceptionMessage(ex.Message);
                 progress?.Error(ex, "Import failed");
 
+                // Preserve all previously accumulated entity errors, plus add this exception error
+                var exceptionError = new MigrationError
+                {
+                    Phase = MigrationPhase.Importing,
+                    Message = safeMessage
+                };
+
                 return new ImportResult
                 {
                     Success = false,
@@ -339,14 +346,7 @@ namespace PPDS.Migration.Import
                     RecordsImported = totalImported,
                     Duration = stopwatch.Elapsed,
                     EntityResults = entityResults.ToArray(),
-                    Errors = new[]
-                    {
-                        new MigrationError
-                        {
-                            Phase = MigrationPhase.Importing,
-                            Message = safeMessage
-                        }
-                    }
+                    Errors = errors.Append(exceptionError).ToArray()
                 };
             }
             finally

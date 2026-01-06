@@ -97,12 +97,33 @@ namespace PPDS.Migration.Analysis
 
             _logger?.LogInformation("Found {Count} dependencies", edges.Count);
 
-            // Find circular references using Tarjan's algorithm
+            // Detect self-referential loops (entity references itself) - these are not detected
+            // by Tarjan's algorithm because SCCs of size 1 are filtered out.
+            // Self-referential lookups must be deferred to a second pass.
+            var selfReferences = edges
+                .Where(e => e.FromEntity.Equals(e.ToEntity, StringComparison.OrdinalIgnoreCase))
+                .GroupBy(e => e.FromEntity, StringComparer.OrdinalIgnoreCase)
+                .Select(g => new CircularReference
+                {
+                    Entities = new List<string> { g.Key },
+                    Edges = g.ToList()
+                })
+                .ToList();
+
+            if (selfReferences.Count > 0)
+            {
+                _logger?.LogInformation("Detected {Count} self-referential entities", selfReferences.Count);
+            }
+
+            // Find circular references using Tarjan's algorithm (for multi-entity cycles)
             var circularReferences = FindCircularReferences(entitySet, edges);
+
+            // Combine self-references with multi-entity cycles
+            circularReferences.AddRange(selfReferences);
 
             if (circularReferences.Count > 0)
             {
-                _logger?.LogInformation("Detected {Count} circular reference groups", circularReferences.Count);
+                _logger?.LogInformation("Detected {Count} circular reference groups (including self-references)", circularReferences.Count);
             }
 
             // Build tiers using topological sort
