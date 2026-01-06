@@ -58,7 +58,7 @@ internal static class QueryResultsViewer
 
             if (useTableView)
             {
-                viewResult = await TableView.ShowAsync(state, fetchPage, cancellationToken);
+                viewResult = await InteractiveTableView.ShowAsync(state, fetchPage, cancellationToken);
             }
             else
             {
