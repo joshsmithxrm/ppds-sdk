@@ -93,7 +93,7 @@ public class ImportJobsCommandGroupTests
     [Fact]
     public void EnvironmentOption_HasShortAlias()
     {
-        Assert.Contains("-env", ImportJobsCommandGroup.EnvironmentOption.Aliases);
+        Assert.Contains("-e", ImportJobsCommandGroup.EnvironmentOption.Aliases);
     }
 
     #endregion

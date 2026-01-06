@@ -107,7 +107,7 @@ public class SolutionsCommandGroupTests
     [Fact]
     public void EnvironmentOption_HasShortAlias()
     {
-        Assert.Contains("-env", SolutionsCommandGroup.EnvironmentOption.Aliases);
+        Assert.Contains("-e", SolutionsCommandGroup.EnvironmentOption.Aliases);
     }
 
     #endregion
