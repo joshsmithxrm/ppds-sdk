@@ -12,6 +12,9 @@ internal static class RecordView
 {
     private const int FieldNameWidth = 25;
 
+    // Track the last selected menu action across renders for cursor memory
+    private static RecordAction _lastSelectedAction = RecordAction.Next;
+
     /// <summary>
     /// Navigation actions available in record view.
     /// </summary>
@@ -261,23 +264,100 @@ internal static class RecordView
             Action = RecordAction.Back
         });
 
-        var selected = AnsiConsole.Prompt(
-            new SelectionPrompt<RecordNavigationChoice>()
-                .Title(Styles.MutedText("Navigate:"))
-                .HighlightStyle(Styles.SelectionHighlight)
-                .AddChoices(choices)
-                .UseConverter(FormatChoice));
+        // Find index of last selected action, or default to first item
+        var selectedIndex = choices.FindIndex(c => c.Action == _lastSelectedAction);
+        if (selectedIndex < 0) selectedIndex = 0;
+
+        // Custom menu with cursor memory (SelectionPrompt doesn't support default selection)
+        var selected = ShowCustomMenu(choices, selectedIndex);
+
+        // Remember selection for next time
+        _lastSelectedAction = selected.Action;
 
         return selected.Action;
     }
 
-    private static string FormatChoice(RecordNavigationChoice choice)
+    private static RecordNavigationChoice ShowCustomMenu(List<RecordNavigationChoice> choices, int initialIndex)
     {
-        if (choice.Action == RecordAction.Back)
+        var selectedIndex = initialIndex;
+        var menuStartLine = Console.CursorTop;
+
+        Console.CursorVisible = false;
+
+        // Initial render
+        RenderMenu(choices, selectedIndex, menuStartLine);
+
+        while (true)
         {
-            return Styles.MutedText(choice.Label);
+            var key = Console.ReadKey(intercept: true);
+
+            switch (key.Key)
+            {
+                case ConsoleKey.UpArrow:
+                case ConsoleKey.K: // vim-style
+                    if (selectedIndex > 0)
+                    {
+                        selectedIndex--;
+                        RenderMenu(choices, selectedIndex, menuStartLine);
+                    }
+                    break;
+
+                case ConsoleKey.DownArrow:
+                case ConsoleKey.J: // vim-style
+                    if (selectedIndex < choices.Count - 1)
+                    {
+                        selectedIndex++;
+                        RenderMenu(choices, selectedIndex, menuStartLine);
+                    }
+                    break;
+
+                case ConsoleKey.Enter:
+                case ConsoleKey.Spacebar:
+                    Console.CursorVisible = true;
+                    // Move cursor past menu
+                    Console.SetCursorPosition(0, menuStartLine + choices.Count);
+                    return choices[selectedIndex];
+
+                case ConsoleKey.Escape:
+                    Console.CursorVisible = true;
+                    Console.SetCursorPosition(0, menuStartLine + choices.Count);
+                    return choices.First(c => c.Action == RecordAction.Back);
+            }
         }
-        return choice.Label;
+    }
+
+    private static void RenderMenu(List<RecordNavigationChoice> choices, int selectedIndex, int startLine)
+    {
+        for (var i = 0; i < choices.Count; i++)
+        {
+            Console.SetCursorPosition(0, startLine + i);
+
+            var choice = choices[i];
+            var isSelected = i == selectedIndex;
+            var isBack = choice.Action == RecordAction.Back;
+
+            // Clear line
+            Console.Write(new string(' ', Console.WindowWidth - 1));
+            Console.SetCursorPosition(0, startLine + i);
+
+            if (isSelected)
+            {
+                Console.ForegroundColor = ConsoleColor.Black;
+                Console.BackgroundColor = ConsoleColor.Cyan;
+                Console.Write($" > {choice.Label} ");
+                Console.ResetColor();
+            }
+            else if (isBack)
+            {
+                Console.ForegroundColor = ConsoleColor.DarkGray;
+                Console.Write($"   {choice.Label}");
+                Console.ResetColor();
+            }
+            else
+            {
+                Console.Write($"   {choice.Label}");
+            }
+        }
     }
 
     private static Task ShowJumpToDialog(RecordNavigationState state)
