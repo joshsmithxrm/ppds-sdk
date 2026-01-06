@@ -14,6 +14,7 @@ using PPDS.Cli.Commands.EnvironmentVariables;
 using PPDS.Cli.Commands.Users;
 using PPDS.Cli.Commands.Roles;
 using PPDS.Cli.Infrastructure;
+using PPDS.Cli.Interactive;
 
 namespace PPDS.Cli;
 
@@ -24,6 +25,13 @@ public static class Program
 {
     public static async Task<int> Main(string[] args)
     {
+        // Check for interactive mode before invoking System.CommandLine
+        // This allows a parallel execution path for the TUI
+        if (IsInteractiveMode(args))
+        {
+            return await InteractiveCli.RunAsync();
+        }
+
         var rootCommand = new RootCommand(
             "PPDS CLI - Power Platform Developer Suite command-line tool" + Environment.NewLine +
             Environment.NewLine +
@@ -60,5 +68,19 @@ public static class Program
 
         var parseResult = rootCommand.Parse(args);
         return await parseResult.InvokeAsync();
+    }
+
+    /// <summary>
+    /// Determines if the CLI should run in interactive mode.
+    /// </summary>
+    /// <param name="args">Command line arguments.</param>
+    /// <returns>True if interactive mode was requested.</returns>
+    private static bool IsInteractiveMode(string[] args)
+    {
+        if (args.Length == 0)
+            return false;
+
+        var firstArg = args[0].ToLowerInvariant();
+        return firstArg is "interactive" or "-i" or "--interactive";
     }
 }

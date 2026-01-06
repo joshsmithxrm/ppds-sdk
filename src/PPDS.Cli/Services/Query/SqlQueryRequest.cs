@@ -1,0 +1,34 @@
+namespace PPDS.Cli.Services.Query;
+
+/// <summary>
+/// Request parameters for SQL query execution.
+/// </summary>
+public sealed record SqlQueryRequest
+{
+    /// <summary>
+    /// The SQL query to execute.
+    /// </summary>
+    public required string Sql { get; init; }
+
+    /// <summary>
+    /// Optional TOP value to override in the query.
+    /// If specified, overrides any TOP clause in the SQL.
+    /// </summary>
+    public int? TopOverride { get; init; }
+
+    /// <summary>
+    /// Page number for pagination (1-based).
+    /// </summary>
+    public int? PageNumber { get; init; }
+
+    /// <summary>
+    /// Paging cookie from a previous result for continuation.
+    /// </summary>
+    public string? PagingCookie { get; init; }
+
+    /// <summary>
+    /// Whether to include total record count in the result.
+    /// Note: Cannot be used with TOP queries due to Dataverse limitation.
+    /// </summary>
+    public bool IncludeCount { get; init; }
+}
