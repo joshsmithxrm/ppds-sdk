@@ -12,6 +12,9 @@ internal static class RecordView
 {
     private const int FieldNameWidth = 25;
 
+    // Track the last selected menu action across renders for cursor memory
+    private static RecordAction _lastSelectedAction = RecordAction.Next;
+
     /// <summary>
     /// Navigation actions available in record view.
     /// </summary>
@@ -192,34 +195,23 @@ internal static class RecordView
     {
         var choices = new List<RecordNavigationChoice>();
 
-        // Determine which navigation action should be first (default)
-        var preferNext = state.LastAction == NavigationAction.Next ||
-                         state.LastAction == NavigationAction.JumpTo ||
-                         state.LastAction == NavigationAction.None;
+        // Navigation choices - consistent order
+        if (state.CanMovePrevious)
+        {
+            choices.Add(new RecordNavigationChoice
+            {
+                Label = "< Previous Record",
+                Action = RecordAction.Previous
+            });
+        }
 
-        // Navigation choices - smart ordering based on last action
-        var previousChoice = state.CanMovePrevious
-            ? new RecordNavigationChoice { Label = "< Previous Record", Action = RecordAction.Previous }
-            : null;
-
-        var nextChoice = state.CanMoveNext
-            ? new RecordNavigationChoice
+        if (state.CanMoveNext)
+        {
+            choices.Add(new RecordNavigationChoice
             {
                 Label = state.NeedsMoreRecords ? "> Next Record (load more)" : "> Next Record",
                 Action = RecordAction.Next
-            }
-            : null;
-
-        // Add navigation choices in smart order (default first)
-        if (preferNext)
-        {
-            if (nextChoice != null) choices.Add(nextChoice);
-            if (previousChoice != null) choices.Add(previousChoice);
-        }
-        else
-        {
-            if (previousChoice != null) choices.Add(previousChoice);
-            if (nextChoice != null) choices.Add(nextChoice);
+            });
         }
 
         if (state.TotalLoaded > 3)
@@ -272,12 +264,24 @@ internal static class RecordView
             Action = RecordAction.Back
         });
 
+        // Reorder choices so the last-selected action is first (cursor memory)
+        // This is the workaround since SelectionPrompt doesn't support DefaultValue
+        var defaultChoice = choices.FirstOrDefault(c => c.Action == _lastSelectedAction);
+        if (defaultChoice != null && choices.IndexOf(defaultChoice) > 0)
+        {
+            choices.Remove(defaultChoice);
+            choices.Insert(0, defaultChoice);
+        }
+
         var selected = AnsiConsole.Prompt(
             new SelectionPrompt<RecordNavigationChoice>()
                 .Title(Styles.MutedText("Navigate:"))
                 .HighlightStyle(Styles.SelectionHighlight)
                 .AddChoices(choices)
                 .UseConverter(FormatChoice));
+
+        // Remember this choice for next time
+        _lastSelectedAction = selected.Action;
 
         return selected.Action;
     }

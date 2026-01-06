@@ -3,8 +3,8 @@ using PPDS.Cli.Interactive.Components;
 using PPDS.Cli.Interactive.Components.QueryResults;
 using PPDS.Cli.Services.Query;
 using PPDS.Dataverse.Sql.Parsing;
+using RadLine;
 using Spectre.Console;
-using ReadLineLib = System.ReadLine;
 
 namespace PPDS.Cli.Interactive.Wizards;
 
@@ -50,18 +50,24 @@ internal static class SqlQueryWizard
             AnsiConsole.Write(headerPanel);
             AnsiConsole.WriteLine();
 
-            // Get SQL query from user using ReadLine for proper editing support
-            // (arrow keys, home/end, ctrl+A, up/down for history)
+            // Get SQL query from user using RadLine for proper editing support
+            // (arrow keys, home/end, ctrl+arrows for word nav, up/down for history)
             AnsiConsole.MarkupLine(Styles.MutedText("Enter SQL query (Up/Down for history, 'back' or 'exit'):"));
 
-            // Sync QueryHistory to ReadLine's history for up/down arrow navigation
-            ReadLineLib.ClearHistory();
+            // Build RadLine editor with history
+            var editor = new LineEditor(AnsiConsole.Console)
+            {
+                Prompt = new LineEditorPrompt("> "),
+                Text = lastQuery ?? string.Empty
+            };
+
+            // Sync QueryHistory to RadLine's history for up/down arrow navigation
             foreach (var historyItem in QueryHistory.Recent.Reverse())
             {
-                ReadLineLib.AddHistory(historyItem);
+                editor.History.Add(historyItem);
             }
 
-            var sql = ReadLineLib.Read("> ", lastQuery ?? string.Empty) ?? string.Empty;
+            var sql = await editor.ReadLine(cancellationToken) ?? string.Empty;
 
             // Handle special commands
             if (string.IsNullOrWhiteSpace(sql) || sql.Equals("back", StringComparison.OrdinalIgnoreCase))
@@ -78,7 +84,13 @@ internal static class SqlQueryWizard
             QueryHistory.Add(sql);
 
             // Execute the query
-            var result = await ExecuteQueryAsync(session, environmentUrl, sql, cancellationToken);
+            var result = await ExecuteQueryAsync(
+                session,
+                environmentUrl,
+                profile.DisplayIdentifier,
+                profile.Environment.DisplayName,
+                sql,
+                cancellationToken);
 
             switch (result.Outcome)
             {
@@ -114,6 +126,8 @@ internal static class SqlQueryWizard
     private static async Task<ExecuteResult> ExecuteQueryAsync(
         InteractiveSession session,
         string environmentUrl,
+        string profileName,
+        string environmentName,
         string sql,
         CancellationToken cancellationToken)
     {
@@ -159,6 +173,8 @@ internal static class SqlQueryWizard
                     return result.Result;
                 },
                 environmentUrl,
+                profileName,
+                environmentName,
                 cancellationToken);
 
             // Map view result to query outcome

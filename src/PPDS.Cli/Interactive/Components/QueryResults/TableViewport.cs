@@ -92,13 +92,9 @@ internal sealed class TableViewport
         var nav = _state.NavigationState;
         var position = $"Row {_state.SelectedRowIndex + 1}/{nav.DisplayTotal}";
 
-        var scrollIndicator = "";
-        if (_state.CanScrollLeft || _state.CanScrollRight)
-        {
-            var leftArrow = _state.CanScrollLeft ? "<" : " ";
-            var rightArrow = _state.CanScrollRight ? ">" : " ";
-            scrollIndicator = $" | Col {leftArrow}{_state.FirstScrollableColumn + 1}{rightArrow}";
-        }
+        // Show selected column name
+        var columnName = _state.GetSelectedColumnName();
+        var columnInfo = $" | [{columnName}]";
 
         // Status message (temporary)
         var message = _state.StatusMessage ?? "";
@@ -107,10 +103,10 @@ internal sealed class TableViewport
             message = $" | {message}";
         }
 
-        var statusText = $"{position}{scrollIndicator}{message}";
+        var statusText = $"{position}{columnInfo}{message}";
 
-        // Help text on the right
-        var helpText = "[↑↓] Row  [←→] Col  [Enter] View  [N]ew  [Esc] Back";
+        // Help text on the right - updated for cell navigation (using ASCII for compatibility)
+        var helpText = "[Arrows] Navigate  [Ctrl+C] Copy  [N]ew  [?] Help  [Esc] Back";
 
         // Calculate positioning
         var availableWidth = terminalWidth - statusText.Length - 2;
@@ -142,9 +138,25 @@ internal sealed class TableViewport
             ? $"{_state.FirstVisibleRow + 1}-{Math.Min(_state.FirstVisibleRow + _state.VisibleRowCount, nav.TotalLoaded)}"
             : $"1-{nav.TotalLoaded}";
 
-        var headerContent =
-            $"{Styles.MutedText("Entity:")} {Markup.Escape(nav.EntityName)}\n" +
-            $"{Styles.MutedText("Records:")} {recordRange} of {nav.DisplayTotal}";
+        // Build header content with connection context
+        var lines = new List<string>();
+
+        // Profile/environment context (if available)
+        if (!string.IsNullOrEmpty(nav.ProfileName))
+        {
+            var profileLine = $"{Styles.MutedText("Profile:")} {Markup.Escape(nav.ProfileName)}";
+            if (!string.IsNullOrEmpty(nav.EnvironmentName))
+            {
+                profileLine += $" {Styles.MutedText("→")} {Markup.Escape(nav.EnvironmentName)}";
+            }
+            lines.Add(profileLine);
+        }
+
+        // Entity and record info
+        lines.Add($"{Styles.MutedText("Entity:")} {Markup.Escape(nav.EntityName)}");
+        lines.Add($"{Styles.MutedText("Records:")} {recordRange} of {nav.DisplayTotal}");
+
+        var headerContent = string.Join("\n", lines);
 
         var header = new Panel(headerContent)
         {
@@ -233,19 +245,17 @@ internal sealed class TableViewport
         var nav = _state.NavigationState;
         var record = nav.AllRecords[rowIndex];
         var columns = nav.Columns;
+        var selectedColumnIndex = _state.SelectedColumnIndex;
 
-        if (isSelected)
-        {
-            Console.BackgroundColor = ConsoleColor.DarkBlue;
-            Console.ForegroundColor = ConsoleColor.White;
-        }
-        else
-        {
-            Console.ResetColor();
-        }
+        // Zebra striping for alternating rows (subtle background on even rows)
+        var isEvenRow = rowIndex % 2 == 0;
 
-        Console.ForegroundColor = isSelected ? ConsoleColor.White : ConsoleColor.DarkCyan;
-        Console.Write("│");
+        // Default row styling
+        Console.ResetColor();
+
+        // Row border - brighter for selected row
+        Console.ForegroundColor = isSelected ? ConsoleColor.Cyan : ConsoleColor.DarkCyan;
+        Console.Write(isSelected ? "║" : "│");
 
         foreach (var layout in visibleLayouts)
         {
@@ -256,10 +266,40 @@ internal sealed class TableViewport
             // Get plain value (no markup for direct console output)
             var displayValue = GetPlainDisplayValue(value, column, layout.DisplayWidth);
 
-            Console.ForegroundColor = isSelected ? ConsoleColor.White : ConsoleColor.Gray;
+            // Determine cell highlighting
+            var isCellSelected = isSelected && layout.ColumnIndex == selectedColumnIndex;
+
+            if (isCellSelected)
+            {
+                // Selected cell: bright highlight with inverse colors
+                Console.BackgroundColor = ConsoleColor.Cyan;
+                Console.ForegroundColor = ConsoleColor.Black;
+            }
+            else if (isSelected)
+            {
+                // Selected row but not this cell: clear highlight
+                Console.BackgroundColor = ConsoleColor.DarkBlue;
+                Console.ForegroundColor = ConsoleColor.White;
+            }
+            else if (isEvenRow)
+            {
+                // Zebra stripe for even rows - subtle background
+                Console.BackgroundColor = ConsoleColor.DarkGray;
+                Console.ForegroundColor = ConsoleColor.White;
+            }
+            else
+            {
+                // Odd rows - default dark background
+                Console.ResetColor();
+                Console.ForegroundColor = ConsoleColor.Gray;
+            }
+
             Console.Write(TruncateOrPad(displayValue, layout.DisplayWidth + ColumnPadding));
-            Console.ForegroundColor = isSelected ? ConsoleColor.White : ConsoleColor.DarkCyan;
-            Console.Write("│");
+
+            // Reset for border
+            Console.ResetColor();
+            Console.ForegroundColor = isSelected ? ConsoleColor.Cyan : ConsoleColor.DarkCyan;
+            Console.Write(isSelected ? "║" : "│");
         }
 
         Console.ResetColor();
@@ -385,5 +425,65 @@ internal sealed class TableViewport
         }
 
         return display;
+    }
+
+    /// <summary>
+    /// Shows the keyboard shortcuts help overlay.
+    /// </summary>
+    public void ShowHelpOverlay()
+    {
+        // Save cursor position
+        var savedTop = Console.CursorTop;
+
+        // Calculate overlay position (center of screen)
+        var overlayWidth = 50;
+        var overlayHeight = 20;
+        var startX = Math.Max(0, (Console.WindowWidth - overlayWidth) / 2);
+        var startY = Math.Max(0, (Console.WindowHeight - overlayHeight) / 2);
+
+        // Draw help content using Spectre.Console
+        Console.Clear();
+
+        var helpTable = new Table()
+            .Border(TableBorder.Rounded)
+            .BorderStyle(Styles.HeaderBorder)
+            .Title("[bold cyan]Keyboard Shortcuts[/]")
+            .AddColumn(new TableColumn(Styles.MutedText("Key")).Width(20))
+            .AddColumn(new TableColumn(Styles.MutedText("Action")).Width(35));
+
+        // Navigation
+        helpTable.AddRow("[bold]Navigation[/]", "");
+        helpTable.AddRow("Up / Down", "Move up/down one row");
+        helpTable.AddRow("Left / Right", "Move left/right one cell");
+        helpTable.AddRow("Ctrl+Left / Ctrl+Right", "Scroll columns without moving");
+        helpTable.AddRow("Page Up / Page Down", "Move up/down one page");
+        helpTable.AddRow("Home / End", "Jump to first/last row");
+        helpTable.AddRow("Tab / Shift+Tab", "Scroll columns");
+        helpTable.AddRow("", "");
+
+        // Actions
+        helpTable.AddRow("[bold]Actions[/]", "");
+        helpTable.AddRow("Enter / R", "View record details");
+        helpTable.AddRow("Ctrl+C", "Copy selected cell value");
+        helpTable.AddRow("C", "Copy record URL");
+        helpTable.AddRow("O", "Open record in browser");
+        helpTable.AddRow("N", "New query");
+        helpTable.AddRow("", "");
+
+        // Exit
+        helpTable.AddRow("[bold]Exit[/]", "");
+        helpTable.AddRow("Esc / B", "Go back");
+        helpTable.AddRow("Q", "Quit interactive mode");
+        helpTable.AddRow("? / F1", "Show this help");
+
+        AnsiConsole.Write(helpTable);
+        AnsiConsole.WriteLine();
+        AnsiConsole.MarkupLine(Styles.MutedText("Press any key to close..."));
+
+        // Wait for any key
+        Console.ReadKey(true);
+
+        // Re-render the table
+        Render();
     }
 }

@@ -32,24 +32,66 @@ internal static class InteractiveTableView
             switch (action)
             {
                 case TableInputAction.MoveUp:
-                    if (state.MoveUp())
                     {
-                        viewport.UpdateRowHighlight(previousRow, state.SelectedRowIndex);
+                        var previousFirstVisible = state.FirstVisibleRow;
+                        if (state.MoveUp())
+                        {
+                            // Full redraw if viewport scrolled, otherwise just update highlight
+                            if (state.FirstVisibleRow != previousFirstVisible)
+                                viewport.Render();
+                            else
+                                viewport.UpdateRowHighlight(previousRow, state.SelectedRowIndex);
+                        }
                     }
                     break;
 
                 case TableInputAction.MoveDown:
-                    if (state.MoveDown())
                     {
-                        viewport.UpdateRowHighlight(previousRow, state.SelectedRowIndex);
-                    }
-                    else if (state.NeedsMoreRecords && fetchPage != null)
-                    {
-                        // Need to load more records
-                        await LoadMoreRecords(state, fetchPage, cancellationToken);
+                        var previousFirstVisible = state.FirstVisibleRow;
                         if (state.MoveDown())
                         {
-                            viewport.Render(); // Full re-render after loading
+                            // Full redraw if viewport scrolled, otherwise just update highlight
+                            if (state.FirstVisibleRow != previousFirstVisible)
+                                viewport.Render();
+                            else
+                                viewport.UpdateRowHighlight(previousRow, state.SelectedRowIndex);
+                        }
+                        else if (state.NeedsMoreRecords && fetchPage != null)
+                        {
+                            // Need to load more records
+                            await LoadMoreRecords(state, fetchPage, cancellationToken);
+                            if (state.MoveDown())
+                            {
+                                viewport.Render(); // Full re-render after loading
+                            }
+                        }
+                    }
+                    break;
+
+                case TableInputAction.MoveLeft:
+                    {
+                        var previousFirstScrollable = state.FirstScrollableColumn;
+                        if (state.MoveLeft())
+                        {
+                            // Full redraw if viewport scrolled horizontally
+                            if (state.FirstScrollableColumn != previousFirstScrollable)
+                                viewport.Render();
+                            else
+                                viewport.UpdateRowHighlight(previousRow, state.SelectedRowIndex);
+                        }
+                    }
+                    break;
+
+                case TableInputAction.MoveRight:
+                    {
+                        var previousFirstScrollable = state.FirstScrollableColumn;
+                        if (state.MoveRight())
+                        {
+                            // Full redraw if viewport scrolled horizontally
+                            if (state.FirstScrollableColumn != previousFirstScrollable)
+                                viewport.Render();
+                            else
+                                viewport.UpdateRowHighlight(previousRow, state.SelectedRowIndex);
                         }
                     }
                     break;
@@ -116,6 +158,10 @@ internal static class InteractiveTableView
                     CopyRecordUrl(navigationState, state, viewport);
                     break;
 
+                case TableInputAction.CopyCellContent:
+                    CopyCellContent(state, viewport);
+                    break;
+
                 case TableInputAction.NewQuery:
                     RestoreConsole();
                     return ViewResult.NewQuery;
@@ -127,6 +173,10 @@ internal static class InteractiveTableView
                 case TableInputAction.Exit:
                     RestoreConsole();
                     return ViewResult.Exit;
+
+                case TableInputAction.ShowHelp:
+                    viewport.ShowHelpOverlay();
+                    break;
 
                 case TableInputAction.None:
                     // Unknown key, ignore
@@ -182,6 +232,31 @@ internal static class InteractiveTableView
         else
         {
             tableState.StatusMessage = "Cannot build URL";
+        }
+        viewport.RenderStatusBar();
+    }
+
+    private static void CopyCellContent(
+        InteractiveTableState tableState,
+        TableViewport viewport)
+    {
+        var value = tableState.GetSelectedCellValue();
+        if (value != null)
+        {
+            if (ClipboardHelper.CopyToClipboard(value))
+            {
+                // Truncate display value for status if too long
+                var displayValue = value.Length > 30 ? value[..27] + "..." : value;
+                tableState.StatusMessage = $"Copied: {displayValue}";
+            }
+            else
+            {
+                tableState.StatusMessage = "Copy failed";
+            }
+        }
+        else
+        {
+            tableState.StatusMessage = "No value to copy";
         }
         viewport.RenderStatusBar();
     }

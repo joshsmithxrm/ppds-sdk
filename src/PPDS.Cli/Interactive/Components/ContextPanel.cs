@@ -1,4 +1,5 @@
 using PPDS.Auth.Profiles;
+using PPDS.Cli.Commands;
 using Spectre.Console;
 
 namespace PPDS.Cli.Interactive.Components;
@@ -16,16 +17,34 @@ internal static class ContextPanel
     {
         var content = BuildContent(profile);
 
+        // Include version in header (truncate commit hash if present)
+        var version = TruncateVersion(ErrorOutput.Version);
+        var headerText = $" PPDS Interactive v{version} ";
+
         var panel = new Panel(content)
         {
             Border = BoxBorder.Rounded,
             BorderStyle = Styles.HeaderBorder,
-            Header = new PanelHeader(" PPDS Interactive ", Justify.Center),
+            Header = new PanelHeader(headerText, Justify.Center),
             Padding = new Padding(1, 0, 1, 0)
         };
 
         AnsiConsole.Write(panel);
         AnsiConsole.WriteLine();
+    }
+
+    /// <summary>
+    /// Truncates the version string to exclude the commit hash for display.
+    /// </summary>
+    private static string TruncateVersion(string version)
+    {
+        // Version might be "1.0.0-beta.9+abc1234" - truncate after + symbol
+        var plusIndex = version.IndexOf('+');
+        if (plusIndex > 0)
+        {
+            return version[..plusIndex];
+        }
+        return version;
     }
 
     private static string BuildContent(AuthProfile? profile)
