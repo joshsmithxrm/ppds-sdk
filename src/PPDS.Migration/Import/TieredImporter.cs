@@ -451,10 +451,13 @@ namespace PPDS.Migration.Import
                 {
                     // Cache that this entity doesn't support bulk operations
                     _bulkNotSupportedEntities[entityName] = true;
-                    _logger?.LogInformation("Entity {Entity} does not support bulk operations (detected via probe), using individual operations", entityName);
+                    _logger?.LogWarning("Entity {Entity} does not support bulk operations, falling back to individual operations", entityName);
 
                     // Fall back to individual operations for ALL records (including the probe record)
                     bulkResult = await ExecuteIndividualOperationsAsync(entityName, preparedRecords, options, cancellationToken).ConfigureAwait(false);
+
+                    _logger?.LogInformation("Successfully imported {SuccessCount}/{TotalCount} {Entity} records via individual operations",
+                        bulkResult.SuccessCount, preparedRecords.Count, entityName);
                 }
                 else
                 {
@@ -482,8 +485,11 @@ namespace PPDS.Migration.Import
             else if (_bulkNotSupportedEntities.ContainsKey(entityName))
             {
                 // Already know bulk operations aren't supported for this entity
-                _logger?.LogDebug("Skipping bulk API for {Entity} (cached as unsupported)", entityName);
+                _logger?.LogDebug("Using individual operations for {Entity} (bulk not supported)", entityName);
                 bulkResult = await ExecuteIndividualOperationsAsync(entityName, preparedRecords, options, cancellationToken).ConfigureAwait(false);
+
+                _logger?.LogDebug("Imported {SuccessCount}/{TotalCount} {Entity} records via individual operations",
+                    bulkResult.SuccessCount, preparedRecords.Count, entityName);
             }
             else
             {

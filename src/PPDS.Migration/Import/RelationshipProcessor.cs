@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Threading;
@@ -6,6 +7,7 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Microsoft.Xrm.Sdk;
 using Microsoft.Xrm.Sdk.Messages;
+using Microsoft.Xrm.Sdk.Metadata;
 using PPDS.Dataverse.Pooling;
 using PPDS.Migration.Progress;
 
@@ -19,6 +21,12 @@ namespace PPDS.Migration.Import
     {
         private readonly IDataverseConnectionPool _connectionPool;
         private readonly ILogger<RelationshipProcessor>? _logger;
+
+        /// <summary>
+        /// Cache mapping intersect entity names to actual relationship SchemaNames.
+        /// Populated lazily on first M2M processing. Key is lowercase intersect entity name.
+        /// </summary>
+        private ConcurrentDictionary<string, string>? _relationshipNameCache;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="RelationshipProcessor"/> class.
@@ -108,6 +116,9 @@ namespace PPDS.Migration.Import
                         continue;
                     }
 
+                    // Resolve relationship name (handles case where schema has intersect entity name instead of SchemaName)
+                    var resolvedRelationshipName = await ResolveRelationshipNameAsync(m2mData.RelationshipName, cancellationToken).ConfigureAwait(false);
+
                     // Create association request
                     await using var client = await _connectionPool.GetClientAsync(null, cancellationToken: cancellationToken).ConfigureAwait(false);
 
@@ -121,7 +132,7 @@ namespace PPDS.Migration.Import
                     {
                         Target = new EntityReference(entityName, sourceNewId),
                         RelatedEntities = relatedEntities,
-                        Relationship = new Relationship(m2mData.RelationshipName)
+                        Relationship = new Relationship(resolvedRelationshipName)
                     };
 
                     try
@@ -211,6 +222,95 @@ namespace PPDS.Migration.Import
             // We need to find it by name, but we don't have the source name here
             // For now, return null - proper solution requires exporting role names
             return null;
+        }
+
+        /// <summary>
+        /// Resolves the actual relationship SchemaName from what may be an intersect entity name.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// Some schema files (e.g., CMT-generated or older PPDS schemas) may store the intersect
+        /// entity name (e.g., "teamroles") instead of the relationship SchemaName (e.g., "teamroles_association").
+        /// This method resolves the correct name by querying Dataverse metadata.
+        /// </para>
+        /// <para>
+        /// Resolution order:
+        /// 1. If already cached, return cached value
+        /// 2. If cache doesn't have it, try loading all M2M relationships from metadata
+        /// 3. Look up by intersect entity name
+        /// 4. If still not found, return original name (let Dataverse fail if invalid)
+        /// </para>
+        /// </remarks>
+        private async Task<string> ResolveRelationshipNameAsync(
+            string relationshipName,
+            CancellationToken cancellationToken)
+        {
+            var key = relationshipName.ToLowerInvariant();
+
+            // If cache not loaded, load it now
+            if (_relationshipNameCache == null)
+            {
+                await LoadRelationshipMetadataCacheAsync(cancellationToken).ConfigureAwait(false);
+            }
+
+            // Check if this is an intersect entity name that maps to a different SchemaName
+            if (_relationshipNameCache!.TryGetValue(key, out var resolvedName))
+            {
+                if (!resolvedName.Equals(relationshipName, StringComparison.OrdinalIgnoreCase))
+                {
+                    _logger?.LogDebug("Resolved relationship name '{Original}' to '{Resolved}' (intersect entity to SchemaName)",
+                        relationshipName, resolvedName);
+                }
+                return resolvedName;
+            }
+
+            // Not found in cache - return original and let Dataverse validate
+            return relationshipName;
+        }
+
+        /// <summary>
+        /// Loads all M2M relationship metadata from Dataverse and builds the intersect entity → SchemaName cache.
+        /// </summary>
+        private async Task LoadRelationshipMetadataCacheAsync(CancellationToken cancellationToken)
+        {
+            _relationshipNameCache = new ConcurrentDictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+            try
+            {
+                await using var client = await _connectionPool.GetClientAsync(null, cancellationToken: cancellationToken).ConfigureAwait(false);
+
+                var request = new RetrieveAllEntitiesRequest
+                {
+                    EntityFilters = EntityFilters.Relationships,
+                    RetrieveAsIfPublished = false
+                };
+
+                var response = (RetrieveAllEntitiesResponse)await client.ExecuteAsync(request).ConfigureAwait(false);
+
+                foreach (var entityMetadata in response.EntityMetadata)
+                {
+                    if (entityMetadata.ManyToManyRelationships == null)
+                        continue;
+
+                    foreach (var rel in entityMetadata.ManyToManyRelationships)
+                    {
+                        if (string.IsNullOrEmpty(rel.IntersectEntityName) || string.IsNullOrEmpty(rel.SchemaName))
+                            continue;
+
+                        // Map both the intersect entity name and the SchemaName to the SchemaName
+                        // This handles both cases: when input is the intersect entity or already the SchemaName
+                        _relationshipNameCache.TryAdd(rel.IntersectEntityName.ToLowerInvariant(), rel.SchemaName);
+                        _relationshipNameCache.TryAdd(rel.SchemaName.ToLowerInvariant(), rel.SchemaName);
+                    }
+                }
+
+                _logger?.LogDebug("Loaded {Count} M2M relationship mappings from metadata", _relationshipNameCache.Count);
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogWarning(ex, "Failed to load M2M relationship metadata - relationship name resolution may fail");
+                // Don't throw - we'll try with the original names
+            }
         }
     }
 }
