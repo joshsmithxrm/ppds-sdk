@@ -8,6 +8,11 @@ using PPDS.Cli.Commands.Query;
 using PPDS.Cli.Commands.Internal;
 using PPDS.Cli.Commands.Serve;
 using PPDS.Cli.Commands;
+using PPDS.Cli.Commands.Solutions;
+using PPDS.Cli.Commands.ImportJobs;
+using PPDS.Cli.Commands.EnvironmentVariables;
+using PPDS.Cli.Commands.Users;
+using PPDS.Cli.Commands.Roles;
 using PPDS.Cli.Infrastructure;
 
 namespace PPDS.Cli;
@@ -32,6 +37,11 @@ public static class Program
         rootCommand.Subcommands.Add(PluginsCommandGroup.Create());
         rootCommand.Subcommands.Add(MetadataCommandGroup.Create());
         rootCommand.Subcommands.Add(QueryCommandGroup.Create());
+        rootCommand.Subcommands.Add(SolutionsCommandGroup.Create());
+        rootCommand.Subcommands.Add(ImportJobsCommandGroup.Create());
+        rootCommand.Subcommands.Add(EnvironmentVariablesCommandGroup.Create());
+        rootCommand.Subcommands.Add(UsersCommandGroup.Create());
+        rootCommand.Subcommands.Add(RolesCommandGroup.Create());
         rootCommand.Subcommands.Add(ServeCommand.Create());
         rootCommand.Subcommands.Add(DocsCommand.Create());
 

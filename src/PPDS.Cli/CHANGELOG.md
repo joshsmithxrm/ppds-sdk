@@ -7,6 +7,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **`ppds solutions` command group** - Manage Power Platform solutions ([#137](https://github.com/joshsmithxrm/ppds-sdk/issues/137)):
+  - `ppds solutions list` - List solutions in environment (supports `--include-managed`, `--filter`)
+  - `ppds solutions get <name>` - Get solution details by unique name
+  - `ppds solutions export <name>` - Export solution as ZIP file (supports `--managed`)
+  - `ppds solutions import <file>` - Import solution ZIP file (supports `--overwrite`, `--publish-workflows`)
+  - `ppds solutions components <name>` - List solution components (supports `--type` filtering)
+  - `ppds solutions publish` - Publish all customizations
+  - `ppds solutions url <name>` - Get Maker portal URL for a solution
+- **`ppds importjobs` command group** - Monitor solution import jobs ([#138](https://github.com/joshsmithxrm/ppds-sdk/issues/138)):
+  - `ppds importjobs list` - List recent import jobs (supports `--solution`, `--top`)
+  - `ppds importjobs get <id>` - Get import job details
+  - `ppds importjobs data <id>` - Get raw XML data for an import job
+  - `ppds importjobs wait <id>` - Wait for import job to complete (supports `--timeout`, `--interval`)
+  - `ppds importjobs url <id>` - Get Maker portal URL for an import job
+- **`ppds environmentvariables` command group** - Manage environment variables ([#139](https://github.com/joshsmithxrm/ppds-sdk/issues/139)):
+  - `ppds environmentvariables list` - List environment variables (supports `--solution`)
+  - `ppds environmentvariables get <name>` - Get environment variable details by schema name
+  - `ppds environmentvariables set <name> <value>` - Set environment variable value
+  - `ppds environmentvariables export` - Export environment variables for deployment settings (supports `--solution`, `--output`)
+  - `ppds environmentvariables url <name>` - Get Maker portal URL for an environment variable
+- **`ppds users` command group** - Manage system users ([#119](https://github.com/joshsmithxrm/ppds-sdk/issues/119)):
+  - `ppds users list` - List users (supports `--filter`, `--include-disabled`, `--top`)
+  - `ppds users show <user>` - Show user details (by GUID or domain name)
+  - `ppds users roles <user>` - List roles assigned to a user
+- **`ppds roles` command group** - Manage security roles ([#119](https://github.com/joshsmithxrm/ppds-sdk/issues/119)):
+  - `ppds roles list` - List security roles (supports `--filter`)
+  - `ppds roles show <role>` - Show role details and assigned users (by GUID or name)
+  - `ppds roles assign <role> --user <user>` - Assign a role to a user
+  - `ppds roles remove <role> --user <user>` - Remove a role from a user
+
 ### Fixed
 
 - **`auth create -env` failed to resolve environment** - Creating profiles with InteractiveBrowser or DeviceCode auth and specifying `-env <url>` would fail with "Auth method '' is not supported" because the auth method wasn't passed to Global Discovery Service.

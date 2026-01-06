@@ -497,11 +497,14 @@ namespace PPDS.Dataverse.Generated
 			public const string WorkflowActivationId = "workflowactivationid";
 			public const string WorkflowStageName = "workflowstagename";
 			public const string Workload = "workload";
+			public const string environmentvariabledefinition_AsyncOperations = "environmentvariabledefinition_AsyncOperations";
+			public const string environmentvariablevalue_AsyncOperations = "environmentvariablevalue_AsyncOperations";
 			public const string lk_asyncoperation_createdby = "lk_asyncoperation_createdby";
 			public const string lk_asyncoperation_createdonbehalfby = "lk_asyncoperation_createdonbehalfby";
 			public const string lk_asyncoperation_modifiedby = "lk_asyncoperation_modifiedby";
 			public const string lk_asyncoperation_modifiedonbehalfby = "lk_asyncoperation_modifiedonbehalfby";
 			public const string pluginpackage_AsyncOperations = "pluginpackage_AsyncOperations";
+			public const string Role_AsyncOperations = "Role_AsyncOperations";
 			public const string SdkMessageProcessingStep_AsyncOperations = "SdkMessageProcessingStep_AsyncOperations";
 			public const string system_user_asyncoperation = "system_user_asyncoperation";
 			public const string SystemUser_AsyncOperations = "SystemUser_AsyncOperations";
@@ -1358,6 +1361,44 @@ namespace PPDS.Dataverse.Generated
 		}
 		
 		/// <summary>
+		/// N:1 environmentvariabledefinition_AsyncOperations
+		/// </summary>
+		[Microsoft.Xrm.Sdk.AttributeLogicalNameAttribute("regardingobjectid")]
+		[Microsoft.Xrm.Sdk.RelationshipSchemaNameAttribute("environmentvariabledefinition_AsyncOperations")]
+		public PPDS.Dataverse.Generated.EnvironmentVariableDefinition environmentvariabledefinition_AsyncOperations
+		{
+			get
+			{
+				return this.GetRelatedEntity<PPDS.Dataverse.Generated.EnvironmentVariableDefinition>("environmentvariabledefinition_AsyncOperations", null);
+			}
+			set
+			{
+				this.OnPropertyChanging("environmentvariabledefinition_AsyncOperations");
+				this.SetRelatedEntity<PPDS.Dataverse.Generated.EnvironmentVariableDefinition>("environmentvariabledefinition_AsyncOperations", null, value);
+				this.OnPropertyChanged("environmentvariabledefinition_AsyncOperations");
+			}
+		}
+		
+		/// <summary>
+		/// N:1 environmentvariablevalue_AsyncOperations
+		/// </summary>
+		[Microsoft.Xrm.Sdk.AttributeLogicalNameAttribute("regardingobjectid")]
+		[Microsoft.Xrm.Sdk.RelationshipSchemaNameAttribute("environmentvariablevalue_AsyncOperations")]
+		public PPDS.Dataverse.Generated.EnvironmentVariableValue environmentvariablevalue_AsyncOperations
+		{
+			get
+			{
+				return this.GetRelatedEntity<PPDS.Dataverse.Generated.EnvironmentVariableValue>("environmentvariablevalue_AsyncOperations", null);
+			}
+			set
+			{
+				this.OnPropertyChanging("environmentvariablevalue_AsyncOperations");
+				this.SetRelatedEntity<PPDS.Dataverse.Generated.EnvironmentVariableValue>("environmentvariablevalue_AsyncOperations", null, value);
+				this.OnPropertyChanged("environmentvariablevalue_AsyncOperations");
+			}
+		}
+		
+		/// <summary>
 		/// N:1 lk_asyncoperation_createdby
 		/// </summary>
 		[Microsoft.Xrm.Sdk.AttributeLogicalNameAttribute("createdby")]
@@ -1425,6 +1466,25 @@ namespace PPDS.Dataverse.Generated
 				this.OnPropertyChanging("pluginpackage_AsyncOperations");
 				this.SetRelatedEntity<PPDS.Dataverse.Generated.PluginPackage>("pluginpackage_AsyncOperations", null, value);
 				this.OnPropertyChanged("pluginpackage_AsyncOperations");
+			}
+		}
+		
+		/// <summary>
+		/// N:1 Role_AsyncOperations
+		/// </summary>
+		[Microsoft.Xrm.Sdk.AttributeLogicalNameAttribute("regardingobjectid")]
+		[Microsoft.Xrm.Sdk.RelationshipSchemaNameAttribute("Role_AsyncOperations")]
+		public PPDS.Dataverse.Generated.Role Role_AsyncOperations
+		{
+			get
+			{
+				return this.GetRelatedEntity<PPDS.Dataverse.Generated.Role>("Role_AsyncOperations", null);
+			}
+			set
+			{
+				this.OnPropertyChanging("Role_AsyncOperations");
+				this.SetRelatedEntity<PPDS.Dataverse.Generated.Role>("Role_AsyncOperations", null, value);
+				this.OnPropertyChanged("Role_AsyncOperations");
 			}
 		}
 		

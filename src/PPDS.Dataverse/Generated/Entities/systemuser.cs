@@ -481,6 +481,14 @@ namespace PPDS.Dataverse.Generated
 			public const string lk_asyncoperation_createdonbehalfby = "lk_asyncoperation_createdonbehalfby";
 			public const string lk_asyncoperation_modifiedby = "lk_asyncoperation_modifiedby";
 			public const string lk_asyncoperation_modifiedonbehalfby = "lk_asyncoperation_modifiedonbehalfby";
+			public const string lk_environmentvariabledefinition_createdby = "lk_environmentvariabledefinition_createdby";
+			public const string lk_environmentvariabledefinition_createdonbehalfby = "lk_environmentvariabledefinition_createdonbehalfby";
+			public const string lk_environmentvariabledefinition_modifiedby = "lk_environmentvariabledefinition_modifiedby";
+			public const string lk_environmentvariabledefinition_modifiedonbehalfby = "lk_environmentvariabledefinition_modifiedonbehalfby";
+			public const string lk_environmentvariablevalue_createdby = "lk_environmentvariablevalue_createdby";
+			public const string lk_environmentvariablevalue_createdonbehalfby = "lk_environmentvariablevalue_createdonbehalfby";
+			public const string lk_environmentvariablevalue_modifiedby = "lk_environmentvariablevalue_modifiedby";
+			public const string lk_environmentvariablevalue_modifiedonbehalfby = "lk_environmentvariablevalue_modifiedonbehalfby";
 			public const string lk_importjobbase_createdby = "lk_importjobbase_createdby";
 			public const string lk_importjobbase_createdonbehalfby = "lk_importjobbase_createdonbehalfby";
 			public const string lk_importjobbase_modifiedby = "lk_importjobbase_modifiedby";
@@ -497,6 +505,10 @@ namespace PPDS.Dataverse.Generated
 			public const string lk_publisher_modifiedby = "lk_publisher_modifiedby";
 			public const string lk_publisherbase_createdonbehalfby = "lk_publisherbase_createdonbehalfby";
 			public const string lk_publisherbase_modifiedonbehalfby = "lk_publisherbase_modifiedonbehalfby";
+			public const string lk_role_createdonbehalfby = "lk_role_createdonbehalfby";
+			public const string lk_role_modifiedonbehalfby = "lk_role_modifiedonbehalfby";
+			public const string lk_rolebase_createdby = "lk_rolebase_createdby";
+			public const string lk_rolebase_modifiedby = "lk_rolebase_modifiedby";
 			public const string lk_sdkmessage_createdonbehalfby = "lk_sdkmessage_createdonbehalfby";
 			public const string lk_sdkmessage_modifiedonbehalfby = "lk_sdkmessage_modifiedonbehalfby";
 			public const string lk_sdkmessagefilter_createdonbehalfby = "lk_sdkmessagefilter_createdonbehalfby";
@@ -523,7 +535,9 @@ namespace PPDS.Dataverse.Generated
 			public const string modifiedby_sdkmessageprocessingstepimage = "modifiedby_sdkmessageprocessingstepimage";
 			public const string system_user_asyncoperation = "system_user_asyncoperation";
 			public const string SystemUser_AsyncOperations = "SystemUser_AsyncOperations";
+			public const string user_environmentvariabledefinition = "user_environmentvariabledefinition";
 			public const string Referenceduser_parent_user = "Referenceduser_parent_user";
+			public const string systemuserroles_association = "systemuserroles_association";
 			public const string Referencinglk_systemuser_createdonbehalfby = "lk_systemuser_createdonbehalfby";
 			public const string Referencinglk_systemuser_modifiedonbehalfby = "lk_systemuser_modifiedonbehalfby";
 			public const string Referencinglk_systemuserbase_createdby = "lk_systemuserbase_createdby";
@@ -2993,6 +3007,150 @@ namespace PPDS.Dataverse.Generated
 		}
 		
 		/// <summary>
+		/// 1:N lk_environmentvariabledefinition_createdby
+		/// </summary>
+		[Microsoft.Xrm.Sdk.RelationshipSchemaNameAttribute("lk_environmentvariabledefinition_createdby")]
+		public System.Collections.Generic.IEnumerable<PPDS.Dataverse.Generated.EnvironmentVariableDefinition> lk_environmentvariabledefinition_createdby
+		{
+			get
+			{
+				return this.GetRelatedEntities<PPDS.Dataverse.Generated.EnvironmentVariableDefinition>("lk_environmentvariabledefinition_createdby", null);
+			}
+			set
+			{
+				this.OnPropertyChanging("lk_environmentvariabledefinition_createdby");
+				this.SetRelatedEntities<PPDS.Dataverse.Generated.EnvironmentVariableDefinition>("lk_environmentvariabledefinition_createdby", null, value);
+				this.OnPropertyChanged("lk_environmentvariabledefinition_createdby");
+			}
+		}
+		
+		/// <summary>
+		/// 1:N lk_environmentvariabledefinition_createdonbehalfby
+		/// </summary>
+		[Microsoft.Xrm.Sdk.RelationshipSchemaNameAttribute("lk_environmentvariabledefinition_createdonbehalfby")]
+		public System.Collections.Generic.IEnumerable<PPDS.Dataverse.Generated.EnvironmentVariableDefinition> lk_environmentvariabledefinition_createdonbehalfby
+		{
+			get
+			{
+				return this.GetRelatedEntities<PPDS.Dataverse.Generated.EnvironmentVariableDefinition>("lk_environmentvariabledefinition_createdonbehalfby", null);
+			}
+			set
+			{
+				this.OnPropertyChanging("lk_environmentvariabledefinition_createdonbehalfby");
+				this.SetRelatedEntities<PPDS.Dataverse.Generated.EnvironmentVariableDefinition>("lk_environmentvariabledefinition_createdonbehalfby", null, value);
+				this.OnPropertyChanged("lk_environmentvariabledefinition_createdonbehalfby");
+			}
+		}
+		
+		/// <summary>
+		/// 1:N lk_environmentvariabledefinition_modifiedby
+		/// </summary>
+		[Microsoft.Xrm.Sdk.RelationshipSchemaNameAttribute("lk_environmentvariabledefinition_modifiedby")]
+		public System.Collections.Generic.IEnumerable<PPDS.Dataverse.Generated.EnvironmentVariableDefinition> lk_environmentvariabledefinition_modifiedby
+		{
+			get
+			{
+				return this.GetRelatedEntities<PPDS.Dataverse.Generated.EnvironmentVariableDefinition>("lk_environmentvariabledefinition_modifiedby", null);
+			}
+			set
+			{
+				this.OnPropertyChanging("lk_environmentvariabledefinition_modifiedby");
+				this.SetRelatedEntities<PPDS.Dataverse.Generated.EnvironmentVariableDefinition>("lk_environmentvariabledefinition_modifiedby", null, value);
+				this.OnPropertyChanged("lk_environmentvariabledefinition_modifiedby");
+			}
+		}
+		
+		/// <summary>
+		/// 1:N lk_environmentvariabledefinition_modifiedonbehalfby
+		/// </summary>
+		[Microsoft.Xrm.Sdk.RelationshipSchemaNameAttribute("lk_environmentvariabledefinition_modifiedonbehalfby")]
+		public System.Collections.Generic.IEnumerable<PPDS.Dataverse.Generated.EnvironmentVariableDefinition> lk_environmentvariabledefinition_modifiedonbehalfby
+		{
+			get
+			{
+				return this.GetRelatedEntities<PPDS.Dataverse.Generated.EnvironmentVariableDefinition>("lk_environmentvariabledefinition_modifiedonbehalfby", null);
+			}
+			set
+			{
+				this.OnPropertyChanging("lk_environmentvariabledefinition_modifiedonbehalfby");
+				this.SetRelatedEntities<PPDS.Dataverse.Generated.EnvironmentVariableDefinition>("lk_environmentvariabledefinition_modifiedonbehalfby", null, value);
+				this.OnPropertyChanged("lk_environmentvariabledefinition_modifiedonbehalfby");
+			}
+		}
+		
+		/// <summary>
+		/// 1:N lk_environmentvariablevalue_createdby
+		/// </summary>
+		[Microsoft.Xrm.Sdk.RelationshipSchemaNameAttribute("lk_environmentvariablevalue_createdby")]
+		public System.Collections.Generic.IEnumerable<PPDS.Dataverse.Generated.EnvironmentVariableValue> lk_environmentvariablevalue_createdby
+		{
+			get
+			{
+				return this.GetRelatedEntities<PPDS.Dataverse.Generated.EnvironmentVariableValue>("lk_environmentvariablevalue_createdby", null);
+			}
+			set
+			{
+				this.OnPropertyChanging("lk_environmentvariablevalue_createdby");
+				this.SetRelatedEntities<PPDS.Dataverse.Generated.EnvironmentVariableValue>("lk_environmentvariablevalue_createdby", null, value);
+				this.OnPropertyChanged("lk_environmentvariablevalue_createdby");
+			}
+		}
+		
+		/// <summary>
+		/// 1:N lk_environmentvariablevalue_createdonbehalfby
+		/// </summary>
+		[Microsoft.Xrm.Sdk.RelationshipSchemaNameAttribute("lk_environmentvariablevalue_createdonbehalfby")]
+		public System.Collections.Generic.IEnumerable<PPDS.Dataverse.Generated.EnvironmentVariableValue> lk_environmentvariablevalue_createdonbehalfby
+		{
+			get
+			{
+				return this.GetRelatedEntities<PPDS.Dataverse.Generated.EnvironmentVariableValue>("lk_environmentvariablevalue_createdonbehalfby", null);
+			}
+			set
+			{
+				this.OnPropertyChanging("lk_environmentvariablevalue_createdonbehalfby");
+				this.SetRelatedEntities<PPDS.Dataverse.Generated.EnvironmentVariableValue>("lk_environmentvariablevalue_createdonbehalfby", null, value);
+				this.OnPropertyChanged("lk_environmentvariablevalue_createdonbehalfby");
+			}
+		}
+		
+		/// <summary>
+		/// 1:N lk_environmentvariablevalue_modifiedby
+		/// </summary>
+		[Microsoft.Xrm.Sdk.RelationshipSchemaNameAttribute("lk_environmentvariablevalue_modifiedby")]
+		public System.Collections.Generic.IEnumerable<PPDS.Dataverse.Generated.EnvironmentVariableValue> lk_environmentvariablevalue_modifiedby
+		{
+			get
+			{
+				return this.GetRelatedEntities<PPDS.Dataverse.Generated.EnvironmentVariableValue>("lk_environmentvariablevalue_modifiedby", null);
+			}
+			set
+			{
+				this.OnPropertyChanging("lk_environmentvariablevalue_modifiedby");
+				this.SetRelatedEntities<PPDS.Dataverse.Generated.EnvironmentVariableValue>("lk_environmentvariablevalue_modifiedby", null, value);
+				this.OnPropertyChanged("lk_environmentvariablevalue_modifiedby");
+			}
+		}
+		
+		/// <summary>
+		/// 1:N lk_environmentvariablevalue_modifiedonbehalfby
+		/// </summary>
+		[Microsoft.Xrm.Sdk.RelationshipSchemaNameAttribute("lk_environmentvariablevalue_modifiedonbehalfby")]
+		public System.Collections.Generic.IEnumerable<PPDS.Dataverse.Generated.EnvironmentVariableValue> lk_environmentvariablevalue_modifiedonbehalfby
+		{
+			get
+			{
+				return this.GetRelatedEntities<PPDS.Dataverse.Generated.EnvironmentVariableValue>("lk_environmentvariablevalue_modifiedonbehalfby", null);
+			}
+			set
+			{
+				this.OnPropertyChanging("lk_environmentvariablevalue_modifiedonbehalfby");
+				this.SetRelatedEntities<PPDS.Dataverse.Generated.EnvironmentVariableValue>("lk_environmentvariablevalue_modifiedonbehalfby", null, value);
+				this.OnPropertyChanged("lk_environmentvariablevalue_modifiedonbehalfby");
+			}
+		}
+		
+		/// <summary>
 		/// 1:N lk_importjobbase_createdby
 		/// </summary>
 		[Microsoft.Xrm.Sdk.RelationshipSchemaNameAttribute("lk_importjobbase_createdby")]
@@ -3277,6 +3435,78 @@ namespace PPDS.Dataverse.Generated
 				this.OnPropertyChanging("lk_publisherbase_modifiedonbehalfby");
 				this.SetRelatedEntities<PPDS.Dataverse.Generated.Publisher>("lk_publisherbase_modifiedonbehalfby", null, value);
 				this.OnPropertyChanged("lk_publisherbase_modifiedonbehalfby");
+			}
+		}
+		
+		/// <summary>
+		/// 1:N lk_role_createdonbehalfby
+		/// </summary>
+		[Microsoft.Xrm.Sdk.RelationshipSchemaNameAttribute("lk_role_createdonbehalfby")]
+		public System.Collections.Generic.IEnumerable<PPDS.Dataverse.Generated.Role> lk_role_createdonbehalfby
+		{
+			get
+			{
+				return this.GetRelatedEntities<PPDS.Dataverse.Generated.Role>("lk_role_createdonbehalfby", null);
+			}
+			set
+			{
+				this.OnPropertyChanging("lk_role_createdonbehalfby");
+				this.SetRelatedEntities<PPDS.Dataverse.Generated.Role>("lk_role_createdonbehalfby", null, value);
+				this.OnPropertyChanged("lk_role_createdonbehalfby");
+			}
+		}
+		
+		/// <summary>
+		/// 1:N lk_role_modifiedonbehalfby
+		/// </summary>
+		[Microsoft.Xrm.Sdk.RelationshipSchemaNameAttribute("lk_role_modifiedonbehalfby")]
+		public System.Collections.Generic.IEnumerable<PPDS.Dataverse.Generated.Role> lk_role_modifiedonbehalfby
+		{
+			get
+			{
+				return this.GetRelatedEntities<PPDS.Dataverse.Generated.Role>("lk_role_modifiedonbehalfby", null);
+			}
+			set
+			{
+				this.OnPropertyChanging("lk_role_modifiedonbehalfby");
+				this.SetRelatedEntities<PPDS.Dataverse.Generated.Role>("lk_role_modifiedonbehalfby", null, value);
+				this.OnPropertyChanged("lk_role_modifiedonbehalfby");
+			}
+		}
+		
+		/// <summary>
+		/// 1:N lk_rolebase_createdby
+		/// </summary>
+		[Microsoft.Xrm.Sdk.RelationshipSchemaNameAttribute("lk_rolebase_createdby")]
+		public System.Collections.Generic.IEnumerable<PPDS.Dataverse.Generated.Role> lk_rolebase_createdby
+		{
+			get
+			{
+				return this.GetRelatedEntities<PPDS.Dataverse.Generated.Role>("lk_rolebase_createdby", null);
+			}
+			set
+			{
+				this.OnPropertyChanging("lk_rolebase_createdby");
+				this.SetRelatedEntities<PPDS.Dataverse.Generated.Role>("lk_rolebase_createdby", null, value);
+				this.OnPropertyChanged("lk_rolebase_createdby");
+			}
+		}
+		
+		/// <summary>
+		/// 1:N lk_rolebase_modifiedby
+		/// </summary>
+		[Microsoft.Xrm.Sdk.RelationshipSchemaNameAttribute("lk_rolebase_modifiedby")]
+		public System.Collections.Generic.IEnumerable<PPDS.Dataverse.Generated.Role> lk_rolebase_modifiedby
+		{
+			get
+			{
+				return this.GetRelatedEntities<PPDS.Dataverse.Generated.Role>("lk_rolebase_modifiedby", null);
+			}
+			set
+			{
+				this.OnPropertyChanging("lk_rolebase_modifiedby");
+				this.SetRelatedEntities<PPDS.Dataverse.Generated.Role>("lk_rolebase_modifiedby", null, value);
+				this.OnPropertyChanged("lk_rolebase_modifiedby");
 			}
 		}
 		
@@ -3749,6 +3979,24 @@ namespace PPDS.Dataverse.Generated
 		}
 		
 		/// <summary>
+		/// 1:N user_environmentvariabledefinition
+		/// </summary>
+		[Microsoft.Xrm.Sdk.RelationshipSchemaNameAttribute("user_environmentvariabledefinition")]
+		public System.Collections.Generic.IEnumerable<PPDS.Dataverse.Generated.EnvironmentVariableDefinition> user_environmentvariabledefinition
+		{
+			get
+			{
+				return this.GetRelatedEntities<PPDS.Dataverse.Generated.EnvironmentVariableDefinition>("user_environmentvariabledefinition", null);
+			}
+			set
+			{
+				this.OnPropertyChanging("user_environmentvariabledefinition");
+				this.SetRelatedEntities<PPDS.Dataverse.Generated.EnvironmentVariableDefinition>("user_environmentvariabledefinition", null, value);
+				this.OnPropertyChanged("user_environmentvariabledefinition");
+			}
+		}
+		
+		/// <summary>
 		/// 1:N user_parent_user
 		/// </summary>
 		[Microsoft.Xrm.Sdk.RelationshipSchemaNameAttribute("user_parent_user", Microsoft.Xrm.Sdk.EntityRole.Referenced)]
@@ -3763,6 +4011,24 @@ namespace PPDS.Dataverse.Generated
 				this.OnPropertyChanging("Referenceduser_parent_user");
 				this.SetRelatedEntities<PPDS.Dataverse.Generated.SystemUser>("user_parent_user", Microsoft.Xrm.Sdk.EntityRole.Referenced, value);
 				this.OnPropertyChanged("Referenceduser_parent_user");
+			}
+		}
+		
+		/// <summary>
+		/// N:N systemuserroles_association
+		/// </summary>
+		[Microsoft.Xrm.Sdk.RelationshipSchemaNameAttribute("systemuserroles_association")]
+		public System.Collections.Generic.IEnumerable<PPDS.Dataverse.Generated.Role> systemuserroles_association
+		{
+			get
+			{
+				return this.GetRelatedEntities<PPDS.Dataverse.Generated.Role>("systemuserroles_association", null);
+			}
+			set
+			{
+				this.OnPropertyChanging("systemuserroles_association");
+				this.SetRelatedEntities<PPDS.Dataverse.Generated.Role>("systemuserroles_association", null, value);
+				this.OnPropertyChanged("systemuserroles_association");
 			}
 		}
 		

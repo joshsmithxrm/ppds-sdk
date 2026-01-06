@@ -50,9 +50,14 @@ $Entities = @(
     'solutioncomponent'
     'asyncoperation'
     'importjob'
-    # User management
+    # User/role management
     'systemuser'
+    'role'
+    'systemuserroles'
     'publisher'
+    # Environment variables
+    'environmentvariabledefinition'
+    'environmentvariablevalue'
 )
 
 Write-Host "PPDS Early-Bound Model Generator" -ForegroundColor Cyan
