@@ -39,6 +39,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `ppds roles show <role>` - Show role details and assigned users (by GUID or name)
   - `ppds roles assign <role> --user <user>` - Assign a role to a user
   - `ppds roles remove <role> --user <user>` - Remove a role from a user
+- **`ppds data truncate` command** - Delete ALL records from an entity for dev/test scenarios. See [ADR-0017](../../docs/adr/0017_TRUNCATE_COMMAND.md).
+  - Required confirmation prompt (type `TRUNCATE <entity> <count>` to proceed)
+  - `--dry-run` to preview record count without deleting
+  - `--force` to skip confirmation for automation/CI
+  - `--batch-size` to control delete batch size (default 1000, max 1000)
+  - Safety features: `--bypass-plugins`, `--bypass-flows`, `--continue-on-error`
+  - Progress reporting with deletion rate
 
 ### Fixed
 

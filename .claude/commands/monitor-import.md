@@ -25,10 +25,13 @@ Monitor a running PPDS data import for progress, errors, throttling, and pool ex
 
 ## Monitoring Approach
 
-1. Read the log file periodically (every 30-60 seconds)
-2. Parse progress lines: `[entity] X/Y (Z%) @ N rec/s`
-3. Count and categorize errors
-4. Report summary with:
+**IMPORTANT: Poll every 60 seconds minimum. Do NOT poll more frequently.**
+
+1. Read the log file once, provide summary
+2. WAIT for user to request next update, or if continuous monitoring requested, wait 60 seconds between reads
+3. Parse progress lines: `[entity] X/Y (Z%) @ N rec/s`
+4. Count and categorize errors
+5. Report summary with:
    - Entities completed vs in-progress
    - Current throughput
    - Error counts by pattern
