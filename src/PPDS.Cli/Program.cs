@@ -39,9 +39,9 @@ public static class Program
             ErrorOutput.WriteVersionHeader();
         }
 
-        // Check for interactive mode before invoking System.CommandLine
-        // This allows a parallel execution path for the TUI
-        if (IsInteractiveMode(args))
+        // Handle -i/--interactive shortcuts before System.CommandLine
+        // (The 'interactive' subcommand goes through normal command processing)
+        if (IsInteractiveShortcut(args))
         {
             return await InteractiveCli.RunAsync();
         }
@@ -66,6 +66,7 @@ public static class Program
         rootCommand.Subcommands.Add(RolesCommandGroup.Create());
         rootCommand.Subcommands.Add(ServeCommand.Create());
         rootCommand.Subcommands.Add(DocsCommand.Create());
+        rootCommand.Subcommands.Add(InteractiveCommand.Create());
 
         // Internal/debug commands - only visible when PPDS_INTERNAL=1
         if (Environment.GetEnvironmentVariable("PPDS_INTERNAL") == "1")
@@ -85,10 +86,10 @@ public static class Program
     }
 
     /// <summary>
-    /// Determines if the CLI should run in interactive mode.
+    /// Determines if the CLI should run in interactive mode (for version header skip).
     /// </summary>
     /// <param name="args">Command line arguments.</param>
-    /// <returns>True if interactive mode was requested.</returns>
+    /// <returns>True if interactive mode was requested via any method.</returns>
     private static bool IsInteractiveMode(string[] args)
     {
         if (args.Length == 0)
@@ -96,5 +97,18 @@ public static class Program
 
         var firstArg = args[0].ToLowerInvariant();
         return firstArg is "interactive" or "-i" or "--interactive";
+    }
+
+    /// <summary>
+    /// Determines if the CLI was invoked with -i or --interactive shortcut.
+    /// The 'interactive' subcommand is handled by System.CommandLine.
+    /// </summary>
+    private static bool IsInteractiveShortcut(string[] args)
+    {
+        if (args.Length == 0)
+            return false;
+
+        var firstArg = args[0].ToLowerInvariant();
+        return firstArg is "-i" or "--interactive";
     }
 }

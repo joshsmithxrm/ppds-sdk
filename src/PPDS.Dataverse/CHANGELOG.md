@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0-beta.4] - 2026-01-06
+
 ### Added
 
 - **`Workflow` early-bound entity** - Entity class for Power Automate flows (classic workflows). Supports flow management operations. ([#149](https://github.com/joshsmithxrm/ppds-sdk/issues/149))
@@ -100,7 +102,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Removed rate control presets (`Conservative`, `Balanced`, `Aggressive`) in favor of DOP-based parallelism
 - Removed adaptive rate control in favor of server-recommended limits
 
-[Unreleased]: https://github.com/joshsmithxrm/ppds-sdk/compare/Dataverse-v1.0.0-beta.3...HEAD
+[Unreleased]: https://github.com/joshsmithxrm/ppds-sdk/compare/Dataverse-v1.0.0-beta.4...HEAD
+[1.0.0-beta.4]: https://github.com/joshsmithxrm/ppds-sdk/compare/Dataverse-v1.0.0-beta.3...Dataverse-v1.0.0-beta.4
 [1.0.0-beta.3]: https://github.com/joshsmithxrm/ppds-sdk/compare/Dataverse-v1.0.0-beta.2...Dataverse-v1.0.0-beta.3
 [1.0.0-beta.2]: https://github.com/joshsmithxrm/ppds-sdk/compare/Dataverse-v1.0.0-beta.1...Dataverse-v1.0.0-beta.2
 [1.0.0-beta.1]: https://github.com/joshsmithxrm/ppds-sdk/releases/tag/Dataverse-v1.0.0-beta.1

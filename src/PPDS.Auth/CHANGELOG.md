@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0-beta.5] - 2026-01-06
+
 ### Added
 
 - **`IPowerPlatformTokenProvider`** - New interface for acquiring tokens for Power Platform REST APIs (Power Apps, Power Automate). Enables CLI commands that interact with Power Platform management APIs. ([#150](https://github.com/joshsmithxrm/ppds-sdk/issues/150))
@@ -104,7 +106,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - JWT claims parsing for identity information
 - Targets: `net8.0`, `net10.0`
 
-[Unreleased]: https://github.com/joshsmithxrm/ppds-sdk/compare/Auth-v1.0.0-beta.3...HEAD
+[Unreleased]: https://github.com/joshsmithxrm/ppds-sdk/compare/Auth-v1.0.0-beta.5...HEAD
+[1.0.0-beta.5]: https://github.com/joshsmithxrm/ppds-sdk/compare/Auth-v1.0.0-beta.4...Auth-v1.0.0-beta.5
+[1.0.0-beta.4]: https://github.com/joshsmithxrm/ppds-sdk/compare/Auth-v1.0.0-beta.3...Auth-v1.0.0-beta.4
 [1.0.0-beta.3]: https://github.com/joshsmithxrm/ppds-sdk/compare/Auth-v1.0.0-beta.2...Auth-v1.0.0-beta.3
 [1.0.0-beta.2]: https://github.com/joshsmithxrm/ppds-sdk/compare/Auth-v1.0.0-beta.1...Auth-v1.0.0-beta.2
 [1.0.0-beta.1]: https://github.com/joshsmithxrm/ppds-sdk/releases/tag/Auth-v1.0.0-beta.1
