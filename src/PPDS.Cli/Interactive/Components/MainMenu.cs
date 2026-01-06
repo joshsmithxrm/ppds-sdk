@@ -15,6 +15,7 @@ internal static class MainMenu
         SwitchProfile,
         SwitchEnvironment,
         CreateProfile,
+        SqlQuery,
         DataOperations,
         PluginManagement,
         MetadataExplorer,
@@ -91,6 +92,14 @@ internal static class MainMenu
                 Action = MenuAction.CreateProfile
             });
         }
+
+        // SQL Query - enabled when environment is selected
+        items.Add(new MenuItem
+        {
+            Label = "SQL Query",
+            Action = MenuAction.SqlQuery,
+            IsEnabled = hasEnvironment
+        });
 
         // Future categories (placeholders)
         items.Add(new MenuItem

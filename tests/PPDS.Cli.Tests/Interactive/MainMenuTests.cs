@@ -52,6 +52,12 @@ public class MainMenuTests
     }
 
     [Fact]
+    public void MenuAction_SqlQuery_IsDefined()
+    {
+        Assert.True(Enum.IsDefined(typeof(MainMenu.MenuAction), MainMenu.MenuAction.SqlQuery));
+    }
+
+    [Fact]
     public void MenuItem_Label_IsRequired()
     {
         var item = new MainMenu.MenuItem

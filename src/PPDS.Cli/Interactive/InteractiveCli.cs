@@ -2,6 +2,7 @@ using PPDS.Auth.Profiles;
 using PPDS.Cli.Infrastructure.Errors;
 using PPDS.Cli.Interactive.Components;
 using PPDS.Cli.Interactive.Selectors;
+using PPDS.Cli.Interactive.Wizards;
 using Spectre.Console;
 
 namespace PPDS.Cli.Interactive;
@@ -113,6 +114,13 @@ internal static class InteractiveCli
 
             case MainMenu.MenuAction.CreateProfile:
                 await HandleCreateProfileAsync(cancellationToken);
+                break;
+
+            case MainMenu.MenuAction.SqlQuery:
+                if (collection.ActiveProfile != null)
+                {
+                    await SqlQueryWizard.RunAsync(collection.ActiveProfile, cancellationToken);
+                }
                 break;
 
             case MainMenu.MenuAction.DataOperations:

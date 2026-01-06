@@ -47,7 +47,7 @@ internal static class ContextPanel
         if (!string.IsNullOrEmpty(profile.Username) || !string.IsNullOrEmpty(profile.ApplicationId))
         {
             var identityLabel = Styles.MutedText("Identity:");
-            var identityValue = profile.IdentityDisplay;
+            var identityValue = Markup.Escape(profile.IdentityDisplay);
             lines.Add($"{identityLabel} {identityValue}");
         }
 
@@ -55,7 +55,7 @@ internal static class ContextPanel
         var envLabel = Styles.MutedText("Environment:");
         if (profile.HasEnvironment)
         {
-            var envValue = profile.Environment!.DisplayName;
+            var envValue = Markup.Escape(profile.Environment!.DisplayName);
             var urlValue = Styles.MutedText($"({TruncateUrl(profile.Environment.Url)})");
             lines.Add($"{envLabel} {envValue} {urlValue}");
         }
