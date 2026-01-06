@@ -85,17 +85,20 @@ internal sealed class TableViewport
         var visibleStart = _state.FirstVisibleRow;
         var visibleEnd = visibleStart + _state.VisibleRowCount;
 
+        // Column headers take 3 lines: top border, header text, separator
+        const int columnHeaderLines = 3;
+
         // Redraw previous row (remove highlight)
         if (previousRow >= visibleStart && previousRow < visibleEnd)
         {
-            var screenRow = _tableStartY + 2 + (previousRow - visibleStart); // +2 for header rows
+            var screenRow = _tableStartY + columnHeaderLines + (previousRow - visibleStart);
             RenderSingleRow(previousRow, screenRow, isSelected: false);
         }
 
         // Redraw new row (add highlight)
         if (newRow >= visibleStart && newRow < visibleEnd)
         {
-            var screenRow = _tableStartY + 2 + (newRow - visibleStart);
+            var screenRow = _tableStartY + columnHeaderLines + (newRow - visibleStart);
             RenderSingleRow(newRow, screenRow, isSelected: true);
         }
 
