@@ -267,19 +267,26 @@ namespace PPDS.Migration.Formats
                 return null;
             }
 
+            // Infer lookup type from lookupentity attribute when type is missing
+            if (string.IsNullOrEmpty(type) && element.Attribute("lookupentity") != null)
+            {
+                type = "lookup";
+            }
+
             type = type?.ToLowerInvariant();
 
             return type switch
             {
                 "string" or "memo" or "nvarchar" => value,
-                "int" or "integer" => int.TryParse(value, out var i) ? i : null,
+                "int" or "integer" or "number" => int.TryParse(value, out var i) ? i : null,
+                "bigint" => long.TryParse(value, out var l) ? l : null,
                 "decimal" or "money" => decimal.TryParse(value, NumberStyles.Any, CultureInfo.InvariantCulture, out var d) ? d : null,
                 "float" or "double" => double.TryParse(value, NumberStyles.Any, CultureInfo.InvariantCulture, out var f) ? f : null,
                 "bool" or "boolean" => value == "1" || (bool.TryParse(value, out var b) && b),
                 "datetime" => DateTime.TryParse(value, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out var dt) ? dt : null,
                 "guid" or "uniqueidentifier" => Guid.TryParse(value, out var g) ? g : null,
-                "lookup" or "customer" or "owner" or "entityreference" => ParseEntityReference(element),
-                "optionset" or "picklist" => ParseOptionSetValue(value),
+                "lookup" or "customer" or "owner" or "entityreference" or "partylist" => ParseEntityReference(element),
+                "optionset" or "optionsetvalue" or "picklist" => ParseOptionSetValue(value),
                 "state" or "status" => ParseOptionSetValue(value),
                 _ => value // Return as string for unknown types
             };

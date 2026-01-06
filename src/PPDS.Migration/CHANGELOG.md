@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Error report v1.1 with execution context** - Import error reports now include `executionContext` object with CLI/SDK versions, runtime, platform, import mode, and option flags. Enables reproducing and troubleshooting imports after the fact. Version bumped from "1.0" to "1.1". See [ADR-0022](../../docs/adr/0022_IMPORT_DIAGNOSTICS_ARCHITECTURE.md).
+- **Bulk operation probe-once optimization** - When detecting if an entity supports bulk operations (UpsertMultiple), now probes with 1 record first instead of sending the full batch. Reduces wasted records from N to 1 for unsupported entities (e.g., `team` entity). Cache is per-import-session. See [ADR-0022](../../docs/adr/0022_IMPORT_DIAGNOSTICS_ARCHITECTURE.md).
+
+### Changed
+
+- **M2M relationship import parallelized** - M2M associations now process in parallel using the connection pool's DOP (previously sequential). Progress reporting now shows actual `Current/Total` counts instead of `0/0`. Expected 4-8x performance improvement depending on DOP. ([#196](https://github.com/joshsmithxrm/ppds-sdk/issues/196))
+- **M2M import is now idempotent** - Duplicate association errors ("Cannot insert duplicate key") are treated as success since the desired state is achieved. Enables re-running imports without failing on existing associations.
+- **Deferred field updates use bulk APIs** - Self-referencing lookup field updates now use `UpdateMultiple` bulk API with probe-once fallback pattern. Expected ~60x performance improvement (~8 rec/s → ~500 rec/s). ([#196](https://github.com/joshsmithxrm/ppds-sdk/issues/196))
+
+### Fixed
+
+- **CMT import compatibility: Added `number` type alias** - CMT exports integer fields with `type="number"`, but PPDS only recognized `int`/`integer`. Unrecognized types were treated as strings, causing import failures. ([#187](https://github.com/joshsmithxrm/ppds-sdk/issues/187))
+- **CMT import compatibility: Added `bigint` type support** - 64-bit integer fields now parse correctly instead of falling back to string. ([#187](https://github.com/joshsmithxrm/ppds-sdk/issues/187))
+- **CMT import compatibility: Added `partylist` type handling** - Email participant fields now parse as EntityReference like other lookup types. ([#187](https://github.com/joshsmithxrm/ppds-sdk/issues/187))
+- **CMT import compatibility: Infer lookup type from `lookupentity` attribute** - Fields with `lookupentity` attribute but no `type` attribute are now correctly parsed as EntityReference instead of string. ([#187](https://github.com/joshsmithxrm/ppds-sdk/issues/187))
+
 ## [1.0.0-beta.4] - 2026-01-05
 
 ### Fixed

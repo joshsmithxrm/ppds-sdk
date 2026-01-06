@@ -1,6 +1,7 @@
 using System;
 using PPDS.Dataverse.BulkOperations;
 using PPDS.Migration.Models;
+using PPDS.Migration.Progress;
 
 namespace PPDS.Migration.Import
 {
@@ -111,6 +112,37 @@ namespace PPDS.Migration.Import
         /// </para>
         /// </remarks>
         public bool SkipMissingColumns { get; set; } = false;
+
+        /// <summary>
+        /// Gets or sets the current user's ID for fallback when user mappings can't resolve a reference.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// When <see cref="UserMappings"/> has <see cref="UserMappingCollection.UseCurrentUserAsDefault"/> set to true,
+        /// and a user reference cannot be resolved through explicit mappings, this ID is used as the fallback.
+        /// </para>
+        /// <para>
+        /// This should be set to the WhoAmI user ID of the importing service principal or user.
+        /// If not set and UseCurrentUserAsDefault is true, unmapped user references will be left unchanged.
+        /// </para>
+        /// </remarks>
+        public Guid? CurrentUserId { get; set; }
+
+        /// <summary>
+        /// Gets or sets the callback for streaming errors as they occur.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// When set, this callback is invoked immediately when an error occurs during import.
+        /// This allows real-time error streaming (e.g., to a .errors.jsonl file) so errors
+        /// are not lost if the import is cancelled.
+        /// </para>
+        /// <para>
+        /// The callback is invoked on multiple threads concurrently, so implementations
+        /// must be thread-safe.
+        /// </para>
+        /// </remarks>
+        public Action<MigrationError>? ErrorCallback { get; set; }
     }
 
     /// <summary>

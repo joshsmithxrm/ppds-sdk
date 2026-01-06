@@ -81,5 +81,27 @@ namespace PPDS.Dataverse.BulkOperations
         /// Gets the error message.
         /// </summary>
         public string Message { get; init; } = string.Empty;
+
+        /// <summary>
+        /// Gets the field name that caused the error, if identifiable from the error message.
+        /// Useful for debugging lookup failures and required field errors.
+        /// </summary>
+        public string? FieldName { get; init; }
+
+        /// <summary>
+        /// Gets a description of the field value that caused the error (sanitized for logging).
+        /// For EntityReference: "{LogicalName}:{Id}". For other types: type name only.
+        /// Does not contain actual data values to avoid PII in logs.
+        /// </summary>
+        public string? FieldValueDescription { get; init; }
+
+        /// <summary>
+        /// Gets diagnostics identifying which record(s) caused the batch failure.
+        /// </summary>
+        /// <remarks>
+        /// Populated when a batch fails with a "Does Not Exist" error. Contains details
+        /// about which record contains the problematic reference and the pattern detected.
+        /// </remarks>
+        public IReadOnlyList<BatchFailureDiagnostic>? Diagnostics { get; init; }
     }
 }

@@ -33,13 +33,13 @@ public class PoolSizingTests
     }
 
     [Fact]
-    public void ConnectionPoolOptions_DefaultAcquireTimeout_Is30Seconds()
+    public void ConnectionPoolOptions_DefaultAcquireTimeout_Is120Seconds()
     {
         // Arrange & Act
         var options = new ConnectionPoolOptions();
 
-        // Assert
-        options.AcquireTimeout.Should().Be(TimeSpan.FromSeconds(30));
+        // Assert - 120s allows for large imports with many batches queuing (ADR-0019)
+        options.AcquireTimeout.Should().Be(TimeSpan.FromSeconds(120));
     }
 
     [Fact]

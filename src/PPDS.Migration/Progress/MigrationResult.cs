@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using PPDS.Dataverse.BulkOperations;
 
 namespace PPDS.Migration.Progress
 {
@@ -60,7 +61,7 @@ namespace PPDS.Migration.Progress
 
     /// <summary>
     /// Error information from a migration operation.
-    /// Does not contain record data to avoid PII exposure in logs.
+    /// Contains RecordId (GUID) for correlation but no record data to avoid PII exposure.
     /// </summary>
     public class MigrationError
     {
@@ -75,9 +76,15 @@ namespace PPDS.Migration.Progress
         public string? EntityLogicalName { get; set; }
 
         /// <summary>
-        /// Gets or sets the record index (position in batch, not ID).
+        /// Gets or sets the record index (position in batch).
         /// </summary>
         public int? RecordIndex { get; set; }
+
+        /// <summary>
+        /// Gets or sets the record ID (GUID).
+        /// This is a unique identifier, not PII.
+        /// </summary>
+        public Guid? RecordId { get; set; }
 
         /// <summary>
         /// Gets or sets the Dataverse error code.
@@ -93,5 +100,14 @@ namespace PPDS.Migration.Progress
         /// Gets or sets the timestamp when the error occurred.
         /// </summary>
         public DateTime Timestamp { get; set; } = DateTime.UtcNow;
+
+        /// <summary>
+        /// Gets or sets diagnostics identifying which record(s) caused the batch failure.
+        /// </summary>
+        /// <remarks>
+        /// Populated when a batch fails with a "Does Not Exist" error. Contains details
+        /// about which record contains the problematic reference and the pattern detected.
+        /// </remarks>
+        public IReadOnlyList<BatchFailureDiagnostic>? Diagnostics { get; set; }
     }
 }

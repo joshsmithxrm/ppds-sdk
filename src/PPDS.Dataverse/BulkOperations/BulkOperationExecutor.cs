@@ -7,13 +7,14 @@ using System.Net.Http;
 using System.Net.Sockets;
 using System.ServiceModel;
 using System.ServiceModel.Security;
+using System.Text.Json;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Microsoft.Xrm.Sdk;
 using Microsoft.Xrm.Sdk.Messages;
-using System.Text.Json;
 using PPDS.Dataverse.DependencyInjection;
 using PPDS.Dataverse.Pooling;
 using PPDS.Dataverse.Progress;
@@ -29,7 +30,10 @@ namespace PPDS.Dataverse.BulkOperations
     public sealed class BulkOperationExecutor : IBulkOperationExecutor
     {
         /// <summary>
-        /// Maximum number of retries when connection pool is exhausted.
+        /// Maximum number of retries when connection pool is exhausted in GetClientWithRetryAsync.
+        /// This provides a safety net before propagating to the outer retry loop in
+        /// ExecuteBatchWithThrottleHandlingAsync, which handles PoolExhaustedException with
+        /// unlimited retries (pool exhaustion is always transient).
         /// </summary>
         private const int MaxPoolExhaustionRetries = 3;
 
@@ -104,10 +108,12 @@ namespace PPDS.Dataverse.BulkOperations
             options ??= _options.BulkOperations;
             var entityList = entities.ToList();
 
-            // Get connection info for parallelism baseline
-            await using var client = await _connectionPool.GetClientAsync(cancellationToken: cancellationToken);
-            var connectionName = client.ConnectionName;
-            var recommended = client.RecommendedDegreesOfParallelism;
+            // Get connection info for logging only - release immediately to avoid holding pool slot
+            int recommended;
+            {
+                await using var infoClient = await _connectionPool.GetClientAsync(cancellationToken: cancellationToken);
+                recommended = infoClient.RecommendedDegreesOfParallelism;
+            }
 
             var stopwatch = Stopwatch.StartNew();
             var batches = Batch(entityList, options.BatchSize).ToList();
@@ -137,8 +143,8 @@ namespace PPDS.Dataverse.BulkOperations
             }
             else
             {
-                // Adaptive execution respects per-source DOP limits
-                result = await ExecuteBatchesAdaptiveAsync(
+                // Pool-managed parallel execution - pool semaphore limits concurrency
+                result = await ExecuteBatchesParallelAsync(
                     batches,
                     (batch, ct) => ExecuteCreateMultipleBatchAsync(entityLogicalName, batch, options, ct),
                     tracker,
@@ -167,10 +173,12 @@ namespace PPDS.Dataverse.BulkOperations
             options ??= _options.BulkOperations;
             var entityList = entities.ToList();
 
-            // Get connection info for parallelism baseline
-            await using var client = await _connectionPool.GetClientAsync(cancellationToken: cancellationToken);
-            var connectionName = client.ConnectionName;
-            var recommended = client.RecommendedDegreesOfParallelism;
+            // Get connection info for logging only - release immediately to avoid holding pool slot
+            int recommended;
+            {
+                await using var infoClient = await _connectionPool.GetClientAsync(cancellationToken: cancellationToken);
+                recommended = infoClient.RecommendedDegreesOfParallelism;
+            }
 
             var stopwatch = Stopwatch.StartNew();
             var batches = Batch(entityList, options.BatchSize).ToList();
@@ -200,8 +208,8 @@ namespace PPDS.Dataverse.BulkOperations
             }
             else
             {
-                // Adaptive execution respects per-source DOP limits
-                result = await ExecuteBatchesAdaptiveAsync(
+                // Pool-managed parallel execution - pool semaphore limits concurrency
+                result = await ExecuteBatchesParallelAsync(
                     batches,
                     (batch, ct) => ExecuteUpdateMultipleBatchAsync(entityLogicalName, batch, options, ct),
                     tracker,
@@ -230,10 +238,12 @@ namespace PPDS.Dataverse.BulkOperations
             options ??= _options.BulkOperations;
             var entityList = entities.ToList();
 
-            // Get connection info for parallelism baseline
-            await using var client = await _connectionPool.GetClientAsync(cancellationToken: cancellationToken);
-            var connectionName = client.ConnectionName;
-            var recommended = client.RecommendedDegreesOfParallelism;
+            // Get connection info for logging only - release immediately to avoid holding pool slot
+            int recommended;
+            {
+                await using var infoClient = await _connectionPool.GetClientAsync(cancellationToken: cancellationToken);
+                recommended = infoClient.RecommendedDegreesOfParallelism;
+            }
 
             var stopwatch = Stopwatch.StartNew();
             var batches = Batch(entityList, options.BatchSize).ToList();
@@ -263,8 +273,8 @@ namespace PPDS.Dataverse.BulkOperations
             }
             else
             {
-                // Adaptive execution respects per-source DOP limits
-                result = await ExecuteBatchesAdaptiveAsync(
+                // Pool-managed parallel execution - pool semaphore limits concurrency
+                result = await ExecuteBatchesParallelAsync(
                     batches,
                     (batch, ct) => ExecuteUpsertMultipleBatchAsync(entityLogicalName, batch, options, ct),
                     tracker,
@@ -293,10 +303,12 @@ namespace PPDS.Dataverse.BulkOperations
             options ??= _options.BulkOperations;
             var idList = ids.ToList();
 
-            // Get connection info for parallelism baseline
-            await using var client = await _connectionPool.GetClientAsync(cancellationToken: cancellationToken);
-            var connectionName = client.ConnectionName;
-            var recommended = client.RecommendedDegreesOfParallelism;
+            // Get connection info for logging only - release immediately to avoid holding pool slot
+            int recommended;
+            {
+                await using var infoClient = await _connectionPool.GetClientAsync(cancellationToken: cancellationToken);
+                recommended = infoClient.RecommendedDegreesOfParallelism;
+            }
 
             var stopwatch = Stopwatch.StartNew();
             var batches = Batch(idList, options.BatchSize).ToList();
@@ -326,8 +338,8 @@ namespace PPDS.Dataverse.BulkOperations
             }
             else
             {
-                // Adaptive execution respects per-source DOP limits
-                result = await ExecuteBatchesAdaptiveAsync(batches, executeBatch, tracker, progress, cancellationToken);
+                // Pool-managed parallel execution - pool semaphore limits concurrency
+                result = await ExecuteBatchesParallelAsync(batches, executeBatch, tracker, progress, cancellationToken);
             }
 
             stopwatch.Stop();
@@ -838,6 +850,23 @@ namespace PPDS.Dataverse.BulkOperations
                     await Task.Delay(delay, cancellationToken);
 
                     // Continue to next iteration to retry
+                }
+                catch (PoolExhaustedException ex)
+                {
+                    // Pool exhaustion is ALWAYS transient - connections will free up as batches complete.
+                    // Retry indefinitely with exponential backoff (same pattern as throttling).
+                    // Only cancellation token can stop this - pool exhaustion should never cause data loss.
+                    var delay = TimeSpan.FromSeconds(Math.Min(Math.Pow(2, attempt - 1), 32)); // Cap at 32s
+
+                    _logger.LogWarning(
+                        "Pool exhausted for {Entity} (attempt {Attempt}). " +
+                        "Waiting {Delay}s for connections to free. Active: {Active}/{MaxPool}",
+                        entityLogicalName, attempt, delay.TotalSeconds,
+                        ex.ActiveConnections, ex.MaxPoolSize);
+
+                    await Task.Delay(delay, cancellationToken);
+
+                    // Continue to next iteration of while(true) loop - pool will eventually have capacity
                 }
                 catch (Exception ex) when (ex is TaskCanceledException or OperationCanceledException)
                 {
@@ -1384,11 +1413,25 @@ namespace PPDS.Dataverse.BulkOperations
         }
 
         /// <summary>
-        /// Executes batches with adaptive DOP control.
-        /// Reads live DOP from the pool and limits concurrency accordingly.
-        /// Pool's selection strategy handles per-source distribution.
+        /// Executes batches in parallel with pool-managed concurrency.
         /// </summary>
-        private async Task<BulkOperationResult> ExecuteBatchesAdaptiveAsync<T>(
+        /// <remarks>
+        /// <para>
+        /// Uses Parallel.ForEachAsync with a high local limit, relying on
+        /// the connection pool's semaphore to naturally limit concurrency. Tasks block on
+        /// <see cref="IDataverseConnectionPool.GetClientAsync"/> when the pool is at capacity.
+        /// </para>
+        /// <para>
+        /// This approach enables fair sharing between multiple concurrent consumers (e.g.,
+        /// multiple entities importing in parallel, or multiple CLI commands sharing a pool).
+        /// Each consumer's tasks queue on the pool semaphore rather than each consumer
+        /// assuming it can use the full pool capacity.
+        /// </para>
+        /// <para>
+        /// See ADR-0019 for architectural rationale.
+        /// </para>
+        /// </remarks>
+        private async Task<BulkOperationResult> ExecuteBatchesParallelAsync<T>(
             List<List<T>> batches,
             Func<List<T>, CancellationToken, Task<BulkOperationResult>> executeBatch,
             ProgressTracker tracker,
@@ -1403,73 +1446,59 @@ namespace PPDS.Dataverse.BulkOperations
             var updatedCount = 0;
             var hasUpsertCounts = 0; // 0 = false, 1 = true (for thread-safe flag)
 
-            var pending = new Queue<List<T>>(batches);
-            var inFlight = new List<Task<(BulkOperationResult result, List<T> batch)>>();
+            // Cap parallelism at pool capacity to prevent over-subscription during throttling.
+            // When throttling occurs, connections hold semaphore slots while waiting on Retry-After,
+            // reducing effective throughput. Using ProcessorCount * 4 on a 24-core machine spawns
+            // 96 tasks that queue for ~20 pool slots, exceeding AcquireTimeout (120s).
+            // The Min(CPU, Pool) approach respects both constraints.
+            var cpuBasedLimit = Environment.ProcessorCount * 4;
+            var poolCapacity = _connectionPool.GetTotalRecommendedParallelism();
+            var effectiveParallelism = Math.Min(cpuBasedLimit, Math.Max(poolCapacity, 1));
 
-            while (pending.Count > 0 || inFlight.Count > 0)
-            {
-                cancellationToken.ThrowIfCancellationRequested();
-
-                // Get current recommended parallelism (live value from pool)
-                // This reads from seed clients, so it reflects server's current recommendation
-                var maxParallelism = _connectionPool.GetTotalRecommendedParallelism();
-
-                // Start new batches while under the DOP limit
-                while (pending.Count > 0 && inFlight.Count < maxParallelism)
+            await Parallel.ForEachAsync(
+                batches,
+                new ParallelOptions
                 {
-                    var batch = pending.Dequeue();
-                    var task = ExecuteBatchWithResultAsync(batch, executeBatch, cancellationToken);
-                    inFlight.Add(task);
-                }
-
-                if (inFlight.Count == 0)
+                    MaxDegreeOfParallelism = effectiveParallelism,
+                    CancellationToken = cancellationToken
+                },
+                async (batch, ct) =>
                 {
-                    // DOP is 0 or no batches - shouldn't happen but handle gracefully
-                    if (pending.Count > 0)
+                    // Acquire global batch slot from coordinator.
+                    // This ensures all concurrent bulk operations (e.g., multiple entities importing
+                    // in parallel) don't exceed the pool's total capacity.
+                    await using var slot = await _connectionPool.BatchCoordinator.AcquireAsync(ct);
+
+                    var batchResult = await executeBatch(batch, ct);
+
+                    // Aggregate results (thread-safe)
+                    Interlocked.Add(ref successCount, batchResult.SuccessCount);
+                    Interlocked.Add(ref failureCount, batchResult.FailureCount);
+
+                    foreach (var error in batchResult.Errors)
+                        allErrors.Add(error);
+
+                    if (batchResult.CreatedIds != null)
                     {
-                        await Task.Delay(100, cancellationToken);
+                        foreach (var id in batchResult.CreatedIds)
+                            allCreatedIds.Add(id);
                     }
-                    continue;
-                }
 
-                // Wait for any batch to complete
-                var completedTask = await Task.WhenAny(inFlight);
-                inFlight.Remove(completedTask);
-
-                var (batchResult, _) = await completedTask;
-
-                // Aggregate results
-                Interlocked.Add(ref successCount, batchResult.SuccessCount);
-                Interlocked.Add(ref failureCount, batchResult.FailureCount);
-
-                foreach (var error in batchResult.Errors)
-                {
-                    allErrors.Add(error);
-                }
-
-                if (batchResult.CreatedIds != null)
-                {
-                    foreach (var id in batchResult.CreatedIds)
+                    if (batchResult.CreatedCount.HasValue)
                     {
-                        allCreatedIds.Add(id);
+                        Interlocked.Exchange(ref hasUpsertCounts, 1);
+                        Interlocked.Add(ref createdCount, batchResult.CreatedCount.Value);
                     }
-                }
+                    if (batchResult.UpdatedCount.HasValue)
+                    {
+                        Interlocked.Exchange(ref hasUpsertCounts, 1);
+                        Interlocked.Add(ref updatedCount, batchResult.UpdatedCount.Value);
+                    }
 
-                if (batchResult.CreatedCount.HasValue)
-                {
-                    Interlocked.Exchange(ref hasUpsertCounts, 1);
-                    Interlocked.Add(ref createdCount, batchResult.CreatedCount.Value);
-                }
-                if (batchResult.UpdatedCount.HasValue)
-                {
-                    Interlocked.Exchange(ref hasUpsertCounts, 1);
-                    Interlocked.Add(ref updatedCount, batchResult.UpdatedCount.Value);
-                }
-
-                // Report progress
-                tracker.RecordProgress(batchResult.SuccessCount, batchResult.FailureCount);
-                progress?.Report(tracker.GetSnapshot());
-            }
+                    // Report progress
+                    tracker.RecordProgress(batchResult.SuccessCount, batchResult.FailureCount);
+                    progress?.Report(tracker.GetSnapshot());
+                });
 
             return new BulkOperationResult
             {
@@ -1481,15 +1510,6 @@ namespace PPDS.Dataverse.BulkOperations
                 CreatedCount = hasUpsertCounts == 1 ? createdCount : null,
                 UpdatedCount = hasUpsertCounts == 1 ? updatedCount : null
             };
-        }
-
-        private static async Task<(BulkOperationResult result, List<T> batch)> ExecuteBatchWithResultAsync<T>(
-            List<T> batch,
-            Func<List<T>, CancellationToken, Task<BulkOperationResult>> executeBatch,
-            CancellationToken cancellationToken)
-        {
-            var result = await executeBatch(batch, cancellationToken);
-            return (result, batch);
         }
 
         /// <summary>
@@ -1560,17 +1580,87 @@ namespace PPDS.Dataverse.BulkOperations
         }
 
         /// <summary>
+        /// Extracts the most useful error message from an exception.
+        /// For FaultException, uses Detail.Message which contains the actual Dataverse error.
+        /// Falls back to ex.Message for other exception types.
+        /// </summary>
+        private static string GetExceptionMessage(Exception ex)
+        {
+            if (ex is FaultException<OrganizationServiceFault> faultEx
+                && faultEx.Detail?.Message != null)
+            {
+                return faultEx.Detail.Message;
+            }
+            return ex.Message;
+        }
+
+        /// <summary>
+        /// Attempts to extract a field/attribute name from a Dataverse error message.
+        /// </summary>
+        /// <remarks>
+        /// Common patterns:
+        /// - "attribute 'fieldname'" or "field 'fieldname'"
+        /// - "Entity 'entityname' With Id = ..." (indicates a lookup field)
+        /// - "'fieldname' contains invalid data"
+        /// </remarks>
+        private static string? TryExtractFieldName(string message)
+        {
+            if (string.IsNullOrEmpty(message))
+                return null;
+
+            // Pattern: attribute 'fieldname' or field 'fieldname'
+            var match = Regex.Match(message, @"(?:attribute|field)\s*['""](\w+)['""]", RegexOptions.IgnoreCase);
+            if (match.Success)
+                return match.Groups[1].Value;
+
+            // Pattern: 'fieldname' contains invalid data
+            match = Regex.Match(message, @"['""](\w+)['""]\s+contains", RegexOptions.IgnoreCase);
+            if (match.Success)
+                return match.Groups[1].Value;
+
+            return null;
+        }
+
+        /// <summary>
+        /// Creates a safe description of a field value for logging (no PII).
+        /// </summary>
+        private static string? DescribeFieldValue(Entity entity, string? fieldName)
+        {
+            if (string.IsNullOrEmpty(fieldName) || !entity.Contains(fieldName))
+                return null;
+
+            var value = entity[fieldName];
+            return value switch
+            {
+                EntityReference er => $"{er.LogicalName}:{er.Id.ToString("D")[..8]}...",
+                OptionSetValue osv => $"OptionSet({osv.Value})",
+                Money m => $"Money({m.Value})",
+                null => "null",
+                _ => value.GetType().Name
+            };
+        }
+
+        /// <summary>
         /// Creates a failure result for a batch of entities that failed due to a non-retryable error.
         /// </summary>
         private static BulkOperationResult CreateFailureResultForEntities(List<Entity> batch, Exception ex)
         {
             var errorCode = ExtractErrorCode(ex);
+            var message = GetExceptionMessage(ex);
+            var fieldName = TryExtractFieldName(message);
+
+            // Analyze the batch failure to identify which record(s) caused the issue
+            var diagnostics = AnalyzeBatchFailure(batch, ex);
+
             var errors = batch.Select((e, i) => new BulkOperationError
             {
                 Index = i,
                 RecordId = e.Id != Guid.Empty ? e.Id : null,
                 ErrorCode = errorCode,
-                Message = ex.Message
+                Message = message,
+                FieldName = fieldName,
+                FieldValueDescription = DescribeFieldValue(e, fieldName),
+                Diagnostics = diagnostics.Count > 0 ? diagnostics : null
             }).ToList();
 
             return new BulkOperationResult
@@ -1588,12 +1678,17 @@ namespace PPDS.Dataverse.BulkOperations
         private static BulkOperationResult CreateFailureResultForIds(List<Guid> batch, Exception ex)
         {
             var errorCode = ExtractErrorCode(ex);
+            var message = GetExceptionMessage(ex);
+            var fieldName = TryExtractFieldName(message);
+
             var errors = batch.Select((id, i) => new BulkOperationError
             {
                 Index = i,
                 RecordId = id,
                 ErrorCode = errorCode,
-                Message = ex.Message
+                Message = message,
+                FieldName = fieldName
+                // FieldValueDescription not available when only IDs are provided
             }).ToList();
 
             return new BulkOperationResult
@@ -1634,6 +1729,111 @@ namespace PPDS.Dataverse.BulkOperations
             public int RequestIndex { get; set; }
             public string? Id { get; set; }
             public int StatusCode { get; set; }
+        }
+
+        /// <summary>
+        /// Regex pattern to extract GUIDs from "Does Not Exist" error messages.
+        /// </summary>
+        private static readonly Regex MissingIdPattern = new(
+            @"(?:With )?Ids? = ([0-9a-fA-F-]{36})",
+            RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+        /// <summary>
+        /// Analyzes a batch failure to identify which record(s) caused the failure.
+        /// </summary>
+        /// <param name="batch">The batch of entities that failed.</param>
+        /// <param name="exception">The exception that was thrown.</param>
+        /// <returns>A list of diagnostics identifying problematic records.</returns>
+        /// <remarks>
+        /// <para>
+        /// When a batch fails with a "Does Not Exist" error, this method:
+        /// 1. Parses the error message to extract the missing reference ID(s)
+        /// 2. Scans all records in the batch for EntityReference fields matching those IDs
+        /// 3. Returns diagnostics identifying which record/field contains the problematic reference
+        /// </para>
+        /// <para>
+        /// Special patterns detected:
+        /// <list type="bullet">
+        ///   <item><c>SELF_REFERENCE</c>: Record references itself (common in hierarchical entities)</item>
+        ///   <item><c>SAME_BATCH_REFERENCE</c>: Record references another record in the same batch</item>
+        ///   <item><c>MISSING_REFERENCE</c>: Record references an entity that doesn't exist in target</item>
+        /// </list>
+        /// </para>
+        /// </remarks>
+        public static IReadOnlyList<BatchFailureDiagnostic> AnalyzeBatchFailure(
+            IReadOnlyList<Entity> batch,
+            Exception exception)
+        {
+            ArgumentNullException.ThrowIfNull(batch);
+            ArgumentNullException.ThrowIfNull(exception);
+
+            var diagnostics = new List<BatchFailureDiagnostic>();
+            var message = GetExceptionMessage(exception);
+
+            // Extract all GUIDs mentioned in the error message
+            var missingIds = new HashSet<Guid>();
+            var matches = MissingIdPattern.Matches(message);
+            foreach (Match match in matches)
+            {
+                if (Guid.TryParse(match.Groups[1].Value, out var id))
+                {
+                    missingIds.Add(id);
+                }
+            }
+
+            if (missingIds.Count == 0)
+            {
+                // No GUIDs in error message - can't diagnose further
+                return diagnostics;
+            }
+
+            // Build a set of IDs in this batch for detecting same-batch references
+            var batchIds = new HashSet<Guid>(batch.Select(e => e.Id).Where(id => id != Guid.Empty));
+
+            // Scan all records in the batch for references to missing IDs
+            for (int i = 0; i < batch.Count; i++)
+            {
+                var entity = batch[i];
+
+                foreach (var attr in entity.Attributes)
+                {
+                    if (attr.Value is EntityReference er && missingIds.Contains(er.Id))
+                    {
+                        // Determine the error pattern
+                        string pattern;
+                        string? suggestion = null;
+
+                        if (er.Id == entity.Id)
+                        {
+                            pattern = "SELF_REFERENCE";
+                            suggestion = "Record references itself. Consider two-pass import: create records first, then update self-references.";
+                        }
+                        else if (batchIds.Contains(er.Id))
+                        {
+                            pattern = "SAME_BATCH_REFERENCE";
+                            suggestion = "Record references another record in the same batch that hasn't been created yet. Consider dependency-aware batching.";
+                        }
+                        else
+                        {
+                            pattern = "MISSING_REFERENCE";
+                            suggestion = "Referenced record doesn't exist in target environment. Ensure the referenced entity is imported first.";
+                        }
+
+                        diagnostics.Add(new BatchFailureDiagnostic
+                        {
+                            RecordId = entity.Id,
+                            RecordIndex = i,
+                            FieldName = attr.Key,
+                            ReferencedId = er.Id,
+                            ReferencedEntityName = er.LogicalName,
+                            Pattern = pattern,
+                            Suggestion = suggestion
+                        });
+                    }
+                }
+            }
+
+            return diagnostics;
         }
     }
 }
