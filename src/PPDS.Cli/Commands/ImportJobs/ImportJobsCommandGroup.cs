@@ -18,7 +18,7 @@ public static class ImportJobsCommandGroup
     /// <summary>
     /// Environment option for target environment.
     /// </summary>
-    public static readonly Option<string?> EnvironmentOption = new("--environment", "-env")
+    public static readonly Option<string?> EnvironmentOption = new("--environment", "-e")
     {
         Description = "Override the environment URL. Takes precedence over profile's bound environment."
     };

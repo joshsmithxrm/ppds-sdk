@@ -100,22 +100,35 @@ public static class DataCommand
                 {
                     Console.Error.WriteLine($"Data written to: {fullPath}");
                 }
+                else
+                {
+                    var output = new DataOutput
+                    {
+                        ImportJobId = importJobId,
+                        FilePath = fullPath,
+                        SizeBytes = data.Length
+                    };
+                    writer.WriteSuccess(output);
+                }
             }
             else
             {
-                // Output to stdout - this is the data, not a message
-                Console.WriteLine(data);
-            }
-
-            if (globalOptions.IsJsonMode && !string.IsNullOrEmpty(outputPath))
-            {
-                var output = new DataOutput
+                // Output to stdout
+                if (globalOptions.IsJsonMode)
                 {
-                    ImportJobId = importJobId,
-                    FilePath = Path.GetFullPath(outputPath),
-                    SizeBytes = data.Length
-                };
-                writer.WriteSuccess(output);
+                    // Wrap XML in JSON structure for consistent JSON output
+                    var output = new DataOutput
+                    {
+                        ImportJobId = importJobId,
+                        Data = data,
+                        SizeBytes = data.Length
+                    };
+                    writer.WriteSuccess(output);
+                }
+                else
+                {
+                    Console.WriteLine(data);
+                }
             }
 
             return ExitCodes.Success;
@@ -136,7 +149,12 @@ public static class DataCommand
         public Guid ImportJobId { get; set; }
 
         [JsonPropertyName("filePath")]
-        public string FilePath { get; set; } = string.Empty;
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public string? FilePath { get; set; }
+
+        [JsonPropertyName("data")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public string? Data { get; set; }
 
         [JsonPropertyName("sizeBytes")]
         public long SizeBytes { get; set; }
