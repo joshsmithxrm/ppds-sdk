@@ -106,6 +106,9 @@ public static class ErrorCodes
         /// <summary>The operation was cancelled.</summary>
         public const string Cancelled = "Operation.Cancelled";
 
+        /// <summary>The operation timed out.</summary>
+        public const string Timeout = "Operation.Timeout";
+
         /// <summary>An internal error occurred.</summary>
         public const string Internal = "Operation.Internal";
 

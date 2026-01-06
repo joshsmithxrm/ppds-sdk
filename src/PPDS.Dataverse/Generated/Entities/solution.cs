@@ -98,6 +98,7 @@ namespace PPDS.Dataverse.Generated
 			public const string Version = "version";
 			public const string VersionNumber = "versionnumber";
 			public const string Referencedsolution_parent_solution = "Referencedsolution_parent_solution";
+			public const string solution_role = "solution_role";
 			public const string solution_solutioncomponent = "solution_solutioncomponent";
 			public const string lk_solution_createdby = "lk_solution_createdby";
 			public const string lk_solution_modifiedby = "lk_solution_modifiedby";
@@ -633,6 +634,24 @@ namespace PPDS.Dataverse.Generated
 				this.OnPropertyChanging("Referencedsolution_parent_solution");
 				this.SetRelatedEntities<PPDS.Dataverse.Generated.Solution>("solution_parent_solution", Microsoft.Xrm.Sdk.EntityRole.Referenced, value);
 				this.OnPropertyChanged("Referencedsolution_parent_solution");
+			}
+		}
+		
+		/// <summary>
+		/// 1:N solution_role
+		/// </summary>
+		[Microsoft.Xrm.Sdk.RelationshipSchemaNameAttribute("solution_role")]
+		public System.Collections.Generic.IEnumerable<PPDS.Dataverse.Generated.Role> solution_role
+		{
+			get
+			{
+				return this.GetRelatedEntities<PPDS.Dataverse.Generated.Role>("solution_role", null);
+			}
+			set
+			{
+				this.OnPropertyChanging("solution_role");
+				this.SetRelatedEntities<PPDS.Dataverse.Generated.Role>("solution_role", null, value);
+				this.OnPropertyChanged("solution_role");
 			}
 		}
 		

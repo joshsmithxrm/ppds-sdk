@@ -8,6 +8,7 @@ using PPDS.Dataverse.Metadata;
 using PPDS.Dataverse.Pooling;
 using PPDS.Dataverse.Query;
 using PPDS.Dataverse.Resilience;
+using PPDS.Dataverse.Services;
 
 namespace PPDS.Dataverse.DependencyInjection
 {
@@ -248,6 +249,13 @@ namespace PPDS.Dataverse.DependencyInjection
             services.AddTransient<IBulkOperationExecutor, BulkOperationExecutor>();
             services.AddTransient<IMetadataService, DataverseMetadataService>();
             services.AddTransient<IQueryExecutor, QueryExecutor>();
+
+            // Domain services (transient - CLI command support)
+            services.AddTransient<ISolutionService, SolutionService>();
+            services.AddTransient<IImportJobService, ImportJobService>();
+            services.AddTransient<IEnvironmentVariableService, EnvironmentVariableService>();
+            services.AddTransient<IUserService, UserService>();
+            services.AddTransient<IRoleService, RoleService>();
 
             return services;
         }
