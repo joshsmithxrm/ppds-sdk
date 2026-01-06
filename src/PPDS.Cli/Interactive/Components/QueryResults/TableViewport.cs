@@ -471,16 +471,7 @@ internal sealed class TableViewport
     /// </summary>
     public void ShowHelpOverlay()
     {
-        // Save cursor position
-        var savedTop = Console.CursorTop;
-
-        // Calculate overlay position (center of screen)
-        var overlayWidth = 50;
-        var overlayHeight = 20;
-        var startX = Math.Max(0, (Console.WindowWidth - overlayWidth) / 2);
-        var startY = Math.Max(0, (Console.WindowHeight - overlayHeight) / 2);
-
-        // Draw help content using Spectre.Console
+        // Draw help content using Spectre.Console (full screen, not positioned overlay)
         Console.Clear();
 
         var helpTable = new Table()
