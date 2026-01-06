@@ -48,9 +48,12 @@ namespace PPDS.Dataverse.Pooling
 
         /// <summary>
         /// Gets or sets the maximum time to wait for a connection.
-        /// Default: 30 seconds
+        /// With proper pool-managed concurrency (ADR-0015), tasks queue on the semaphore
+        /// and this timeout should rarely be hit. Set high enough to accommodate large
+        /// imports with many batches queuing for connections.
+        /// Default: 120 seconds
         /// </summary>
-        public TimeSpan AcquireTimeout { get; set; } = TimeSpan.FromSeconds(30);
+        public TimeSpan AcquireTimeout { get; set; } = TimeSpan.FromSeconds(120);
 
         /// <summary>
         /// Gets or sets the maximum connection idle time before eviction.

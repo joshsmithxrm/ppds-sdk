@@ -31,8 +31,10 @@ namespace PPDS.Dataverse.BulkOperations
     {
         /// <summary>
         /// Maximum number of retries when connection pool is exhausted.
+        /// With ADR-0015 pool-managed concurrency, exhaustion is rare since tasks
+        /// queue on the semaphore. One retry provides a safety net for edge cases.
         /// </summary>
-        private const int MaxPoolExhaustionRetries = 3;
+        private const int MaxPoolExhaustionRetries = 1;
 
         /// <summary>
         /// Maximum number of retries for bulk operation infrastructure race conditions.
@@ -1426,16 +1428,16 @@ namespace PPDS.Dataverse.BulkOperations
             var updatedCount = 0;
             var hasUpsertCounts = 0; // 0 = false, 1 = true (for thread-safe flag)
 
-            // Limit parallelism to pool's recommended capacity.
-            // This prevents spawning more tasks than available connections,
-            // avoiding PoolExhaustedException after retry exhaustion.
-            // The pool's DOP-based recommendation reflects server capacity.
-            var poolParallelism = _connectionPool.GetTotalRecommendedParallelism();
+            // Per ADR-0015: Use a loose CPU-bound limit and let the pool's semaphore
+            // handle actual concurrency control. Multiple consumers (entities importing
+            // in parallel) naturally queue on GetClientAsync() when pool is at capacity.
+            // Do NOT use GetTotalRecommendedParallelism() here - that causes each consumer
+            // to spawn pool-capacity tasks, leading to N×DOP tasks competing for DOP slots.
             await Parallel.ForEachAsync(
                 batches,
                 new ParallelOptions
                 {
-                    MaxDegreeOfParallelism = Math.Max(poolParallelism, 1),
+                    MaxDegreeOfParallelism = Environment.ProcessorCount * 4,
                     CancellationToken = cancellationToken
                 },
                 async (batch, ct) =>
