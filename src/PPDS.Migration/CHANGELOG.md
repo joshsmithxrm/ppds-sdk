@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - **M2M relationship import parallelized** - M2M associations now process in parallel using the connection pool's DOP (previously sequential). Progress reporting now shows actual `Current/Total` counts instead of `0/0`. Expected 4-8x performance improvement depending on DOP. ([#196](https://github.com/joshsmithxrm/ppds-sdk/issues/196))
+- **M2M import is now idempotent** - Duplicate association errors ("Cannot insert duplicate key") are treated as success since the desired state is achieved. Enables re-running imports without failing on existing associations.
 - **Deferred field updates use bulk APIs** - Self-referencing lookup field updates now use `UpdateMultiple` bulk API with probe-once fallback pattern. Expected ~60x performance improvement (~8 rec/s → ~500 rec/s). ([#196](https://github.com/joshsmithxrm/ppds-sdk/issues/196))
 
 ### Fixed

@@ -74,6 +74,7 @@ namespace PPDS.Migration.Import
             var processedAssociations = 0;
             var successCount = 0;
             var failureCount = 0;
+            var skippedDuplicateCount = 0;
 
             // Get parallelism from connection pool
             var parallelism = _connectionPool.GetTotalRecommendedParallelism();
@@ -183,15 +184,41 @@ namespace PPDS.Migration.Import
                     }
                     catch (Exception ex)
                     {
-                        // M2M associations may fail if already exists - log but continue
-                        _logger?.LogDebug(ex, "Failed to associate {Source} with {TargetCount} targets via {Relationship}",
-                            sourceNewId, mappedTargetIds.Count, m2mData.RelationshipName);
-                        Interlocked.Increment(ref failureCount);
-
-                        if (!context.Options.ContinueOnError)
+                        // Check if this is a "duplicate key" error - association already exists
+                        // This is idempotent success: the desired state (association exists) is achieved
+                        if (IsDuplicateAssociationError(ex))
                         {
-                            shouldStop = true;
-                            firstException ??= ex;
+                            _logger?.LogDebug("Association already exists for {Source} via {Relationship} - treating as success",
+                                sourceNewId, m2mData.RelationshipName);
+
+                            // Count as success since the association exists (idempotent)
+                            var newSuccess = Interlocked.Add(ref successCount, mappedTargetIds.Count);
+                            var current = Interlocked.Add(ref processedAssociations, mappedTargetIds.Count);
+                            Interlocked.Increment(ref skippedDuplicateCount);
+
+                            context.Progress?.Report(new ProgressEventArgs
+                            {
+                                Phase = MigrationPhase.ProcessingRelationships,
+                                Entity = entityName,
+                                Relationship = resolvedRelationshipName,
+                                Current = current,
+                                Total = totalTargetAssociations,
+                                SuccessCount = newSuccess,
+                                Message = $"[M2M] {resolvedRelationshipName}"
+                            });
+                        }
+                        else
+                        {
+                            // Genuine failure - log and potentially stop
+                            _logger?.LogDebug(ex, "Failed to associate {Source} with {TargetCount} targets via {Relationship}",
+                                sourceNewId, mappedTargetIds.Count, m2mData.RelationshipName);
+                            Interlocked.Increment(ref failureCount);
+
+                            if (!context.Options.ContinueOnError)
+                            {
+                                shouldStop = true;
+                                firstException ??= ex;
+                            }
                         }
                     }
                 }).ConfigureAwait(false);
@@ -203,8 +230,17 @@ namespace PPDS.Migration.Import
             }
 
             stopwatch.Stop();
-            _logger?.LogInformation("Processed {Count} M2M associations in {Duration}ms (parallelism: {DOP})",
-                successCount, stopwatch.ElapsedMilliseconds, parallelism);
+
+            if (skippedDuplicateCount > 0)
+            {
+                _logger?.LogInformation("Processed {Count} M2M associations in {Duration}ms (parallelism: {DOP}, {Skipped} already existed)",
+                    successCount, stopwatch.ElapsedMilliseconds, parallelism, skippedDuplicateCount);
+            }
+            else
+            {
+                _logger?.LogInformation("Processed {Count} M2M associations in {Duration}ms (parallelism: {DOP})",
+                    successCount, stopwatch.ElapsedMilliseconds, parallelism);
+            }
 
             return new PhaseResult
             {
@@ -358,6 +394,43 @@ namespace PPDS.Migration.Import
                 _logger?.LogWarning(ex, "Failed to load M2M relationship metadata - relationship name resolution may fail");
                 // Don't throw - we'll try with the original names
             }
+        }
+
+        /// <summary>
+        /// Determines if an exception indicates a duplicate association (association already exists).
+        /// </summary>
+        /// <remarks>
+        /// Dataverse throws "Cannot insert duplicate key" (error code 0x80040237) when attempting
+        /// to create an association that already exists. This is treated as idempotent success
+        /// since the desired state (association exists) is achieved.
+        /// </remarks>
+        private static bool IsDuplicateAssociationError(Exception ex)
+        {
+            // Error code 0x80040237 = -2147220937 (Cannot insert duplicate key)
+            const int DuplicateKeyErrorCode = unchecked((int)0x80040237);
+
+            // Check for FaultException with OrganizationServiceFault
+            if (ex is System.ServiceModel.FaultException<Microsoft.Xrm.Sdk.OrganizationServiceFault> faultEx)
+            {
+                if (faultEx.Detail?.ErrorCode == DuplicateKeyErrorCode)
+                {
+                    return true;
+                }
+            }
+
+            // Fallback: check message for common duplicate key patterns
+            var message = ex.Message;
+            if (message != null)
+            {
+                if (message.Contains("Cannot insert duplicate key", StringComparison.OrdinalIgnoreCase) ||
+                    message.Contains("duplicate key", StringComparison.OrdinalIgnoreCase) ||
+                    message.Contains("0x80040237", StringComparison.OrdinalIgnoreCase))
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
     }
 }
