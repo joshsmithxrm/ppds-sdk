@@ -51,10 +51,10 @@ internal static class SqlQueryWizard
             AnsiConsole.WriteLine();
 
             // Get SQL query from user using ReadLine for proper editing support
-            // (arrow keys, home/end, ctrl+A, etc.)
-            AnsiConsole.MarkupLine(Styles.MutedText("Enter SQL query (or 'back'/'exit'/'history'):"));
+            // (arrow keys, home/end, ctrl+A, up/down for history)
+            AnsiConsole.MarkupLine(Styles.MutedText("Enter SQL query (↑/↓ for history, 'back' or 'exit'):"));
 
-            // Sync QueryHistory to ReadLine's history
+            // Sync QueryHistory to ReadLine's history for up/down arrow navigation
             ReadLineLib.ClearHistory();
             foreach (var historyItem in QueryHistory.Recent.Reverse())
             {
@@ -72,16 +72,6 @@ internal static class SqlQueryWizard
             if (sql.Equals("exit", StringComparison.OrdinalIgnoreCase))
             {
                 return WizardResult.Exit;
-            }
-
-            if (sql.Equals("history", StringComparison.OrdinalIgnoreCase))
-            {
-                var selectedQuery = QueryHistory.ShowSelector();
-                if (selectedQuery != null)
-                {
-                    lastQuery = selectedQuery;
-                }
-                continue;
             }
 
             // Add to history before execution (so failed queries are also recorded)
