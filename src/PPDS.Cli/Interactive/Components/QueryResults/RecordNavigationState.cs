@@ -42,6 +42,16 @@ internal sealed class RecordNavigationState
     public string? EnvironmentUrl { get; }
 
     /// <summary>
+    /// The profile display name for header context.
+    /// </summary>
+    public string? ProfileName { get; }
+
+    /// <summary>
+    /// The environment display name for header context.
+    /// </summary>
+    public string? EnvironmentName { get; }
+
+    /// <summary>
     /// The last navigation action performed (for smart menu defaults).
     /// </summary>
     public NavigationAction LastAction { get; set; }
@@ -101,16 +111,89 @@ internal sealed class RecordNavigationState
     /// </summary>
     /// <param name="initialResult">The initial query result.</param>
     /// <param name="environmentUrl">The environment URL for building record links (optional).</param>
-    public RecordNavigationState(QueryResult initialResult, string? environmentUrl = null)
+    /// <param name="profileName">The profile display name for header context (optional).</param>
+    /// <param name="environmentName">The environment display name for header context (optional).</param>
+    public RecordNavigationState(
+        QueryResult initialResult,
+        string? environmentUrl = null,
+        string? profileName = null,
+        string? environmentName = null)
     {
-        Columns = initialResult.Columns;
+        // Reorder columns to prioritize name/primary fields first
+        Columns = ReorderColumns(initialResult.Columns);
         EntityName = initialResult.EntityLogicalName;
         EnvironmentUrl = environmentUrl;
+        ProfileName = profileName;
+        EnvironmentName = environmentName;
         ExecutionTimeMs = initialResult.ExecutionTimeMs;
         _loadedRecords = new List<IReadOnlyDictionary<string, QueryValue>>(initialResult.Records);
         _pagingCookie = initialResult.PagingCookie;
         _currentPageNumber = initialResult.PageNumber;
         MoreRecordsAvailable = initialResult.MoreRecords;
+    }
+
+    /// <summary>
+    /// Reorders columns to prioritize "name" and primary fields first.
+    /// Priority: name/primary display field → primary key → other columns.
+    /// </summary>
+    private static IReadOnlyList<QueryColumn> ReorderColumns(IReadOnlyList<QueryColumn> columns)
+    {
+        if (columns.Count <= 1)
+        {
+            return columns;
+        }
+
+        var result = new List<QueryColumn>(columns.Count);
+        var remaining = new List<QueryColumn>(columns);
+
+        // Find and move best "name" column to front
+        var nameColumn = FindBestNameColumn(remaining);
+        if (nameColumn != null)
+        {
+            result.Add(nameColumn);
+            remaining.Remove(nameColumn);
+        }
+
+        // Add remaining columns in original order
+        result.AddRange(remaining);
+
+        return result;
+    }
+
+    /// <summary>
+    /// Finds the best "name" or primary display column from the list.
+    /// </summary>
+    private static QueryColumn? FindBestNameColumn(IReadOnlyList<QueryColumn> columns)
+    {
+        // Priority order for primary display columns (most specific first)
+        var namePriority = new[]
+        {
+            "name",          // Most common (account.name, etc.)
+            "fullname",      // contact.fullname
+            "title",         // Various entities
+            "subject",       // Activities (email, task, etc.)
+            "description",   // Fallback for simple entities
+        };
+
+        foreach (var targetName in namePriority)
+        {
+            var match = columns.FirstOrDefault(c =>
+                string.Equals(c.LogicalName, targetName, StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(c.Alias, targetName, StringComparison.OrdinalIgnoreCase));
+
+            if (match != null)
+            {
+                return match;
+            }
+        }
+
+        // If no name column found, look for any column that ends with "name" but isn't an ID
+        var nameEndingColumn = columns.FirstOrDefault(c =>
+            c.LogicalName.EndsWith("name", StringComparison.OrdinalIgnoreCase) &&
+            !c.LogicalName.EndsWith("typename", StringComparison.OrdinalIgnoreCase) &&
+            c.DataType != QueryColumnType.Guid);
+
+        return nameEndingColumn;
     }
 
     /// <summary>

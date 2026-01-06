@@ -28,6 +28,11 @@ internal sealed class InteractiveTableState
     public int SelectedRowIndex { get; private set; }
 
     /// <summary>
+    /// The currently selected column index (for cell selection).
+    /// </summary>
+    public int SelectedColumnIndex { get; private set; }
+
+    /// <summary>
     /// Number of rows that can be displayed in the viewport.
     /// </summary>
     public int VisibleRowCount { get; private set; }
@@ -160,7 +165,37 @@ internal sealed class InteractiveTableState
     }
 
     /// <summary>
-    /// Scrolls right by one column.
+    /// Moves cell selection right by one column.
+    /// </summary>
+    /// <returns>True if moved.</returns>
+    public bool MoveRight()
+    {
+        if (SelectedColumnIndex < TotalColumns - 1)
+        {
+            SelectedColumnIndex++;
+            EnsureSelectedColumnVisible();
+            return true;
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// Moves cell selection left by one column.
+    /// </summary>
+    /// <returns>True if moved.</returns>
+    public bool MoveLeft()
+    {
+        if (SelectedColumnIndex > 0)
+        {
+            SelectedColumnIndex--;
+            EnsureSelectedColumnVisible();
+            return true;
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// Scrolls right by one column (viewport scroll without changing selection).
     /// </summary>
     /// <returns>True if scrolled.</returns>
     public bool ScrollRight()
@@ -174,7 +209,7 @@ internal sealed class InteractiveTableState
     }
 
     /// <summary>
-    /// Scrolls left by one column.
+    /// Scrolls left by one column (viewport scroll without changing selection).
     /// </summary>
     /// <returns>True if scrolled.</returns>
     public bool ScrollLeft()
@@ -222,13 +257,92 @@ internal sealed class InteractiveTableState
     }
 
     /// <summary>
+    /// Ensures the selected column is visible in the viewport.
+    /// </summary>
+    private void EnsureSelectedColumnVisible()
+    {
+        // Fixed columns are always visible
+        if (SelectedColumnIndex < FixedColumnCount)
+        {
+            return;
+        }
+
+        // For scrollable columns, adjust FirstScrollableColumn
+        var scrollableIndex = SelectedColumnIndex - FixedColumnCount;
+
+        // If selected column is before the visible scrollable range
+        if (scrollableIndex < FirstScrollableColumn)
+        {
+            FirstScrollableColumn = scrollableIndex;
+        }
+        // If selected column is after the visible scrollable range, we need to check
+        // which columns are actually visible based on layout
+        else if (ColumnLayouts.Count > 0)
+        {
+            var layout = ColumnLayouts.FirstOrDefault(l => l.ColumnIndex == SelectedColumnIndex);
+            if (layout != null && !layout.IsVisible)
+            {
+                // Scroll right until the column becomes visible
+                FirstScrollableColumn = scrollableIndex;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Gets the value of the currently selected cell.
+    /// </summary>
+    /// <returns>The string value of the selected cell, or null if not available.</returns>
+    public string? GetSelectedCellValue()
+    {
+        if (SelectedRowIndex < 0 || SelectedRowIndex >= TotalRows ||
+            SelectedColumnIndex < 0 || SelectedColumnIndex >= TotalColumns)
+        {
+            return null;
+        }
+
+        var record = NavigationState.AllRecords[SelectedRowIndex];
+        var column = NavigationState.Columns[SelectedColumnIndex];
+        var key = column.Alias ?? column.LogicalName;
+
+        if (record.TryGetValue(key, out var value))
+        {
+            return ValueFormatter.GetPlainValue(value, column);
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Gets the display name of the currently selected column.
+    /// </summary>
+    public string GetSelectedColumnName()
+    {
+        if (SelectedColumnIndex < 0 || SelectedColumnIndex >= TotalColumns)
+        {
+            return string.Empty;
+        }
+
+        var column = NavigationState.Columns[SelectedColumnIndex];
+        return column.Alias ?? column.LogicalName;
+    }
+
+    /// <summary>
+    /// Recalculates visible row count for current terminal height.
+    /// Call this when terminal is resized.
+    /// </summary>
+    public void RecalculateVisibleRowCount()
+    {
+        VisibleRowCount = CalculateVisibleRowCount();
+    }
+
+    /// <summary>
     /// Calculates how many rows fit in the current terminal.
     /// </summary>
     private static int CalculateVisibleRowCount()
     {
-        // Reserve space for: header panel (~4 lines), column headers (2 lines),
+        // Reserve space for: header panel (~5 lines with profile), column headers (2 lines),
         // status bar (2 lines), borders
-        const int reservedLines = 10;
+        const int reservedLines = 11;
         return Math.Max(3, Console.WindowHeight - reservedLines);
     }
 
