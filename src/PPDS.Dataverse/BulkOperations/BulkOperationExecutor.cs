@@ -1417,15 +1417,16 @@ namespace PPDS.Dataverse.BulkOperations
             var updatedCount = 0;
             var hasUpsertCounts = 0; // 0 = false, 1 = true (for thread-safe flag)
 
-            // Let the pool semaphore naturally limit concurrency.
-            // Tasks block on GetClientAsync() when pool is full.
-            // No need to pre-calculate parallelism - pool handles it.
-            // The CPU-bound limit prevents excessive task scheduling overhead.
+            // Limit parallelism to pool's recommended capacity.
+            // This prevents spawning more tasks than available connections,
+            // avoiding PoolExhaustedException after retry exhaustion.
+            // The pool's DOP-based recommendation reflects server capacity.
+            var poolParallelism = _connectionPool.GetTotalRecommendedParallelism();
             await Parallel.ForEachAsync(
                 batches,
                 new ParallelOptions
                 {
-                    MaxDegreeOfParallelism = Math.Max(Environment.ProcessorCount * 4, 32),
+                    MaxDegreeOfParallelism = Math.Max(poolParallelism, 1),
                     CancellationToken = cancellationToken
                 },
                 async (batch, ct) =>
