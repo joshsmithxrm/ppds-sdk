@@ -19,7 +19,8 @@ public static class ClipboardHelper
         {
             if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
             {
-                return CopyWithProcess("cmd", $"/c echo {EscapeForCmd(text)}| clip");
+                // Pipe directly to clip.exe via stdin (avoids escaping issues)
+                return CopyWithProcess("clip", string.Empty, text);
             }
             else if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
             {
