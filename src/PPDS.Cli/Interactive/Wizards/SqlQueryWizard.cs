@@ -52,7 +52,7 @@ internal static class SqlQueryWizard
 
             // Get SQL query from user using ReadLine for proper editing support
             // (arrow keys, home/end, ctrl+A, up/down for history)
-            AnsiConsole.MarkupLine(Styles.MutedText("Enter SQL query (↑/↓ for history, 'back' or 'exit'):"));
+            AnsiConsole.MarkupLine(Styles.MutedText("Enter SQL query (Up/Down for history, 'back' or 'exit'):"));
 
             // Sync QueryHistory to ReadLine's history for up/down arrow navigation
             ReadLineLib.ClearHistory();
