@@ -365,9 +365,10 @@ public static class ListCommand
     {
         Console.WriteLine(GetCsvHeader());
 
+        var sb = new StringBuilder();
         foreach (var trace in traces)
         {
-            var sb = new StringBuilder();
+            sb.Clear();
             sb.Append(trace.Id).Append(',');
             sb.Append(EscapeCsv(trace.TypeName)).Append(',');
             sb.Append(EscapeCsv(trace.MessageName ?? "")).Append(',');
@@ -382,7 +383,7 @@ public static class ListCommand
             sb.Append(trace.RequestId?.ToString() ?? "").Append(',');
             sb.Append(trace.PluginStepId?.ToString() ?? "");
 
-            Console.WriteLine(sb.ToString());
+            Console.WriteLine(sb);
         }
     }
 

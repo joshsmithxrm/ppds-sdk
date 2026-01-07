@@ -142,12 +142,12 @@ public static class SettingsCommand
         var writer = ServiceFactory.CreateOutputWriter(globalOptions);
 
         // Parse the setting value
-        var setting = value.ToLowerInvariant() switch
+        PluginTraceLogSetting? setting = value.ToLowerInvariant() switch
         {
             "off" or "0" => PluginTraceLogSetting.Off,
             "exception" or "exceptions" or "1" => PluginTraceLogSetting.Exception,
             "all" or "2" => PluginTraceLogSetting.All,
-            _ => (PluginTraceLogSetting?)null
+            _ => null
         };
 
         if (setting == null)

@@ -26,17 +26,21 @@ public static class TimelineHierarchyBuilder
         var sortedTraces = traces.OrderBy(t => t.CreatedOn).ToList();
 
         // Build depth-based hierarchy
+        // Track mutable children lists separately to avoid casting IReadOnlyList to List
         var rootNodes = new List<TimelineNode>();
+        var childrenMap = new Dictionary<TimelineNode, List<TimelineNode>>();
         var parentStack = new Stack<(TimelineNode Node, int Depth)>();
 
         foreach (var trace in sortedTraces)
         {
+            var children = new List<TimelineNode>();
             var node = new TimelineNode
             {
                 Trace = trace,
                 HierarchyDepth = trace.Depth - 1, // Convert 1-based depth to 0-based
-                Children = new List<TimelineNode>()
+                Children = children
             };
+            childrenMap[node] = children;
 
             // Pop parents that are at same or greater depth (siblings or descendants of siblings)
             while (parentStack.Count > 0 && parentStack.Peek().Depth >= trace.Depth)
@@ -53,8 +57,7 @@ public static class TimelineHierarchyBuilder
             {
                 // This is a child of the current parent
                 var parent = parentStack.Peek().Node;
-                var mutableChildren = (List<TimelineNode>)parent.Children;
-                mutableChildren.Add(node);
+                childrenMap[parent].Add(node);
             }
 
             // This node becomes a potential parent for subsequent nodes
@@ -115,7 +118,9 @@ public static class TimelineHierarchyBuilder
         var totalDuration = Math.Max(1, (timelineEnd - timelineStart).TotalMilliseconds);
 
         // Build hierarchy with positioning
+        // Track mutable children lists separately to avoid casting IReadOnlyList to List
         var rootNodes = new List<TimelineNode>();
+        var childrenMap = new Dictionary<TimelineNode, List<TimelineNode>>();
         var parentStack = new Stack<(TimelineNode Node, int Depth)>();
 
         foreach (var trace in sortedTraces)
@@ -124,14 +129,16 @@ public static class TimelineHierarchyBuilder
             var offsetPercent = (offsetMs / totalDuration) * 100;
             var widthPercent = Math.Max(0.5, ((trace.DurationMs ?? 0) / totalDuration) * 100);
 
+            var children = new List<TimelineNode>();
             var node = new TimelineNode
             {
                 Trace = trace,
                 HierarchyDepth = trace.Depth - 1,
-                Children = new List<TimelineNode>(),
+                Children = children,
                 OffsetPercent = offsetPercent,
                 WidthPercent = widthPercent
             };
+            childrenMap[node] = children;
 
             // Pop parents at same or greater depth
             while (parentStack.Count > 0 && parentStack.Peek().Depth >= trace.Depth)
@@ -146,7 +153,7 @@ public static class TimelineHierarchyBuilder
             else
             {
                 var parent = parentStack.Peek().Node;
-                ((List<TimelineNode>)parent.Children).Add(node);
+                childrenMap[parent].Add(node);
             }
 
             parentStack.Push((node, trace.Depth));
