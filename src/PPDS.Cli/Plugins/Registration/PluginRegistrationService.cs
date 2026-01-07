@@ -21,7 +21,7 @@ namespace PPDS.Cli.Plugins.Registration;
 /// Each method acquires its own client from the pool, enabling DOP-based parallelism.
 /// See ADR-0002 and ADR-0005 for pool architecture details.
 /// </remarks>
-public sealed class PluginRegistrationService
+public sealed class PluginRegistrationService : IPluginRegistrationService
 {
     private readonly IDataverseConnectionPool _pool;
     private readonly ILogger<PluginRegistrationService> _logger;
