@@ -33,6 +33,7 @@ NuGet packages & CLI for Power Platform: plugin attributes, Dataverse connectivi
 | Include ErrorCode in `PpdsException` | Enables programmatic handling (retry, re-auth) (ADR-0026) |
 | Make new user data accessible via `ppds serve` | VS Code extension needs same data as CLI/TUI |
 | Link related issues in PR body | Use "Closes #123" or "Relates to #456" |
+| Use JSON for config files, JSONL for streaming | No YAML; consistency with CLI output (ADR-0016) |
 
 ---
 
