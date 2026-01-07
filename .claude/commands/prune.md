@@ -38,7 +38,13 @@ For each worktree whose branch shows `: gone]`:
 git worktree remove "<path>" --force
 ```
 
-If removal fails due to permissions, run `git worktree prune` to clean metadata.
+If removal fails with exit code 255 "Directory not empty", a NUL file may be blocking deletion. Remove it with:
+
+```bash
+rm -rf "<path>"
+```
+
+Then run `git worktree prune` to clean metadata.
 
 ### 5. Delete Gone Branches
 
