@@ -66,11 +66,24 @@ internal sealed class PpdsApplication : IDisposable
         finally
         {
             Application.Shutdown();
+            TuiDebugLog.Log("TUI shutdown, disposing session...");
+
             // Note: Sync-over-async is required here because Terminal.Gui's Application.Run()
             // is synchronous and we need to clean up the session before returning.
-            // The session disposal is fast (just releases pooled connections).
+            // Use timeout to prevent hanging if connection pool is stuck.
 #pragma warning disable PPDS012 // Terminal.Gui requires sync disposal
-            _session?.DisposeAsync().AsTask().GetAwaiter().GetResult();
+            if (_session != null)
+            {
+                var disposeTask = _session.DisposeAsync().AsTask();
+                if (!disposeTask.Wait(TimeSpan.FromSeconds(3)))
+                {
+                    TuiDebugLog.Log("Session disposal timed out after 3s - forcing exit");
+                }
+                else
+                {
+                    TuiDebugLog.Log("Session disposed successfully");
+                }
+            }
 #pragma warning restore PPDS012
         }
     }
@@ -80,7 +93,11 @@ internal sealed class PpdsApplication : IDisposable
         if (_disposed) return;
         _disposed = true;
 #pragma warning disable PPDS012 // IDisposable.Dispose must be synchronous
-        _session?.DisposeAsync().AsTask().GetAwaiter().GetResult();
+        if (_session != null)
+        {
+            var disposeTask = _session.DisposeAsync().AsTask();
+            disposeTask.Wait(TimeSpan.FromSeconds(3)); // Don't hang forever
+        }
 #pragma warning restore PPDS012
     }
 }

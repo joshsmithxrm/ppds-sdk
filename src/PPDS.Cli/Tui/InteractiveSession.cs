@@ -334,14 +334,18 @@ internal sealed class InteractiveSession : IAsyncDisposable
             return;
         }
 
+        TuiDebugLog.Log("Disposing InteractiveSession...");
         _disposed = true;
 
         if (_serviceProvider != null)
         {
+            TuiDebugLog.Log("Disposing ServiceProvider (connection pool)...");
             await _serviceProvider.DisposeAsync().ConfigureAwait(false);
             _serviceProvider = null;
+            TuiDebugLog.Log("ServiceProvider disposed");
         }
 
         _lock.Dispose();
+        TuiDebugLog.Log("InteractiveSession disposed");
     }
 }

@@ -28,7 +28,9 @@ This file tracks incremental UX improvements during TUI development iterations.
 
 ## Open Feedback
 
-_No open items_
+- [ ] Ctrl+Q hang on quit - ServiceProvider disposal blocks (added 3s timeout as workaround)
+  - Debug log shows where it hangs (ServiceProvider dispose or session dispose)
+  - Need to investigate connection pool disposal
 
 ## Done
 
