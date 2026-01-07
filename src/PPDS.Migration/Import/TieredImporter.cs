@@ -137,6 +137,12 @@ namespace PPDS.Migration.Import
             var errors = new ConcurrentBag<MigrationError>();
             var totalImported = 0;
 
+            // Track overall progress across all entities
+            var totalEntities = data.EntityData.Count;
+            var overallTotal = data.TotalRecordCount;
+            long overallProcessed = 0;
+            var entityIndex = 0;
+
             _logger?.LogInformation("Starting tiered import: {Tiers} tiers, {Records} records",
                 plan.TierCount, data.TotalRecordCount);
 
@@ -220,10 +226,17 @@ namespace PPDS.Migration.Import
                 // Phase 1: Process each tier sequentially
                 foreach (var tier in plan.Tiers)
                 {
+                    // Log tier start checkpoint
+                    context.OutputManager?.LogTierStart(tier.TierNumber, tier.Entities.ToArray());
+
                     progress?.Report(new ProgressEventArgs
                     {
                         Phase = MigrationPhase.Importing,
                         TierNumber = tier.TierNumber,
+                        TotalTiers = plan.TierCount,
+                        TotalEntities = totalEntities,
+                        OverallProcessed = Interlocked.Read(ref overallProcessed),
+                        OverallTotal = overallTotal,
                         Message = $"Processing tier {tier.TierNumber}: {string.Join(", ", tier.Entities)}"
                     });
 
@@ -262,6 +275,24 @@ namespace PPDS.Migration.Import
                             entityResults.Add(result);
                             Interlocked.Add(ref totalImported, result.SuccessCount);
 
+                            // Update overall progress tracking
+                            Interlocked.Add(ref overallProcessed, result.RecordCount);
+                            var currentEntityIndex = Interlocked.Increment(ref entityIndex);
+
+                            // Log entity completion checkpoint
+                            if (result.Duration.TotalSeconds > 0)
+                            {
+                                var rps = result.SuccessCount / result.Duration.TotalSeconds;
+                                context.OutputManager?.LogEntityProgress(entityName, result.SuccessCount, records.Count, rps);
+                            }
+
+                            // Log entity error checkpoint if failures occurred
+                            if (result.FailureCount > 0)
+                            {
+                                var errorSummary = result.Errors.FirstOrDefault()?.Message ?? "Multiple errors";
+                                context.OutputManager?.LogEntityError(entityName, result.FailureCount, errorSummary);
+                            }
+
                             // Add all detailed errors from this entity
                             foreach (var error in result.Errors)
                             {
@@ -275,15 +306,22 @@ namespace PPDS.Migration.Import
                     _logger?.LogInformation("Tier {Tier} complete", tier.TierNumber);
                 }
 
+                // Capture Phase 1 duration (entity import)
+                var phase1Duration = stopwatch.Elapsed;
+
                 // Phase 2: Process deferred fields
+                context.OutputManager?.LogProgress("Starting deferred fields phase");
                 var deferredResult = await _deferredFieldProcessor.ProcessAsync(context, cancellationToken)
                     .ConfigureAwait(false);
                 var deferredUpdates = deferredResult.SuccessCount;
+                var phase2Duration = deferredResult.Duration;
 
                 // Phase 3: Process M2M relationships
+                context.OutputManager?.LogProgress("Starting M2M relationships phase");
                 var relationshipResult = await _relationshipProcessor.ProcessAsync(context, cancellationToken)
                     .ConfigureAwait(false);
                 var relationshipsProcessed = relationshipResult.SuccessCount;
+                var phase3Duration = relationshipResult.Duration;
 
                 stopwatch.Stop();
 
@@ -298,6 +336,9 @@ namespace PPDS.Migration.Import
                     RecordsUpdated = deferredUpdates,
                     RelationshipsProcessed = relationshipsProcessed,
                     Duration = stopwatch.Elapsed,
+                    Phase1Duration = phase1Duration,
+                    Phase2Duration = phase2Duration,
+                    Phase3Duration = phase3Duration,
                     EntityResults = entityResults.ToArray(),
                     Errors = errors.ToArray()
                 };
