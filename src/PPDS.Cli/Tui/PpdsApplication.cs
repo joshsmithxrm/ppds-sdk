@@ -1,5 +1,4 @@
 using PPDS.Auth.Credentials;
-using PPDS.Cli.Interactive;
 using Terminal.Gui;
 
 namespace PPDS.Cli.Tui;

@@ -1,10 +1,12 @@
 using Microsoft.Extensions.DependencyInjection;
 using PPDS.Auth.Credentials;
 using PPDS.Cli.Infrastructure;
+using PPDS.Cli.Services.Export;
+using PPDS.Cli.Services.History;
 using PPDS.Cli.Services.Query;
 using PPDS.Dataverse.Pooling;
 
-namespace PPDS.Cli.Interactive;
+namespace PPDS.Cli.Tui;
 
 /// <summary>
 /// Manages the interactive session state including connection pool lifecycle.
@@ -116,6 +118,34 @@ internal sealed class InteractiveSession : IAsyncDisposable
     {
         var provider = await GetServiceProviderAsync(environmentUrl, cancellationToken).ConfigureAwait(false);
         return provider.GetRequiredService<IDataverseConnectionPool>();
+    }
+
+    /// <summary>
+    /// Gets the query history service for the specified environment.
+    /// </summary>
+    /// <param name="environmentUrl">The environment URL to connect to.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>The query history service.</returns>
+    public async Task<IQueryHistoryService> GetQueryHistoryServiceAsync(
+        string environmentUrl,
+        CancellationToken cancellationToken = default)
+    {
+        var provider = await GetServiceProviderAsync(environmentUrl, cancellationToken).ConfigureAwait(false);
+        return provider.GetRequiredService<IQueryHistoryService>();
+    }
+
+    /// <summary>
+    /// Gets the export service for the specified environment.
+    /// </summary>
+    /// <param name="environmentUrl">The environment URL to connect to.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>The export service.</returns>
+    public async Task<IExportService> GetExportServiceAsync(
+        string environmentUrl,
+        CancellationToken cancellationToken = default)
+    {
+        var provider = await GetServiceProviderAsync(environmentUrl, cancellationToken).ConfigureAwait(false);
+        return provider.GetRequiredService<IExportService>();
     }
 
     /// <summary>

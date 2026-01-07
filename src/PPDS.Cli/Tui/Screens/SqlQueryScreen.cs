@@ -1,8 +1,11 @@
+using System.Data;
 using System.Net.Http;
 using PPDS.Auth.Credentials;
 using PPDS.Auth.Profiles;
-using PPDS.Cli.Interactive;
+using PPDS.Cli.Services.Export;
+using PPDS.Cli.Services.History;
 using PPDS.Cli.Services.Query;
+using PPDS.Cli.Tui.Dialogs;
 using PPDS.Cli.Tui.Views;
 using Terminal.Gui;
 
@@ -181,7 +184,12 @@ internal sealed class SqlQueryScreen : Window
                     break;
 
                 case Key.CtrlMask | Key.E:
-                    _ = ExportResultsAsync();
+                    ShowExportDialog();
+                    e.Handled = true;
+                    break;
+
+                case Key.CtrlMask | Key.H:
+                    ShowHistoryDialog();
                     e.Handled = true;
                     break;
             }
@@ -230,6 +238,11 @@ internal sealed class SqlQueryScreen : Window
                 var moreText = result.Result.MoreRecords ? " (more available)" : "";
                 _statusLabel.Text = $"Returned {result.Result.Count} rows in {result.Result.ExecutionTimeMs}ms{moreText}";
             });
+
+            // Save to history (fire-and-forget)
+#pragma warning disable PPDS013 // Fire-and-forget - history save shouldn't block UI
+            _ = SaveToHistoryAsync(sql, result.Result.Count, result.Result.ExecutionTimeMs);
+#pragma warning restore PPDS013
         }
         catch (InvalidOperationException ex)
         {
@@ -238,6 +251,21 @@ internal sealed class SqlQueryScreen : Window
         catch (HttpRequestException ex)
         {
             Application.MainLoop?.Invoke(() => _statusLabel.Text = $"Network error: {ex.Message}");
+        }
+    }
+
+    private async Task SaveToHistoryAsync(string sql, int rowCount, long executionTimeMs)
+    {
+        if (_environmentUrl == null) return;
+
+        try
+        {
+            var historyService = await _session.GetQueryHistoryServiceAsync(_environmentUrl, CancellationToken.None);
+            await historyService.AddQueryAsync(_environmentUrl, sql, rowCount, executionTimeMs);
+        }
+        catch
+        {
+            // Silently ignore history save failures
         }
     }
 
@@ -291,22 +319,75 @@ internal sealed class SqlQueryScreen : Window
     {
         _filterFrame.Visible = false;
         _filterField.Text = string.Empty;
+        _resultsTable.ApplyFilter(null);
         _statusLabel.Text = "Filter cleared.";
     }
 
     private void OnFilterChanged(NStack.ustring obj)
     {
-        // Filter is handled by the DataTable's DefaultView in QueryResultsTableView
-        // For now, filtering is basic - could enhance to filter the underlying DataTable
         var filterText = _filterField.Text?.ToString() ?? string.Empty;
-        _statusLabel.Text = string.IsNullOrEmpty(filterText)
-            ? "Filter cleared."
-            : $"Filtering by: {filterText}";
+        _resultsTable.ApplyFilter(filterText);
     }
 
-    private Task ExportResultsAsync()
+    private void ShowExportDialog()
     {
-        MessageBox.Query("Export", "Export functionality will be implemented in a future update.\n\nPlanned features:\n- CSV export\n- TSV export\n- Clipboard copy", "OK");
-        return Task.CompletedTask;
+        var dataTable = _resultsTable.GetDataTable();
+        if (dataTable == null || dataTable.Rows.Count == 0)
+        {
+            MessageBox.ErrorQuery("Export", "No data to export. Execute a query first.", "OK");
+            return;
+        }
+
+        // Create export service directly (doesn't need environment connection)
+        var exportService = new ExportService(Microsoft.Extensions.Logging.Abstractions.NullLogger<ExportService>.Instance);
+        var dialog = new ExportDialog(exportService, dataTable);
+
+        Application.Run(dialog);
+
+        if (dialog.ExportCompleted)
+        {
+            _statusLabel.Text = "Export completed";
+        }
+    }
+
+    private void ShowHistoryDialog()
+    {
+        if (_environmentUrl == null)
+        {
+            MessageBox.ErrorQuery("History", "No environment selected. Query history is per-environment.", "OK");
+            return;
+        }
+
+#pragma warning disable PPDS013 // Fire-and-forget with proper error handling
+        _ = ShowHistoryDialogAsync().ContinueWith(t =>
+        {
+            if (t.IsFaulted)
+            {
+                Application.MainLoop?.Invoke(() =>
+                {
+                    _statusLabel.Text = $"Error: {t.Exception?.InnerException?.Message ?? "Failed to load history"}";
+                });
+            }
+        }, TaskScheduler.Default);
+#pragma warning restore PPDS013
+    }
+
+    private async Task ShowHistoryDialogAsync()
+    {
+        if (_environmentUrl == null) return;
+
+        var historyService = await _session.GetQueryHistoryServiceAsync(_environmentUrl, CancellationToken.None);
+        var dialog = new QueryHistoryDialog(historyService, _environmentUrl);
+
+        Application.MainLoop?.Invoke(() =>
+        {
+            Application.Run(dialog);
+
+            if (dialog.SelectedEntry != null)
+            {
+                _queryInput.Text = dialog.SelectedEntry.Sql;
+                _statusLabel.Text = "Query loaded from history. Press Ctrl+Enter to execute.";
+            }
+        });
     }
 }

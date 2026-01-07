@@ -1,5 +1,9 @@
+using Microsoft.Extensions.Logging.Abstractions;
 using PPDS.Auth.Credentials;
-using PPDS.Cli.Interactive;
+using PPDS.Auth.Profiles;
+using PPDS.Cli.Services.Environment;
+using PPDS.Cli.Services.Profile;
+using PPDS.Cli.Tui.Dialogs;
 using PPDS.Cli.Tui.Screens;
 using Terminal.Gui;
 
@@ -10,9 +14,12 @@ namespace PPDS.Cli.Tui;
 /// </summary>
 internal sealed class MainWindow : Window
 {
-    private readonly string? _profileName;
+    private string? _profileName;
+    private string? _environmentName;
+    private string? _environmentUrl;
     private readonly Action<DeviceCodeInfo>? _deviceCodeCallback;
     private readonly InteractiveSession _session;
+    private readonly Label _statusLabel;
 
     public MainWindow(string? profileName, Action<DeviceCodeInfo>? deviceCodeCallback, InteractiveSession session)
     {
@@ -26,8 +33,25 @@ internal sealed class MainWindow : Window
         Width = Dim.Fill();
         Height = Dim.Fill();
 
+        // Status bar at bottom
+        _statusLabel = new Label
+        {
+            X = 0,
+            Y = Pos.AnchorEnd(1),
+            Width = Dim.Fill(),
+            Height = 1,
+            ColorScheme = new ColorScheme
+            {
+                Normal = Application.Driver.MakeAttribute(Color.White, Color.Blue)
+            }
+        };
+
         SetupMenu();
         ShowMainMenu();
+        Add(_statusLabel);
+
+        // Load initial profile info
+        LoadProfileInfoAsync();
     }
 
     private void SetupMenu()
@@ -36,8 +60,11 @@ internal sealed class MainWindow : Window
         {
             new("_File", new MenuItem[]
             {
-                new("_SQL Query", "Run SQL queries against Dataverse", () => NavigateToSqlQuery()),
-                new("_Data Migration", "Import/export data", () => NavigateToDataMigration(), shortcut: Key.CtrlMask | Key.D),
+                new("_SQL Query", "Run SQL queries against Dataverse", () => NavigateToSqlQuery(), shortcut: Key.F2),
+                new("_Data Migration", "Import/export data", () => NavigateToDataMigration(), shortcut: Key.F3),
+                new("", "", () => {}, null, null, Key.Null), // Separator
+                new("Switch _Profile...", "Select a different authentication profile", () => ShowProfileSelector()),
+                new("Switch _Environment...", "Select a different environment", () => ShowEnvironmentSelector()),
                 new("", "", () => {}, null, null, Key.Null), // Separator
                 new("_Quit", "Exit the application", () => RequestStop(), shortcut: Key.CtrlMask | Key.Q)
             }),
@@ -49,7 +76,7 @@ internal sealed class MainWindow : Window
             new("_Help", new MenuItem[]
             {
                 new("_About", "About PPDS", () => ShowAbout()),
-                new("_Keyboard Shortcuts", "Show keyboard shortcuts", () => ShowKeyboardShortcuts()),
+                new("_Keyboard Shortcuts", "Show keyboard shortcuts", () => ShowKeyboardShortcuts(), shortcut: Key.F1),
             })
         });
 
@@ -63,7 +90,7 @@ internal sealed class MainWindow : Window
             X = 0,
             Y = 1,
             Width = Dim.Fill(),
-            Height = Dim.Fill()
+            Height = Dim.Fill() - 1 // Leave room for status bar
         };
 
         var label = new Label("Welcome to PPDS Interactive Mode\n\nSelect an option from the menu or use keyboard shortcuts:")
@@ -95,18 +122,7 @@ internal sealed class MainWindow : Window
         };
         buttonQuit.Clicked += () => RequestStop();
 
-        // Profile info
-        var profileLabel = new Label(_profileName != null
-            ? $"Profile: {_profileName}"
-            : "Profile: (none selected)")
-        {
-            X = Pos.Right(container) - 30,
-            Y = Pos.Bottom(container) - 2,
-            Width = 28,
-            TextAlignment = TextAlignment.Right
-        };
-
-        container.Add(label, buttonSql, buttonData, buttonQuit, profileLabel);
+        container.Add(label, buttonSql, buttonData, buttonQuit);
         Add(container);
 
         // Global keyboard shortcuts
@@ -114,6 +130,10 @@ internal sealed class MainWindow : Window
         {
             switch (e.KeyEvent.Key)
             {
+                case Key.F1:
+                    ShowKeyboardShortcuts();
+                    e.Handled = true;
+                    break;
                 case Key.F2:
                     NavigateToSqlQuery();
                     e.Handled = true;
@@ -124,6 +144,162 @@ internal sealed class MainWindow : Window
                     break;
             }
         };
+    }
+
+    private void LoadProfileInfoAsync()
+    {
+        // Fire-and-forget with error handling
+#pragma warning disable PPDS013 // Fire-and-forget with explicit error handling
+        _ = LoadProfileInfoInternalAsync().ContinueWith(t =>
+        {
+            if (t.IsFaulted && t.Exception != null)
+            {
+                Application.MainLoop?.Invoke(() =>
+                {
+                    UpdateStatus("Error loading profile info");
+                });
+            }
+        }, TaskScheduler.Default);
+#pragma warning restore PPDS013
+    }
+
+    private async Task LoadProfileInfoInternalAsync()
+    {
+        using var store = new ProfileStore();
+        var collection = await store.LoadAsync(CancellationToken.None);
+        var profile = collection.ActiveProfile;
+
+        Application.MainLoop?.Invoke(() =>
+        {
+            if (profile != null)
+            {
+                _profileName = profile.DisplayIdentifier;
+                _environmentName = profile.Environment?.DisplayName;
+                _environmentUrl = profile.Environment?.Url;
+            }
+            UpdateStatus();
+        });
+    }
+
+    private void UpdateStatus(string? error = null)
+    {
+        if (error != null)
+        {
+            _statusLabel.Text = $" {error}";
+            return;
+        }
+
+        var profilePart = _profileName != null ? $"Profile: {_profileName}" : "No profile";
+        var envPart = _environmentName != null ? $"Environment: {_environmentName}" : "No environment";
+        _statusLabel.Text = $" {profilePart} | {envPart}";
+    }
+
+    private void ShowProfileSelector()
+    {
+        var store = new ProfileStore();
+        var service = new ProfileService(store, NullLogger<ProfileService>.Instance);
+        var dialog = new ProfileSelectorDialog(service);
+
+        Application.Run(dialog);
+
+        if (dialog.SelectedProfile != null)
+        {
+            // Update active profile and refresh
+#pragma warning disable PPDS013 // Fire-and-forget with explicit error handling
+            _ = SetActiveProfileAsync(dialog.SelectedProfile).ContinueWith(t =>
+            {
+                if (t.IsFaulted)
+                {
+                    Application.MainLoop?.Invoke(() =>
+                    {
+                        MessageBox.ErrorQuery("Error", t.Exception?.InnerException?.Message ?? "Failed to switch profile", "OK");
+                    });
+                }
+            }, TaskScheduler.Default);
+#pragma warning restore PPDS013
+        }
+        else if (dialog.CreateNewSelected)
+        {
+            // Profile creation would require more complex flow - show message for now
+            MessageBox.Query("Create Profile", "Profile creation is available via CLI:\n\nppds auth create --name MyProfile", "OK");
+        }
+    }
+
+    private async Task SetActiveProfileAsync(ProfileSummary profile)
+    {
+        var store = new ProfileStore();
+        var service = new ProfileService(store, NullLogger<ProfileService>.Instance);
+
+        await service.SetActiveProfileAsync(profile.DisplayIdentifier);
+
+        // Reload profile info
+        _profileName = profile.DisplayIdentifier;
+        _environmentName = profile.EnvironmentName;
+        _environmentUrl = profile.EnvironmentUrl;
+
+        // Invalidate session to force reconnection with new profile
+        await _session.InvalidateAsync();
+
+        Application.MainLoop?.Invoke(() =>
+        {
+            UpdateStatus();
+        });
+    }
+
+    private void ShowEnvironmentSelector()
+    {
+        if (_profileName == null)
+        {
+            MessageBox.ErrorQuery("No Profile", "Please select a profile first before choosing an environment.", "OK");
+            return;
+        }
+
+        var store = new ProfileStore();
+        var service = new EnvironmentService(store, NullLogger<EnvironmentService>.Instance);
+        var dialog = new EnvironmentSelectorDialog(service, _deviceCodeCallback);
+
+        Application.Run(dialog);
+
+        if (dialog.SelectedEnvironment != null || dialog.UseManualUrl)
+        {
+            var url = dialog.UseManualUrl ? dialog.ManualUrl : dialog.SelectedEnvironment?.Url;
+            var name = dialog.UseManualUrl ? dialog.ManualUrl : dialog.SelectedEnvironment?.DisplayName;
+
+            if (url != null)
+            {
+#pragma warning disable PPDS013 // Fire-and-forget with explicit error handling
+                _ = SetEnvironmentAsync(url, name).ContinueWith(t =>
+                {
+                    if (t.IsFaulted)
+                    {
+                        Application.MainLoop?.Invoke(() =>
+                        {
+                            MessageBox.ErrorQuery("Error", t.Exception?.InnerException?.Message ?? "Failed to set environment", "OK");
+                        });
+                    }
+                }, TaskScheduler.Default);
+#pragma warning restore PPDS013
+            }
+        }
+    }
+
+    private async Task SetEnvironmentAsync(string url, string? displayName)
+    {
+        var store = new ProfileStore();
+        var service = new EnvironmentService(store, NullLogger<EnvironmentService>.Instance);
+
+        var result = await service.SetEnvironmentAsync(url, _deviceCodeCallback);
+
+        _environmentUrl = result.Url;
+        _environmentName = result.DisplayName;
+
+        // Invalidate session to force reconnection with new environment
+        await _session.InvalidateAsync();
+
+        Application.MainLoop?.Invoke(() =>
+        {
+            UpdateStatus();
+        });
     }
 
     private void NavigateToSqlQuery()
