@@ -32,6 +32,13 @@ This file tracks incremental UX improvements during TUI development iterations.
 
 ## Done
 
+- [x] Token cache reuse across sessions (fixed: 2026-01-07, ADR-0027)
+  - Root cause: `HomeAccountId` not persisted after auth, so MSAL couldn't find cached account
+  - Added `ProfileStore.UpdateProfileAsync()` for partial profile updates
+  - `ProfileConnectionSource` now takes callback to persist HomeAccountId after auth
+  - `ProfileServiceFactory` wires callback to save updated profile
+  - Result: Auth once in CLI/TUI, no re-prompt in subsequent sessions
+
 - [x] Profile switch re-warms pool with new credentials (fixed: 2026-01-07)
   - Added `InteractiveSession.SetActiveProfileAsync()` that updates profile name and re-warms pool
   - `MainWindow.SetActiveProfileAsync()` now calls session method instead of just InvalidateAsync
