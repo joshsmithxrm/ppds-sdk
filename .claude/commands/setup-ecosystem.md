@@ -43,7 +43,7 @@ Multi-select (AskUserQuestion with multiSelect: true):
 | VS Code workspace | Create `ppds.code-workspace` file |
 | Terminal profile | Install `ppds`, `goto`, `ppdsw` commands |
 | Sound notification | Play Windows sound when Claude finishes |
-| Status line | Show worktree name in Claude's status bar |
+| Status line | Show directory and git branch in Claude's status bar |
 
 ### Step 4: Execute Setup
 
@@ -118,26 +118,89 @@ Read existing settings.json first, merge the hooks section, then write back.
 
 #### Setup Status Line (if selected)
 
-1. Create status line script at `~/.claude/statusline.ps1`:
+**Important:** The statusLine command requires an absolute path - `~` does not expand correctly on Windows.
+
+1. First, detect the user's home directory:
 ```powershell
-# PPDS Claude status line - shows worktree name
-$data = $input | ConvertFrom-Json
-$dir = Split-Path $data.workspace.current_dir -Leaf
-$model = $data.model.display_name
-Write-Output "[$model] $dir"
+# Windows
+$homePath = [Environment]::GetFolderPath('UserProfile')
+# macOS/Linux
+$homePath = $env:HOME
 ```
 
-2. Add statusLine config to `~/.claude/settings.json`:
+2. Create status line script at `{homePath}/.claude/statusline.ps1`:
+
+**Windows version** (PowerShell):
+```powershell
+# PPDS Claude status line - shows directory and git branch with colors
+$json = [Console]::In.ReadToEnd()
+$data = $json | ConvertFrom-Json
+$dir = Split-Path $data.workspace.current_dir -Leaf
+$branch = ""
+try {
+    Push-Location $data.workspace.current_dir
+    $b = git branch --show-current 2>$null
+    if ($LASTEXITCODE -eq 0 -and $b) { $branch = $b }
+    Pop-Location
+} catch {}
+
+# ANSI colors: cyan for dir, magenta for branch
+$cyan = "$([char]27)[96m"
+$magenta = "$([char]27)[95m"
+$reset = "$([char]27)[0m"
+
+if ($branch) {
+    Write-Output "${cyan}${dir}${reset} ${magenta}(${branch})${reset}"
+} else {
+    Write-Output "${cyan}${dir}${reset}"
+}
+```
+
+**macOS/Linux version** (bash):
+```bash
+#!/bin/bash
+# PPDS Claude status line - shows directory and git branch with colors
+read -r json
+dir=$(echo "$json" | jq -r '.workspace.current_dir' | xargs basename)
+branch=$(git -C "$(echo "$json" | jq -r '.workspace.current_dir')" branch --show-current 2>/dev/null)
+
+# ANSI colors: cyan for dir, magenta for branch
+cyan='\033[96m'
+magenta='\033[95m'
+reset='\033[0m'
+
+if [ -n "$branch" ]; then
+    echo -e "${cyan}${dir}${reset} ${magenta}(${branch})${reset}"
+else
+    echo -e "${cyan}${dir}${reset}"
+fi
+```
+
+3. Add statusLine config to `~/.claude/settings.json` with **absolute path**:
+
+**Windows:**
 ```json
 {
   "statusLine": {
     "type": "command",
-    "command": "powershell -NoProfile -File ~/.claude/statusline.ps1"
+    "command": "pwsh -NoProfile -File C:/Users/USERNAME/.claude/statusline.ps1"
   }
 }
 ```
 
-This shows `[Claude Sonnet 4] sdk-tui-enhancements` at the bottom of Claude's UI - great for split panes!
+**macOS/Linux:**
+```json
+{
+  "statusLine": {
+    "type": "command",
+    "command": "bash /Users/USERNAME/.claude/statusline.sh"
+  }
+}
+```
+
+Replace `USERNAME` with the actual username from the detected home path.
+
+This shows `sdk (feature/my-branch)` at the bottom of Claude's UI with cyan directory and magenta branch - great for split panes!
 
 ### Step 5: Summary
 
@@ -153,7 +216,7 @@ Developer tools configured:
   - VS Code workspace: {base}/ppds.code-workspace
   - Terminal profile: ppds, goto, ppdsw commands installed
   - Sound notification: Plays when Claude finishes
-  - Status line: Shows worktree name in Claude UI
+  - Status line: Shows directory and git branch in Claude UI
 
 Next steps:
   - Open workspace: code "{base}/ppds.code-workspace"
