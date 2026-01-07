@@ -158,7 +158,7 @@ public sealed class NoFireAndForgetInCtorAnalyzer : DiagnosticAnalyzer
         if (parent is MemberAccessExpressionSyntax outerMemberAccess)
         {
             var grandparent = outerMemberAccess.Parent;
-            if (grandparent is InvocationExpressionSyntax outerInvocation &&
+            if (grandparent is InvocationExpressionSyntax &&
                 outerMemberAccess.Name.Identifier.Text == "ContinueWith")
             {
                 return true;
