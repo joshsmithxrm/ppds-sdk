@@ -1,5 +1,8 @@
 using System.CommandLine;
-using PPDS.Cli.Interactive;
+using PPDS.Cli.Infrastructure;
+using PPDS.Cli.Infrastructure.Errors;
+using PPDS.Cli.Tui;
+using Spectre.Console;
 
 namespace PPDS.Cli.Commands;
 
@@ -18,9 +21,41 @@ public static class InteractiveCommand
     {
         var command = new Command("interactive", "Launch interactive TUI mode for profile selection and SQL queries");
 
-        command.SetAction(async (parseResult, cancellationToken) =>
+        command.SetAction((parseResult, cancellationToken) =>
         {
-            return await InteractiveCli.RunAsync(cancellationToken);
+            // Check if we're in a TTY environment
+            if (!AnsiConsole.Profile.Capabilities.Interactive)
+            {
+                Console.Error.WriteLine("Error: Interactive mode requires a terminal (TTY).");
+                Console.Error.WriteLine("This may occur in CI/CD pipelines, redirected input, or non-interactive shells.");
+                Console.Error.WriteLine();
+                Console.Error.WriteLine("Use standard CLI commands instead:");
+                Console.Error.WriteLine("  ppds auth list       - List profiles");
+                Console.Error.WriteLine("  ppds auth select     - Select a profile");
+                Console.Error.WriteLine("  ppds env list        - List environments");
+                Console.Error.WriteLine("  ppds env select      - Select an environment");
+                return Task.FromResult(ExitCodes.Failure);
+            }
+
+            try
+            {
+                using var app = new PpdsApplication(
+                    profileName: null, // Uses active profile
+                    deviceCodeCallback: ProfileServiceFactory.DefaultDeviceCodeCallback);
+
+                return Task.FromResult(app.Run(cancellationToken));
+            }
+            catch (OperationCanceledException)
+            {
+                // User cancelled - not an error
+                return Task.FromResult(ExitCodes.Success);
+            }
+            catch (InvalidOperationException ex)
+            {
+                Console.Error.WriteLine($"Interactive mode error: {ex.Message}");
+                AnsiConsole.MarkupLine($"[red]Error: {ex.Message}[/]");
+                return Task.FromResult(ExitCodes.Failure);
+            }
         });
 
         return command;
