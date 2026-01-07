@@ -251,7 +251,7 @@ namespace PPDS.Migration.Import
                 try
                 {
                     var updateRequest = new UpdateRequest { Target = updates[i] };
-                    ApplyBypassOptions(updateRequest, context.Options);
+                    updateRequest.ApplyBypassOptions(context.Options);
                     await client.ExecuteAsync(updateRequest).ConfigureAwait(false);
                     successCount++;
                 }
@@ -285,29 +285,6 @@ namespace PPDS.Migration.Import
             }
 
             return (successCount, failureCount);
-        }
-
-        /// <summary>
-        /// Applies bypass options to an OrganizationRequest for individual operations.
-        /// </summary>
-        private static void ApplyBypassOptions(OrganizationRequest request, ImportOptions options)
-        {
-            // Custom business logic bypass
-            if (options.BypassCustomPlugins != CustomLogicBypass.None)
-            {
-                var parts = new List<string>(2);
-                if (options.BypassCustomPlugins.HasFlag(CustomLogicBypass.Synchronous))
-                    parts.Add("CustomSync");
-                if (options.BypassCustomPlugins.HasFlag(CustomLogicBypass.Asynchronous))
-                    parts.Add("CustomAsync");
-                request.Parameters["BypassBusinessLogicExecution"] = string.Join(",", parts);
-            }
-
-            // Power Automate flows bypass
-            if (options.BypassPowerAutomateFlows)
-            {
-                request.Parameters["SuppressCallbackRegistrationExpanderJob"] = true;
-            }
         }
 
         /// <summary>

@@ -555,19 +555,19 @@ namespace PPDS.Migration.Import
                     {
                         case ImportMode.Create:
                             var createRequest = new CreateRequest { Target = record };
-                            ApplyBypassOptions(createRequest, options);
+                            createRequest.ApplyBypassOptions(options);
                             var createResponse = (CreateResponse)await client.ExecuteAsync(createRequest).ConfigureAwait(false);
                             newId = createResponse.id;
                             break;
                         case ImportMode.Update:
                             var updateRequest = new UpdateRequest { Target = record };
-                            ApplyBypassOptions(updateRequest, options);
+                            updateRequest.ApplyBypassOptions(options);
                             await client.ExecuteAsync(updateRequest).ConfigureAwait(false);
                             newId = record.Id;
                             break;
                         default:
                             var upsertRequest = new UpsertRequest { Target = record };
-                            ApplyBypassOptions(upsertRequest, options);
+                            upsertRequest.ApplyBypassOptions(options);
                             var upsertResponse = (UpsertResponse)await client.ExecuteAsync(upsertRequest).ConfigureAwait(false);
                             newId = upsertResponse.Target?.Id ?? record.Id;
                             break;
@@ -602,33 +602,6 @@ namespace PPDS.Migration.Import
                 Errors = errors,
                 Duration = TimeSpan.Zero
             };
-        }
-
-        /// <summary>
-        /// Applies bypass options to an OrganizationRequest for individual operations.
-        /// </summary>
-        /// <remarks>
-        /// This mirrors the logic in BulkOperationExecutor.ApplyBypassOptions
-        /// to ensure consistent bypass behavior between bulk and individual operations.
-        /// </remarks>
-        private static void ApplyBypassOptions(OrganizationRequest request, ImportOptions options)
-        {
-            // Custom business logic bypass
-            if (options.BypassCustomPlugins != CustomLogicBypass.None)
-            {
-                var parts = new List<string>(2);
-                if (options.BypassCustomPlugins.HasFlag(CustomLogicBypass.Synchronous))
-                    parts.Add("CustomSync");
-                if (options.BypassCustomPlugins.HasFlag(CustomLogicBypass.Asynchronous))
-                    parts.Add("CustomAsync");
-                request.Parameters["BypassBusinessLogicExecution"] = string.Join(",", parts);
-            }
-
-            // Power Automate flows bypass
-            if (options.BypassPowerAutomateFlows)
-            {
-                request.Parameters["SuppressCallbackRegistrationExpanderJob"] = true;
-            }
         }
 
         private Entity PrepareRecordForImport(
