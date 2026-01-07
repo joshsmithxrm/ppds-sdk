@@ -1,4 +1,5 @@
 using System.Data;
+using System.Net.Http;
 using PPDS.Cli.Infrastructure;
 using PPDS.Dataverse.Query;
 using Terminal.Gui;
@@ -16,6 +17,7 @@ internal sealed class QueryResultsTableView : FrameView
     private DataTable _dataTable;
     private QueryResult? _lastResult;
     private string? _environmentUrl;
+    private bool _isLoadingMore;
 
     /// <summary>
     /// Raised when the user scrolls to the end and more records are available.
@@ -197,19 +199,29 @@ internal sealed class QueryResultsTableView : FrameView
 
     private async Task LoadMoreAsync()
     {
-        if (LoadMoreRequested != null)
-        {
-            _statusLabel.Text = $"Loading page {CurrentPageNumber + 1}...";
-            Application.Refresh();
+        // Guard against concurrent load requests
+        if (_isLoadingMore || LoadMoreRequested == null)
+            return;
 
-            try
-            {
-                await LoadMoreRequested.Invoke();
-            }
-            catch (Exception ex)
-            {
-                _statusLabel.Text = $"Error loading: {ex.Message}";
-            }
+        _isLoadingMore = true;
+        _statusLabel.Text = $"Loading page {CurrentPageNumber + 1}...";
+        Application.Refresh();
+
+        try
+        {
+            await LoadMoreRequested.Invoke();
+        }
+        catch (InvalidOperationException ex)
+        {
+            _statusLabel.Text = $"Error loading: {ex.Message}";
+        }
+        catch (HttpRequestException ex)
+        {
+            _statusLabel.Text = $"Network error: {ex.Message}";
+        }
+        finally
+        {
+            _isLoadingMore = false;
         }
     }
 

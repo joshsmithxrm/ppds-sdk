@@ -24,11 +24,15 @@ internal sealed class PpdsApplication : IDisposable
     /// <summary>
     /// Runs the TUI application. Blocks until the user exits.
     /// </summary>
+    /// <param name="cancellationToken">Token to signal application shutdown.</param>
     /// <returns>Exit code (0 for success).</returns>
-    public int Run()
+    public int Run(CancellationToken cancellationToken = default)
     {
         // Create session for connection pool reuse across screens
         _session = new InteractiveSession(_profileName, _deviceCodeCallback);
+
+        // Register cancellation to request stop
+        using var registration = cancellationToken.Register(() => Application.RequestStop());
 
         Application.Init();
 
@@ -42,6 +46,9 @@ internal sealed class PpdsApplication : IDisposable
         finally
         {
             Application.Shutdown();
+            // Note: Sync-over-async is required here because Terminal.Gui's Application.Run()
+            // is synchronous and we need to clean up the session before returning.
+            // The session disposal is fast (just releases pooled connections).
             _session?.DisposeAsync().AsTask().GetAwaiter().GetResult();
         }
     }

@@ -39,15 +39,20 @@ public static class InteractiveCommand
 
             try
             {
-                var app = new PpdsApplication(
+                using var app = new PpdsApplication(
                     profileName: null, // Uses active profile
                     deviceCodeCallback: ProfileServiceFactory.DefaultDeviceCodeCallback);
 
-                return Task.FromResult(app.Run());
+                return Task.FromResult(app.Run(cancellationToken));
             }
-            catch (Exception ex)
+            catch (OperationCanceledException)
             {
-                Console.Error.WriteLine($"Interactive mode error: {ex}");
+                // User cancelled - not an error
+                return Task.FromResult(ExitCodes.Success);
+            }
+            catch (InvalidOperationException ex)
+            {
+                Console.Error.WriteLine($"Interactive mode error: {ex.Message}");
                 AnsiConsole.MarkupLine($"[red]Error: {ex.Message}[/]");
                 return Task.FromResult(ExitCodes.Failure);
             }

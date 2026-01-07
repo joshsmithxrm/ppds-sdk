@@ -1,3 +1,4 @@
+using System.Net.Http;
 using PPDS.Auth.Credentials;
 using PPDS.Auth.Profiles;
 using PPDS.Cli.Interactive;
@@ -103,8 +104,17 @@ internal sealed class SqlQueryScreen : Window
 
         Add(queryFrame, _filterFrame, _resultsTable, _statusLabel);
 
-        // Load profile and environment info
-        _ = LoadProfileInfoAsync();
+        // Load profile and environment info (fire-and-forget with error handling)
+        _ = LoadProfileInfoAsync().ContinueWith(t =>
+        {
+            if (t.IsFaulted && t.Exception != null)
+            {
+                Application.MainLoop?.Invoke(() =>
+                {
+                    _statusLabel.Text = $"Error loading profile: {t.Exception.InnerException?.Message ?? t.Exception.Message}";
+                });
+            }
+        }, TaskScheduler.Default);
 
         // Set up keyboard shortcuts
         SetupKeyboardShortcuts();
@@ -112,12 +122,13 @@ internal sealed class SqlQueryScreen : Window
 
     private async Task LoadProfileInfoAsync()
     {
-        try
-        {
-            using var store = new ProfileStore();
-            var collection = await store.LoadAsync(CancellationToken.None);
-            var profile = collection.ActiveProfile;
+        using var store = new ProfileStore();
+        var collection = await store.LoadAsync(CancellationToken.None);
+        var profile = collection.ActiveProfile;
 
+        // Update UI on main thread
+        Application.MainLoop?.Invoke(() =>
+        {
             if (profile?.Environment != null)
             {
                 _environmentUrl = profile.Environment.Url;
@@ -128,11 +139,7 @@ internal sealed class SqlQueryScreen : Window
             {
                 _statusLabel.Text = "No environment selected. Select a profile with an environment first.";
             }
-        }
-        catch (Exception ex)
-        {
-            _statusLabel.Text = $"Error loading profile: {ex.Message}";
-        }
+        });
     }
 
     private void SetupKeyboardShortcuts()
@@ -210,17 +217,25 @@ internal sealed class SqlQueryScreen : Window
 
             var result = await service.ExecuteAsync(request, CancellationToken.None);
 
-            _resultsTable.LoadResults(result.Result);
-            _lastSql = sql;
-            _lastPagingCookie = result.Result.PagingCookie;
-            _lastPageNumber = result.Result.PageNumber;
+            // Update UI on main thread
+            Application.MainLoop?.Invoke(() =>
+            {
+                _resultsTable.LoadResults(result.Result);
+                _lastSql = sql;
+                _lastPagingCookie = result.Result.PagingCookie;
+                _lastPageNumber = result.Result.PageNumber;
 
-            var moreText = result.Result.MoreRecords ? " (more available)" : "";
-            _statusLabel.Text = $"Returned {result.Result.Count} rows in {result.Result.ExecutionTimeMs}ms{moreText}";
+                var moreText = result.Result.MoreRecords ? " (more available)" : "";
+                _statusLabel.Text = $"Returned {result.Result.Count} rows in {result.Result.ExecutionTimeMs}ms{moreText}";
+            });
         }
-        catch (Exception ex)
+        catch (InvalidOperationException ex)
         {
-            _statusLabel.Text = $"Error: {ex.Message}";
+            Application.MainLoop?.Invoke(() => _statusLabel.Text = $"Error: {ex.Message}");
+        }
+        catch (HttpRequestException ex)
+        {
+            Application.MainLoop?.Invoke(() => _statusLabel.Text = $"Network error: {ex.Message}");
         }
     }
 
@@ -242,15 +257,23 @@ internal sealed class SqlQueryScreen : Window
 
             var result = await service.ExecuteAsync(request, CancellationToken.None);
 
-            _resultsTable.AddPage(result.Result);
-            _lastPagingCookie = result.Result.PagingCookie;
-            _lastPageNumber = result.Result.PageNumber;
+            // Update UI on main thread
+            Application.MainLoop?.Invoke(() =>
+            {
+                _resultsTable.AddPage(result.Result);
+                _lastPagingCookie = result.Result.PagingCookie;
+                _lastPageNumber = result.Result.PageNumber;
 
-            _statusLabel.Text = $"Loaded page {_lastPageNumber}";
+                _statusLabel.Text = $"Loaded page {_lastPageNumber}";
+            });
         }
-        catch (Exception ex)
+        catch (InvalidOperationException ex)
         {
-            _statusLabel.Text = $"Error loading more: {ex.Message}";
+            Application.MainLoop?.Invoke(() => _statusLabel.Text = $"Error loading more: {ex.Message}");
+        }
+        catch (HttpRequestException ex)
+        {
+            Application.MainLoop?.Invoke(() => _statusLabel.Text = $"Network error: {ex.Message}");
         }
     }
 
