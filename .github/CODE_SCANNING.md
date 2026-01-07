@@ -85,6 +85,37 @@ To suppress project-wide in `.editorconfig`:
 dotnet_diagnostic.PPDS006.severity = none
 ```
 
+### Triage Process for Analyzer Findings
+
+When an analyzer flags code, follow this decision tree:
+
+1. **Is this a real bug?**
+   - YES → Create GitHub issue, fix the code
+   - NO → Continue to step 2
+
+2. **Is it a framework/API constraint?**
+   - YES → Suppress inline with WHY comment
+   - NO → Continue to step 3
+
+3. **Can code be refactored to avoid the pattern?**
+   - YES → Refactor (no suppression needed)
+   - NO → Suppress inline with WHY comment
+
+### Known Safe Patterns
+
+| Pattern | Why Safe | Example |
+|---------|----------|---------|
+| Sync disposal in Terminal.Gui | Framework requires sync `Application.Run()` | `PpdsApplication.Dispose()` |
+| DI factory sync-over-async | Factory delegates cannot be async | `ServiceRegistration.cs` |
+| Fire-and-forget with `.ContinueWith()` | Errors are explicitly handled | `SqlQueryScreen` constructor |
+
+### Creating GitHub Issues for Real Bugs
+
+If a finding reveals a real bug:
+1. Create issue with `bug` label
+2. Reference the analyzer rule (e.g., "Found by PPDS012")
+3. Include the file and line number
+
 ## Architecture (ADRs)
 
 Bot instructions reference these Architecture Decision Records:
@@ -100,3 +131,4 @@ Bot instructions reference these Architecture Decision Records:
 
 - [#231](https://github.com/joshsmithxrm/ppds-sdk/issues/231) - Tune code scanning tools to reduce noise
 - [#232](https://github.com/joshsmithxrm/ppds-sdk/issues/232) - ADR-0024 (style) - Prefer foreach over LINQ
+- [#246](https://github.com/joshsmithxrm/ppds-sdk/issues/246) - Analyzer triage process and PPDS013 refinement

@@ -63,6 +63,10 @@ public sealed class NoFireAndForgetInCtorAnalyzer : DiagnosticAnalyzer
             if (IsCommonSafePattern(methodSymbol))
                 continue;
 
+            // Skip if the task has .ContinueWith() error handling attached
+            if (HasContinueWithErrorHandling(invocation))
+                continue;
+
             var methodName = GetMethodName(invocation);
 
             var diagnostic = Diagnostic.Create(
@@ -130,6 +134,36 @@ public sealed class NoFireAndForgetInCtorAnalyzer : DiagnosticAnalyzer
         // Task.CompletedTask, Task.FromResult are safe
         if (containingType == "Task" && methodName is "FromResult" or "FromException" or "FromCanceled")
             return true;
+
+        return false;
+    }
+
+    private static bool HasContinueWithErrorHandling(InvocationExpressionSyntax invocation)
+    {
+        // Check if this invocation is part of a .ContinueWith() chain
+        // Pattern: _ = SomeAsync().ContinueWith(...)
+        var parent = invocation.Parent;
+
+        // The invocation might be the expression in a member access like SomeAsync().ContinueWith
+        if (parent is MemberAccessExpressionSyntax memberAccess &&
+            memberAccess.Name.Identifier.Text == "ContinueWith")
+        {
+            return true;
+        }
+
+        // Also check if the entire statement is a discard assignment with ContinueWith
+        // Pattern: _ = SomeAsync().ContinueWith(t => { ... });
+        // In this case, the invocation is SomeAsync(), and we need to check if it's
+        // the object of a .ContinueWith() call
+        if (parent is MemberAccessExpressionSyntax outerMemberAccess)
+        {
+            var grandparent = outerMemberAccess.Parent;
+            if (grandparent is InvocationExpressionSyntax outerInvocation &&
+                outerMemberAccess.Name.Identifier.Text == "ContinueWith")
+            {
+                return true;
+            }
+        }
 
         return false;
     }
