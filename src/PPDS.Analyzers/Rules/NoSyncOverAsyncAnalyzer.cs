@@ -81,23 +81,20 @@ public sealed class NoSyncOverAsyncAnalyzer : DiagnosticAnalyzer
         }
 
         // Check for .GetResult() call (from .GetAwaiter().GetResult())
-        if (methodName == "GetResult")
+        if (methodName == "GetResult" &&
+            memberAccess.Expression is InvocationExpressionSyntax innerInvocation &&
+            innerInvocation.Expression is MemberAccessExpressionSyntax innerMemberAccess &&
+            innerMemberAccess.Name.Identifier.Text == "GetAwaiter")
         {
-            // Check if it's called on an awaiter
-            if (memberAccess.Expression is InvocationExpressionSyntax innerInvocation &&
-                innerInvocation.Expression is MemberAccessExpressionSyntax innerMemberAccess &&
-                innerMemberAccess.Name.Identifier.Text == "GetAwaiter")
+            var typeInfo = context.SemanticModel.GetTypeInfo(innerMemberAccess.Expression, context.CancellationToken);
+            if (IsTaskType(typeInfo.Type))
             {
-                var typeInfo = context.SemanticModel.GetTypeInfo(innerMemberAccess.Expression, context.CancellationToken);
-                if (IsTaskType(typeInfo.Type))
-                {
-                    var diagnostic = Diagnostic.Create(
-                        Rule,
-                        invocation.GetLocation(),
-                        ".GetAwaiter().GetResult()");
+                var diagnostic = Diagnostic.Create(
+                    Rule,
+                    invocation.GetLocation(),
+                    ".GetAwaiter().GetResult()");
 
-                    context.ReportDiagnostic(diagnostic);
-                }
+                context.ReportDiagnostic(diagnostic);
             }
         }
     }

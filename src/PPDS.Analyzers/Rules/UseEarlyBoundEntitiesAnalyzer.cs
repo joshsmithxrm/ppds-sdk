@@ -21,7 +21,7 @@ public sealed class UseEarlyBoundEntitiesAnalyzer : DiagnosticAnalyzer
         defaultSeverity: DiagnosticSeverity.Warning,
         isEnabledByDefault: true,
         description: "QueryExpression should use early-bound EntityLogicalName constants for compile-time safety. " +
-                     "See CLAUDE.md for available generated entities.");
+                     "See CODE_SCANNING.md for details on available generated entities.");
 
     public override ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics =>
         ImmutableArray.Create(Rule);
@@ -37,9 +37,10 @@ public sealed class UseEarlyBoundEntitiesAnalyzer : DiagnosticAnalyzer
     {
         var objectCreation = (ObjectCreationExpressionSyntax)context.Node;
 
-        // Check if it's a QueryExpression constructor
+        // Check if it's a QueryExpression constructor using full metadata name for robustness
         var typeInfo = context.SemanticModel.GetTypeInfo(objectCreation, context.CancellationToken);
-        if (typeInfo.Type?.Name != "QueryExpression")
+        var queryExpressionType = context.SemanticModel.Compilation.GetTypeByMetadataName("Microsoft.Xrm.Sdk.Query.QueryExpression");
+        if (queryExpressionType is null || !SymbolEqualityComparer.Default.Equals(typeInfo.Type, queryExpressionType))
             return;
 
         // Check if the first argument is a string literal
