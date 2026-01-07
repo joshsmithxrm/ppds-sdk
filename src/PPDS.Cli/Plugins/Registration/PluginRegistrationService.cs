@@ -901,9 +901,13 @@ public sealed class PluginRegistrationService : IPluginRegistrationService
             await using var client = await _pool.GetClientAsync(cancellationToken: cancellationToken);
             await ExecuteAsync(request, client, cancellationToken);
         }
-        catch (Exception ex) when (ex.Message.Contains("already exists"))
+        catch (FaultException<OrganizationServiceFault> ex) when (ex.Detail?.ErrorCode == -2147159998)
         {
-            // Component already in solution, ignore
+            // Error code 0x80048542: Component already exists in the solution
+            // This is expected when re-deploying - not an error
+            _logger.LogDebug(
+                "Component {ComponentId} already exists in solution {SolutionName}, skipping",
+                componentId, solutionName);
         }
     }
 
