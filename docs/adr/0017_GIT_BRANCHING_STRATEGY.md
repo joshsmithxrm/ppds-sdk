@@ -48,21 +48,67 @@ C:\VS\ppds\
 - Single-session work
 - No need to switch away
 
+### Creating Worktrees
+
+**For issue-driven work:** Use `/plan-work`
+```
+/plan-work 123 456
+```
+- Fetches issues from GitHub
+- Creates worktrees with session prompts
+- Session prompt includes verification checklist and research hints
+- Then use `/start-work` in the worktree to begin
+
+**For ad-hoc work:** Use `/create-worktree`
+```
+/create-worktree "add authentication caching"
+/create-worktree "fix null pointer in bulk ops" --fix
+/create-worktree "update docs" --issue  # also creates GitHub issue
+```
+- No GitHub issue required
+- Infers branch type from description
+- Then enter plan mode in the worktree to establish context
+
 ### Worktree Lifecycle
 
 ```bash
-# Create worktree from main
-git worktree add ../sdk-{name} main
-cd ../sdk-{name}
-git checkout -b feature/{name}
+# Option 1: Issue-driven (recommended for tracked work)
+/plan-work 123          # In sdk/ orchestrator
+cd ../sdk-feature-x
+/start-work             # Displays session context
+# Enter plan mode to verify and plan
+
+# Option 2: Ad-hoc (for untracked work)
+/create-worktree "description"  # In sdk/ orchestrator
+cd ../sdk-xxx
+# Enter plan mode to establish context
 
 # Work, commit, push
 git push -u origin feature/{name}
 gh pr create
 
 # After PR merges, clean up
-git worktree remove ../sdk-{name}
+/prune                  # Or: git worktree remove ../sdk-{name}
 ```
+
+### Plan Mode as Session Context
+
+Plan mode is the recommended way to establish session context in any worktree:
+
+**Issue-driven worktrees:**
+- Session prompt created by `/plan-work` contains verification checklist
+- Verification ensures issue approach is still valid for current codebase
+- Plan mode researches, verifies, then creates implementation plan
+
+**Ad-hoc worktrees:**
+- No session prompt - user describes work in plan mode
+- Plan mode researches codebase and creates implementation plan
+- Plan file becomes the session context
+
+**Why plan mode?**
+- Issues can be stale - created based on older codebase state
+- Plan mode verifies approach against current patterns and ADRs
+- User approval before implementation prevents wasted effort
 
 ### Main Branch Protection
 
