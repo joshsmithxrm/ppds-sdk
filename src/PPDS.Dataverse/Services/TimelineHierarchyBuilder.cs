@@ -61,9 +61,6 @@ public static class TimelineHierarchyBuilder
             parentStack.Push((node, trace.Depth));
         }
 
-        // Calculate timeline positioning
-        CalculatePositioning(rootNodes, sortedTraces);
-
         return rootNodes;
     }
 
@@ -95,55 +92,6 @@ public static class TimelineHierarchyBuilder
     private static int CountNodesRecursive(TimelineNode node)
     {
         return 1 + node.Children.Sum(CountNodesRecursive);
-    }
-
-    private static void CalculatePositioning(List<TimelineNode> rootNodes, List<PluginTraceInfo> sortedTraces)
-    {
-        if (sortedTraces.Count == 0) return;
-
-        var timelineStart = sortedTraces.First().CreatedOn;
-        var timelineEnd = sortedTraces.Max(t => t.CreatedOn.AddMilliseconds(t.DurationMs ?? 0));
-        var totalDuration = (timelineEnd - timelineStart).TotalMilliseconds;
-
-        // Handle edge case where all traces occur at same time
-        if (totalDuration <= 0)
-        {
-            totalDuration = 1;
-        }
-
-        CalculatePositioningRecursive(rootNodes, timelineStart, totalDuration);
-    }
-
-    private static void CalculatePositioningRecursive(
-        IEnumerable<TimelineNode> nodes,
-        DateTime timelineStart,
-        double totalDuration)
-    {
-        foreach (var node in nodes)
-        {
-            var traceStart = node.Trace.CreatedOn;
-            var traceDuration = node.Trace.DurationMs ?? 0;
-
-            var offsetMs = (traceStart - timelineStart).TotalMilliseconds;
-            var offsetPercent = (offsetMs / totalDuration) * 100;
-
-            // Ensure minimum width for visibility
-            var widthPercent = Math.Max(0.5, (traceDuration / totalDuration) * 100);
-
-            // Create updated node with positioning (since TimelineNode is a record)
-            // Note: We modify the mutable parts here since we control the List<>
-            // In a production scenario, we might want to make this fully immutable
-
-            // For now, we'll rely on the caller to handle the calculated values
-            // The OffsetPercent and WidthPercent are init-only, so we need a different approach
-
-            // Actually, let's update the node in place by recreating it
-            // But since we're using List<TimelineNode> we can't easily replace...
-            // Let's update the approach to build nodes with positioning from the start
-
-            // Process children
-            CalculatePositioningRecursive(node.Children, timelineStart, totalDuration);
-        }
     }
 
     /// <summary>

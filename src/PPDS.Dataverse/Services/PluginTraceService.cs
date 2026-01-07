@@ -133,17 +133,30 @@ public class PluginTraceService : IPluginTraceService
 
         int deleted = 0;
 
-        foreach (var traceId in ids)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
+        // Use pool parallelism for efficient deletion (ADR-0002)
+        var parallelism = Math.Min(_pool.GetTotalRecommendedParallelism(), ids.Count);
 
-            if (await DeleteAsync(traceId, cancellationToken))
+        await Parallel.ForEachAsync(
+            ids,
+            new ParallelOptions
             {
-                deleted++;
-            }
-
-            progress?.Report(deleted);
-        }
+                MaxDegreeOfParallelism = parallelism,
+                CancellationToken = cancellationToken
+            },
+            async (traceId, ct) =>
+            {
+                await using var client = await _pool.GetClientAsync(cancellationToken: ct);
+                try
+                {
+                    await client.DeleteAsync(PluginTraceLog.EntityLogicalName, traceId, ct);
+                    var count = Interlocked.Increment(ref deleted);
+                    progress?.Report(count);
+                }
+                catch (Exception ex) when (ex.Message.Contains("does not exist"))
+                {
+                    // Trace already deleted, skip
+                }
+            });
 
         _logger.LogInformation("Deleted {Count} of {Total} plugin traces", deleted, ids.Count);
         return deleted;
@@ -155,11 +168,38 @@ public class PluginTraceService : IPluginTraceService
         IProgress<int>? progress = null,
         CancellationToken cancellationToken = default)
     {
-        // First, query to get the IDs to delete
-        var traces = await ListAsync(filter, top: 5000, cancellationToken);
-        var ids = traces.Select(t => t.Id).ToList();
+        int totalDeleted = 0;
 
-        return await DeleteByIdsAsync(ids, progress, cancellationToken);
+        // Page through all matching records
+        while (true)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            var traces = await ListAsync(filter, top: 5000, cancellationToken);
+            if (traces.Count == 0)
+            {
+                break;
+            }
+
+            var ids = traces.Select(t => t.Id).ToList();
+
+            // Create wrapper progress that adds to total
+            var batchProgress = new Progress<int>(count =>
+            {
+                progress?.Report(totalDeleted + count);
+            });
+
+            var batchDeleted = await DeleteByIdsAsync(ids, batchProgress, cancellationToken);
+            totalDeleted += batchDeleted;
+
+            // If we deleted fewer than requested, we're done
+            if (traces.Count < 5000)
+            {
+                break;
+            }
+        }
+
+        return totalDeleted;
     }
 
     /// <inheritdoc />
@@ -238,10 +278,91 @@ public class PluginTraceService : IPluginTraceService
         PluginTraceFilter? filter = null,
         CancellationToken cancellationToken = default)
     {
-        // For simplicity, we count by retrieving with minimal columns
-        // A more efficient approach would use FetchXML aggregate
-        var traces = await ListAsync(filter, top: 50000, cancellationToken);
-        return traces.Count;
+        await using var client = await _pool.GetClientAsync(cancellationToken: cancellationToken);
+
+        var fetchXml = BuildCountFetchXml(filter);
+        var result = await client.RetrieveMultipleAsync(new FetchExpression(fetchXml), cancellationToken);
+
+        var countEntity = result.Entities.FirstOrDefault();
+        if (countEntity == null) return 0;
+
+        var countValue = countEntity.GetAttributeValue<AliasedValue>("count");
+        return countValue?.Value is int count ? count : 0;
+    }
+
+    private static string BuildCountFetchXml(PluginTraceFilter? filter)
+    {
+        var conditions = new System.Text.StringBuilder();
+
+        if (filter != null)
+        {
+            if (!string.IsNullOrEmpty(filter.TypeName))
+                conditions.Append($"<condition attribute=\"typename\" operator=\"like\" value=\"%{EscapeXml(filter.TypeName)}%\" />");
+
+            if (!string.IsNullOrEmpty(filter.MessageName))
+                conditions.Append($"<condition attribute=\"messagename\" operator=\"like\" value=\"%{EscapeXml(filter.MessageName)}%\" />");
+
+            if (!string.IsNullOrEmpty(filter.PrimaryEntity))
+                conditions.Append($"<condition attribute=\"primaryentity\" operator=\"like\" value=\"%{EscapeXml(filter.PrimaryEntity)}%\" />");
+
+            if (filter.Mode.HasValue)
+                conditions.Append($"<condition attribute=\"mode\" operator=\"eq\" value=\"{(int)filter.Mode.Value}\" />");
+
+            if (filter.OperationType.HasValue)
+                conditions.Append($"<condition attribute=\"operationtype\" operator=\"eq\" value=\"{(int)filter.OperationType.Value}\" />");
+
+            if (filter.MinDepth.HasValue)
+                conditions.Append($"<condition attribute=\"depth\" operator=\"ge\" value=\"{filter.MinDepth.Value}\" />");
+
+            if (filter.MaxDepth.HasValue)
+                conditions.Append($"<condition attribute=\"depth\" operator=\"le\" value=\"{filter.MaxDepth.Value}\" />");
+
+            if (filter.CreatedAfter.HasValue)
+                conditions.Append($"<condition attribute=\"createdon\" operator=\"on-or-after\" value=\"{filter.CreatedAfter.Value:o}\" />");
+
+            if (filter.CreatedBefore.HasValue)
+                conditions.Append($"<condition attribute=\"createdon\" operator=\"on-or-before\" value=\"{filter.CreatedBefore.Value:o}\" />");
+
+            if (filter.MinDurationMs.HasValue)
+                conditions.Append($"<condition attribute=\"performanceexecutionduration\" operator=\"ge\" value=\"{filter.MinDurationMs.Value}\" />");
+
+            if (filter.MaxDurationMs.HasValue)
+                conditions.Append($"<condition attribute=\"performanceexecutionduration\" operator=\"le\" value=\"{filter.MaxDurationMs.Value}\" />");
+
+            if (filter.HasException.HasValue)
+            {
+                if (filter.HasException.Value)
+                    conditions.Append("<condition attribute=\"exceptiondetails\" operator=\"not-null\" />");
+                else
+                    conditions.Append("<condition attribute=\"exceptiondetails\" operator=\"null\" />");
+            }
+
+            if (filter.CorrelationId.HasValue)
+                conditions.Append($"<condition attribute=\"correlationid\" operator=\"eq\" value=\"{filter.CorrelationId.Value}\" />");
+
+            if (filter.RequestId.HasValue)
+                conditions.Append($"<condition attribute=\"requestid\" operator=\"eq\" value=\"{filter.RequestId.Value}\" />");
+
+            if (filter.PluginStepId.HasValue)
+                conditions.Append($"<condition attribute=\"pluginstepid\" operator=\"eq\" value=\"{filter.PluginStepId.Value}\" />");
+        }
+
+        return $@"<fetch aggregate=""true"">
+  <entity name=""plugintracelog"">
+    <attribute name=""plugintracelogid"" alias=""count"" aggregate=""count"" />
+    <filter type=""and"">{conditions}</filter>
+  </entity>
+</fetch>";
+    }
+
+    private static string EscapeXml(string value)
+    {
+        return value
+            .Replace("&", "&amp;")
+            .Replace("<", "&lt;")
+            .Replace(">", "&gt;")
+            .Replace("\"", "&quot;")
+            .Replace("'", "&apos;");
     }
 
     private static QueryExpression BuildListQuery(PluginTraceFilter? filter, int top)

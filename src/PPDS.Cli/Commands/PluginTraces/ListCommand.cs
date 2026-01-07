@@ -239,6 +239,20 @@ public static class ListCommand
     {
         var writer = ServiceFactory.CreateOutputWriter(globalOptions);
 
+        // Validate --top is within Dataverse paging limit
+        const int maxTop = 5000;
+        if (top > maxTop)
+        {
+            var error = new StructuredError(
+                ErrorCodes.Validation.InvalidValue,
+                $"--top value {top} exceeds maximum of {maxTop}. Use pagination for larger result sets.",
+                null,
+                "top");
+
+            writer.WriteError(error);
+            return ExitCodes.InvalidArguments;
+        }
+
         try
         {
             await using var serviceProvider = await ProfileServiceFactory.CreateFromProfilesAsync(
