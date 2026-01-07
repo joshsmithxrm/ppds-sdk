@@ -1,62 +1,201 @@
-# Design: Bug Fixes - Bypass Plugins and Mapping
+# Design: Plugin Traces (Phase 3)
 
 ## Issues
 
 | # | Title | Type | Priority | Size |
 |---|-------|------|----------|------|
-| 199 | fix: apply bypass plugins to M2M associations and individual operation fallbacks | bug | P1-High | M |
-| 200 | bug: investigate bypass plugins not working for bulk operations on certain entities | bug | P1-High | S |
-| 202 | fix: distinguish user-provided mapping from auto-created default in summary | bug | P2-Medium | S |
+| 152 | feat: Add `ppds plugintraces list` command with inline filters | feature | P2-Medium | L |
+| 153 | feat: Add `ppds plugintraces get` command | feature | P2-Medium | M |
+| 154 | feat: Add `ppds plugintraces related` command | feature | P3-Low | M |
+| 155 | feat: Add filter file support for `ppds plugintraces list` | feature | P3-Low | S |
+| 156 | feat: Add `ppds plugintraces delete` command | feature | P3-Low | S |
+| 157 | feat: Add `ppds plugintraces settings` command | feature | P2-Medium | S |
+| 158 | feat: Add CSV export support for `ppds plugintraces list` | feature | P3-Low | S |
 
 ## Context
 
-The bypass plugins feature (`BypassCustomPluginExecution`) is not being applied consistently across all code paths in the data import pipeline. This causes performance degradation when importing data to environments with heavy plugin logic.
+Plugin traces are critical for debugging Dataverse plugins. The `PluginTraceLog` entity stores execution details. This phase adds CLI commands to query, view, and manage plugin traces.
 
-### Issue #199 - M2M Associations and Fallbacks
-- M2M (many-to-many) association operations don't use bypass plugins
-- Individual record fallbacks (when bulk fails) don't inherit the bypass setting
-- Location: `src/PPDS.Dataverse/BulkOperations/` and `src/PPDS.Migration/`
+### Dataverse Entity
+- **Entity**: `plugintracelog`
+- **Key Fields**: `performanceexecutionstarttime`, `messagename`, `primaryentity`, `exceptiondetails`, `messageblock`
+- **Generated Class**: Check `src/PPDS.Dataverse/Generated/` for `PluginTraceLog`
 
-### Issue #200 - Certain Entities
-- Some entities may have special handling that bypasses the bypass logic
-- Need investigation to identify which entities and why
-- Likely in entity-specific handlers or metadata checks
-
-### Issue #202 - Mapping Display
-- Import summary shows mappings but doesn't distinguish:
-  - User-provided explicit mappings
-  - Auto-generated default mappings (field name matches)
-- Makes it hard to audit what was actually configured vs auto-matched
-
-## Key Files to Investigate
+## Command Structure
 
 ```
-src/PPDS.Dataverse/BulkOperations/BulkOperationExecutor.cs
-src/PPDS.Migration/Import/DataImporter.cs
-src/PPDS.Migration/Import/AssociationImporter.cs
-src/PPDS.Migration/Mapping/FieldMapper.cs
-src/PPDS.Cli/Commands/Data/ImportCommand.cs
+ppds plugintraces
+├── list       # List traces with filters
+├── get        # Get single trace details
+├── related    # Find traces related to a correlation ID or record
+├── delete     # Delete old traces
+└── settings   # View/modify trace settings
 ```
 
-## Suggested Implementation Order
+## Implementation Order
 
-1. **#200 first** - Investigation to understand the full scope
-2. **#199 second** - Apply bypass to M2M and fallbacks (depends on #200 findings)
-3. **#202 last** - UI/display change, independent of the others
+1. **#152 - list** (foundation - others depend on this)
+2. **#153 - get** (simple follow-on)
+3. **#157 - settings** (independent, system-level)
+4. **#154 - related** (builds on list)
+5. **#155 - filter file** (enhancement to list)
+6. **#156 - delete** (administrative)
+7. **#158 - CSV export** (enhancement to list)
+
+## Key Files to Create/Modify
+
+```
+src/PPDS.Dataverse/Services/IPluginTraceService.cs (new)
+src/PPDS.Dataverse/Services/PluginTraceService.cs (new)
+src/PPDS.Cli/Commands/PluginTracesCommand.cs (new)
+src/PPDS.Cli/Commands/PluginTraces/ListCommand.cs (new)
+src/PPDS.Cli/Commands/PluginTraces/GetCommand.cs (new)
+src/PPDS.Cli/Commands/PluginTraces/RelatedCommand.cs (new)
+src/PPDS.Cli/Commands/PluginTraces/DeleteCommand.cs (new)
+src/PPDS.Cli/Commands/PluginTraces/SettingsCommand.cs (new)
+```
+
+## Technical Notes
+
+### #152 - list command
+```bash
+ppds plugintraces list [options]
+
+Options:
+  --entity <name>       Filter by primary entity
+  --message <name>      Filter by message (Create, Update, etc.)
+  --plugin <name>       Filter by plugin type name
+  --since <datetime>    Traces after this time
+  --until <datetime>    Traces before this time
+  --errors-only         Only show traces with exceptions
+  --limit <n>           Max results (default 50)
+  --output-format       json|table|csv
+```
+
+### #153 - get command
+```bash
+ppds plugintraces get <trace-id>
+
+# Shows full details including:
+# - Message block (inputs/outputs)
+# - Exception details with stack trace
+# - Performance metrics
+# - Correlation ID
+```
+
+### #154 - related command
+```bash
+ppds plugintraces related --correlation-id <id>
+ppds plugintraces related --record <entity>/<guid>
+
+# Finds traces that share correlation ID
+# or operated on the same record
+```
+
+### #155 - filter file support
+```yaml
+# traces-filter.yaml
+entity: account
+messages:
+  - Create
+  - Update
+since: 2024-01-01
+errors_only: true
+```
+
+```bash
+ppds plugintraces list --filter traces-filter.yaml
+```
+
+### #156 - delete command
+```bash
+ppds plugintraces delete --older-than 30d
+ppds plugintraces delete --all --confirm
+
+# Requires confirmation for destructive operations
+```
+
+### #157 - settings command
+```bash
+ppds plugintraces settings
+# Shows: Trace level, retention, enabled plugins
+
+ppds plugintraces settings --enable <plugin-type>
+ppds plugintraces settings --level Exception|All|Off
+```
+
+### #158 - CSV export
+```bash
+ppds plugintraces list --output-format csv > traces.csv
+```
+
+## Service Layer Pattern
+
+Follow existing patterns in `src/PPDS.Dataverse/Services/`:
+
+```csharp
+public interface IPluginTraceService
+{
+    Task<IReadOnlyList<PluginTraceLog>> ListTracesAsync(
+        PluginTraceFilter filter,
+        CancellationToken cancellationToken = default);
+
+    Task<PluginTraceLog?> GetTraceAsync(
+        Guid traceId,
+        CancellationToken cancellationToken = default);
+
+    Task<IReadOnlyList<PluginTraceLog>> GetRelatedTracesAsync(
+        Guid correlationId,
+        CancellationToken cancellationToken = default);
+
+    Task<int> DeleteTracesAsync(
+        PluginTraceFilter filter,
+        CancellationToken cancellationToken = default);
+
+    Task<PluginTraceSettings> GetSettingsAsync(
+        CancellationToken cancellationToken = default);
+
+    Task SetSettingsAsync(
+        PluginTraceSettings settings,
+        CancellationToken cancellationToken = default);
+}
+```
 
 ## Acceptance Criteria
 
-### #199
-- [ ] M2M AssociateRequest uses `BypassCustomPluginExecution` when enabled
-- [ ] Individual record fallbacks inherit bypass setting from bulk operation
-- [ ] Tests verify bypass is applied in fallback scenarios
+### #152 - list
+- [ ] Lists traces with default limit of 50
+- [ ] All filter options work (--entity, --message, --plugin, --since, --until, --errors-only)
+- [ ] JSON and table output formats
+- [ ] Performance: <2s for typical queries
 
-### #200
-- [ ] Document which entities bypass plugins don't work for
-- [ ] Root cause identified
-- [ ] Fix or workaround implemented
+### #153 - get
+- [ ] Shows full trace details
+- [ ] Message block formatted for readability
+- [ ] Exception stack trace properly formatted
+- [ ] Returns error for non-existent trace ID
 
-### #202
-- [ ] Import summary shows `(auto)` or similar indicator for auto-matched fields
-- [ ] User-provided mappings shown without indicator
-- [ ] Clear distinction in both console and JSON output
+### #154 - related
+- [ ] Finds traces by correlation ID
+- [ ] Finds traces by record (entity/guid)
+- [ ] Results include original trace if found
+
+### #155 - filter file
+- [ ] YAML format supported
+- [ ] Validates filter file schema
+- [ ] CLI args override file values
+
+### #156 - delete
+- [ ] --older-than works with various formats (30d, 1w, 24h)
+- [ ] Requires --confirm for destructive operations
+- [ ] Reports count of deleted traces
+
+### #157 - settings
+- [ ] Displays current trace settings
+- [ ] Can modify trace level
+- [ ] Can enable/disable per-plugin tracing
+
+### #158 - CSV export
+- [ ] CSV output format works
+- [ ] Headers included
+- [ ] Special characters properly escaped
