@@ -67,7 +67,7 @@ Example transformations:
 | Description | Branch | Folder |
 |-------------|--------|--------|
 | "add authentication caching" | `feature/add-authentication-caching` | `sdk-auth-caching` |
-| "fix null pointer in bulk ops" | `fix/null-pointer-bulk-ops` | `sdk-bulk-ops-fix` |
+| "fix null pointer in bulk ops" | `fix/null-pointer-bulk-ops` | `sdk-null-bulk-ops` |
 | "update ADR for file formats" | `docs/adr-file-formats` | `sdk-adr-file-formats` |
 
 ### 4. Validate
@@ -80,12 +80,12 @@ git branch --list "<branch-name>"
 git branch -r --list "origin/<branch-name>"
 
 # Check folder
-ls -d ../<folder-name> 2>/dev/null
+test -d ../<folder-name>
 ```
 
 If exists:
 ```
-Error: Branch 'feature/add-auth-caching' already exists.
+Error: Branch 'feature/add-authentication-caching' already exists.
 Use --name <different-name> to specify a different name.
 ```
 
