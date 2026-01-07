@@ -11,6 +11,8 @@ using PPDS.Migration.Import;
 using PPDS.Migration.Models;
 using PPDS.Migration.Progress;
 
+using OperationClock = PPDS.Migration.Progress.OperationClock;
+
 namespace PPDS.Cli.Commands.Data;
 
 /// <summary>
@@ -159,6 +161,9 @@ public static class ImportCommand
         FileInfo? errorReport,
         CancellationToken cancellationToken)
     {
+        // Start the operation clock for synchronized elapsed time (ADR-0027)
+        OperationClock.Start();
+
         var progressReporter = ServiceFactory.CreateProgressReporter(outputFormat, "Import");
 
         try

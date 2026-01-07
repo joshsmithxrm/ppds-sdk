@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.Linq;
 using System.Text.RegularExpressions;
 
@@ -18,6 +17,10 @@ namespace PPDS.Migration.Progress
     /// Progress is written to stderr to keep stdout clean for command results,
     /// enabling piping (e.g., <c>ppds data export | jq</c>) without interference.
     /// </para>
+    /// <para>
+    /// Uses <see cref="OperationClock"/> for elapsed time to stay synchronized with
+    /// MEL log formatters. See ADR-0027.
+    /// </para>
     /// </remarks>
     public class ConsoleProgressReporter : IProgressReporter
     {
@@ -25,7 +28,6 @@ namespace PPDS.Migration.Progress
         private const int MaxSuggestionsToDisplay = 3;
         private const int OverallProgressIntervalSeconds = 10;
 
-        private readonly Stopwatch _stopwatch = new();
         private string? _lastEntity;
         private int _lastProgress;
         private DateTime _lastOverallProgressTime = DateTime.MinValue;
@@ -33,18 +35,10 @@ namespace PPDS.Migration.Progress
         /// <inheritdoc />
         public string OperationName { get; set; } = "Operation";
 
-        /// <summary>
-        /// Initializes a new instance of the <see cref="ConsoleProgressReporter"/> class.
-        /// </summary>
-        public ConsoleProgressReporter()
-        {
-            _stopwatch.Start();
-        }
-
         /// <inheritdoc />
         public void Report(ProgressEventArgs args)
         {
-            var elapsed = _stopwatch.Elapsed;
+            var elapsed = OperationClock.Elapsed;
             var prefix = $"[+{elapsed:hh\\:mm\\:ss\\.fff}]";
 
             switch (args.Phase)
@@ -171,7 +165,6 @@ namespace PPDS.Migration.Progress
         /// <inheritdoc />
         public void Complete(MigrationResult result)
         {
-            _stopwatch.Stop();
             Console.Error.WriteLine();
 
             // Header line: "Export succeeded." or "Export completed with errors."
@@ -454,7 +447,7 @@ namespace PPDS.Migration.Progress
         /// <inheritdoc />
         public void Reset()
         {
-            _stopwatch.Restart();
+            OperationClock.Start();
             _lastEntity = null;
             _lastProgress = 0;
         }

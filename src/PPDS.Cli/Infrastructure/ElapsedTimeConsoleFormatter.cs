@@ -1,18 +1,20 @@
-using System.Diagnostics;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Logging.Console;
+using PPDS.Migration.Progress;
 
 namespace PPDS.Cli.Infrastructure;
 
 /// <summary>
-/// Console formatter that displays elapsed time from process start instead of wall clock time.
+/// Console formatter that displays elapsed time from operation start instead of wall clock time.
 /// Format: [+HH:mm:ss.fff] level: Category[EventId] Message
 /// </summary>
+/// <remarks>
+/// Uses <see cref="OperationClock"/> for elapsed time to stay synchronized with
+/// <see cref="ConsoleProgressReporter"/>. See ADR-0027.
+/// </remarks>
 public sealed class ElapsedTimeConsoleFormatter : ConsoleFormatter
 {
-    private static readonly Stopwatch Stopwatch = Stopwatch.StartNew();
-
     public const string FormatterName = "elapsed";
 
     public ElapsedTimeConsoleFormatter() : base(FormatterName)
@@ -28,7 +30,7 @@ public sealed class ElapsedTimeConsoleFormatter : ConsoleFormatter
         if (message is null)
             return;
 
-        var elapsed = Stopwatch.Elapsed;
+        var elapsed = OperationClock.Elapsed;
         var timestamp = $"[+{elapsed:hh\\:mm\\:ss\\.fff}]";
 
         var logLevel = GetLogLevelString(logEntry.LogLevel);
