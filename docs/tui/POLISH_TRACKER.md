@@ -28,24 +28,22 @@ This file tracks incremental UX improvements during TUI development iterations.
 
 ## Open Feedback
 
-- [ ] **Pool invalidated unexpectedly after profile switch** (reported: 2026-01-07)
-  - User switches profile, pool re-warms successfully, then pool is INVALIDATED again
-  - SQL query fails with "No environment selected" because `_environmentUrl` is null
-  - Debug log shows two unexplained invalidations:
-    ```
-    [15:27:03] Connection pool warmed successfully
-    [15:27:10] Invalidating connection pool... (7s later - WHY?)
-    [15:27:24] New profile connection warmed successfully
-    [15:27:28] Invalidating connection pool... (4s later - WHY?)
-    ```
-  - Suspect: Race condition with `EnvironmentChanged` firing on ThreadPool vs UI thread
-  - Suspect: Something calling `InvalidateAsync()` or `SetEnvironmentAsync()` unexpectedly
-  - Files to investigate:
-    - `InteractiveSession.cs` (InvalidateAsync, SetActiveProfileAsync)
-    - `MainWindow.cs` (profile/env selector handling)
-    - `SqlQueryScreen.cs` (OnEnvironmentChanged, _environmentUrl lifecycle)
+(none)
 
 ## Done
+
+- [x] **Pool invalidated unexpectedly after profile/environment switch** (fixed: 2026-01-07, ADR-0018)
+  - **Root cause:** `MainWindow.SetEnvironmentAsync()` called `_session.InvalidateAsync()` directly
+    instead of `_session.SetEnvironmentAsync()`, so `EnvironmentChanged` event never fired
+    and `SqlQueryScreen._environmentUrl` stayed stale (null)
+  - **Also:** TUI was updating global `profiles.json` on profile/env switch, causing cross-session issues
+  - **Fix:**
+    - `MainWindow.SetEnvironmentAsync()` now calls `_session.SetEnvironmentAsync()` (fires event)
+    - `MainWindow.SetActiveProfileAsync()` no longer updates global `profiles.json` (session-only)
+    - Added caller tracking to `InvalidateAsync()` for future debugging
+    - Added `PPDS_PROFILE` env var support for per-shell override
+    - Established session isolation architecture (ADR-0018)
+  - **Related issues:** #288 (TUI persistence), #289 (environment theming)
 
 - [x] **Autonomous TUI testing infrastructure** (fixed: 2026-01-07, ADR-0028)
   - Created `IServiceProviderFactory` to enable mock injection in InteractiveSession

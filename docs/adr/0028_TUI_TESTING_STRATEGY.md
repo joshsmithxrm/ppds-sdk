@@ -4,7 +4,7 @@
 Accepted
 
 ## Context
-The TUI (Terminal.Gui application) requires manual testing: user runs `ppds -i`, performs actions, and shares debug logs. This creates a slow feedback loop that blocks autonomous iteration on TUI features and bugs.
+The TUI (Terminal.Gui application) requires manual testing: user runs `ppds`, performs actions, and shares debug logs. This creates a slow feedback loop that blocks autonomous iteration on TUI features and bugs.
 
 Terminal.Gui 1.19 doesn't provide good testing APIs (FakeDriver exists but is internal/undocumented). We need a testing strategy that enables:
 1. Claude to iterate on TUI bugs without user intervention
@@ -88,13 +88,13 @@ public InteractiveSession(
 
 ### Debug Log
 
-When troubleshooting TUI issues (`ppds -i`), check:
+When troubleshooting TUI issues (`ppds`), check:
 
 ```
 ~/.ppds/tui-debug.log
 ```
 
-The log contains timestamps, thread IDs, caller info, and status updates. Each `ppds -i` run clears the previous log.
+The log contains timestamps, thread IDs, caller info, and status updates. Each `ppds` run clears the previous log.
 
 ### Common Issues
 

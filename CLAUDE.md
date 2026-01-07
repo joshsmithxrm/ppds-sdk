@@ -81,7 +81,7 @@ PPDS is a **multi-interface platform**, not just a CLI tool. The TUI is the prim
 │                      User Interfaces                         │
 ├───────────────┬───────────────┬───────────────┬─────────────┤
 │  CLI Commands │  TUI App      │  VS Code Ext  │  Future     │
-│  (ppds data)  │  (ppds -i)    │  (RPC client) │  (Web, etc) │
+│  (ppds data)  │  (ppds)       │  (RPC client) │  (Web, etc) │
 │               │               │               │             │
 │ Spectre.Console│ Terminal.Gui │  JSON-RPC     │             │
 ├───────────────┴───────────────┴───────────────┴─────────────┤

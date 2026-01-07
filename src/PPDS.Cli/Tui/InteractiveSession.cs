@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -283,14 +284,21 @@ internal sealed class InteractiveSession : IAsyncDisposable
     /// Invalidates the current session, disposing the connection pool.
     /// The next call to Get*Async will create a fresh provider.
     /// </summary>
-    public async Task InvalidateAsync()
+    /// <param name="caller">Automatically populated with caller method name.</param>
+    /// <param name="filePath">Automatically populated with caller file path.</param>
+    /// <param name="lineNumber">Automatically populated with caller line number.</param>
+    public async Task InvalidateAsync(
+        [CallerMemberName] string? caller = null,
+        [CallerFilePath] string? filePath = null,
+        [CallerLineNumber] int lineNumber = 0)
     {
         await _lock.WaitAsync().ConfigureAwait(false);
         try
         {
             if (_serviceProvider != null)
             {
-                TuiDebugLog.Log("Invalidating connection pool...");
+                var fileName = filePath != null ? Path.GetFileName(filePath) : "unknown";
+                TuiDebugLog.Log($"Invalidating connection pool (from {caller} at {fileName}:{lineNumber})...");
                 await _serviceProvider.DisposeAsync().ConfigureAwait(false);
                 _serviceProvider = null;
                 _currentEnvironmentUrl = null;

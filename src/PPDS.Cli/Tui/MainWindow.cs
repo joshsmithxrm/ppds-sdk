@@ -240,12 +240,11 @@ internal sealed class MainWindow : Window
 
     private async Task SetActiveProfileAsync(ProfileSummary profile)
     {
-        var service = _session.GetProfileService();
+        // Note: TUI profile switching is session-only (ADR-0018)
+        // We don't update the global active profile in profiles.json
+        // Use 'ppds auth select' to change the global default
 
-        // Update active profile in the profile store (persisted to disk)
-        await service.SetActiveProfileAsync(profile.DisplayIdentifier);
-
-        // Reload profile info
+        // Update local state only
         _profileName = profile.DisplayIdentifier;
         _environmentName = profile.EnvironmentName;
         _environmentUrl = profile.EnvironmentUrl;
@@ -300,15 +299,16 @@ internal sealed class MainWindow : Window
 
     private async Task SetEnvironmentAsync(string url, string? displayName)
     {
-        var service = _session.GetEnvironmentService();
+        // Note: TUI environment switching is session-only (ADR-0018)
+        // We don't persist to profiles.json - use 'ppds env select' for that
+        // Validation happens when pool connects; errors surface to user
 
-        var result = await service.SetEnvironmentAsync(url, _deviceCodeCallback);
+        // Update local state only
+        _environmentUrl = url;
+        _environmentName = displayName;
 
-        _environmentUrl = result.Url;
-        _environmentName = result.DisplayName;
-
-        // Invalidate session to force reconnection with new environment
-        await _session.InvalidateAsync();
+        // Update session - invalidates old pool, sets new URL, fires EnvironmentChanged
+        await _session.SetEnvironmentAsync(url, displayName);
 
         Application.MainLoop?.Invoke(() =>
         {
