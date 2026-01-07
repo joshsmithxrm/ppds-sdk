@@ -241,17 +241,20 @@ function Start-PpdsWorkspace {
         return
     }
 
-    # Build Windows Terminal command
+    # Build Windows Terminal command arguments
+    `$wtArgs = @('-w', '0')
     if (`$Split) {
-        wt -w 0 split-pane -d `$worktreePath --title `$Worktree
+        `$wtArgs += 'split-pane', '-d', `$worktreePath, '--title', `$Worktree
     } else {
-        wt -w 0 new-tab -d `$worktreePath --title `$Worktree
+        `$wtArgs += 'new-tab', '-d', `$worktreePath, '--title', `$Worktree
     }
 
     if (`$WithClaude) {
-        Start-Sleep -Milliseconds 500
-        wt -w 0 split-pane -d `$worktreePath --title "`$Worktree (Claude)" pwsh -NoExit -Command "claude"
+        `$wtArgs += ';', 'split-pane', '-d', `$worktreePath, '--title', "`$Worktree (Claude)", 'pwsh', '-NoExit', '-Command', 'claude'
     }
+
+    # Execute wt with all arguments at once
+    & wt @`$wtArgs
 }
 
 Set-Alias ppdsw Start-PpdsWorkspace
