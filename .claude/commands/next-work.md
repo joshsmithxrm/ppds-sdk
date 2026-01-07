@@ -62,9 +62,21 @@ Look for patterns:
 - "After #X"
 - "Requires #X"
 
-Check if blocking issues are closed:
+Check if blocking issues are closed (batch query to avoid N+1 API calls):
 ```bash
-gh issue view <blocking-number> --json state
+# Collect all unique blocking issue numbers, then check in one GraphQL call
+gh api graphql -f query='
+  query {
+    repository(owner: "{owner}", name: "{repo}") {
+      issues(first: 100, states: [OPEN, CLOSED], filterBy: {}) {
+        nodes { number state }
+      }
+    }
+  }
+' --jq '.data.repository.issues.nodes | map({(.number|tostring): .state}) | add'
+
+# Returns: {"52": "CLOSED", "78": "OPEN", ...}
+# Filter locally to check which blocking issues are resolved
 ```
 
 **Categorize issues:**
