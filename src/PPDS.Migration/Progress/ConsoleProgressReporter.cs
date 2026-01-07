@@ -23,10 +23,12 @@ namespace PPDS.Migration.Progress
     {
         private const int MaxErrorsToDisplay = 10;
         private const int MaxSuggestionsToDisplay = 3;
+        private const int OverallProgressIntervalSeconds = 10;
 
         private readonly Stopwatch _stopwatch = new();
         private string? _lastEntity;
         private int _lastProgress;
+        private DateTime _lastOverallProgressTime = DateTime.MinValue;
 
         /// <inheritdoc />
         public string OperationName { get; set; } = "Operation";
@@ -106,6 +108,33 @@ namespace PPDS.Migration.Progress
 
                         _lastEntity = progressKey;
                         _lastProgress = args.Current;
+                    }
+
+                    // Show periodic overall progress if available
+                    if (args.OverallTotal.HasValue && args.OverallProcessed.HasValue && ShouldShowOverallProgress())
+                    {
+                        var overallPct = args.OverallPercentComplete;
+                        var tierInfo = args.TierNumber.HasValue && args.TotalTiers.HasValue
+                            ? $" | Tier {args.TierNumber}/{args.TotalTiers}"
+                            : "";
+
+                        // Estimate overall ETA based on current rate
+                        var overallEta = "";
+                        if (args.RecordsPerSecond.HasValue && args.RecordsPerSecond > 0)
+                        {
+                            var remainingRecords = args.OverallTotal.Value - args.OverallProcessed.Value;
+                            var etaSeconds = remainingRecords / args.RecordsPerSecond.Value;
+                            if (etaSeconds > 0 && etaSeconds < 86400) // Cap at 24 hours
+                            {
+                                overallEta = $" | ETA: {FormatEta(TimeSpan.FromSeconds(etaSeconds))}";
+                            }
+                        }
+
+                        Console.ForegroundColor = ConsoleColor.Cyan;
+                        Console.Error.WriteLine($"{prefix} Overall: {args.OverallProcessed:N0}/{args.OverallTotal:N0} ({overallPct:F0}%){tierInfo}{overallEta}");
+                        Console.ResetColor();
+
+                        _lastOverallProgressTime = DateTime.UtcNow;
                     }
                     break;
 
@@ -430,6 +459,12 @@ namespace PPDS.Migration.Progress
         {
             // Update every 1000 records or 100 records, whichever comes first
             return current - _lastProgress >= 1000 || current - _lastProgress >= 100;
+        }
+
+        private bool ShouldShowOverallProgress()
+        {
+            // Show overall progress every N seconds
+            return (DateTime.UtcNow - _lastOverallProgressTime).TotalSeconds >= OverallProgressIntervalSeconds;
         }
 
         /// <summary>
