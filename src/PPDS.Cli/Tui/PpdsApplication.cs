@@ -1,4 +1,7 @@
+using PPDS.Auth;
 using PPDS.Auth.Credentials;
+using PPDS.Auth.Profiles;
+using PPDS.Cli.Tui.Infrastructure;
 using Terminal.Gui;
 
 namespace PPDS.Cli.Tui;
@@ -11,6 +14,7 @@ internal sealed class PpdsApplication : IDisposable
 {
     private readonly string? _profileName;
     private readonly Action<DeviceCodeInfo>? _deviceCodeCallback;
+    private ProfileStore? _profileStore;
     private InteractiveSession? _session;
     private bool _disposed;
 
@@ -27,11 +31,22 @@ internal sealed class PpdsApplication : IDisposable
     /// <returns>Exit code (0 for success).</returns>
     public int Run(CancellationToken cancellationToken = default)
     {
+        // Clear debug log for fresh session
+        TuiDebugLog.Clear();
+        TuiDebugLog.Log("TUI session starting");
+
+        // Create shared ProfileStore singleton for all local services
+        _profileStore = new ProfileStore();
+
         // Create session for connection pool reuse across screens
-        _session = new InteractiveSession(_profileName, _deviceCodeCallback);
+        _session = new InteractiveSession(_profileName, _profileStore, _deviceCodeCallback);
 
         // Register cancellation to request stop
         using var registration = cancellationToken.Register(() => Application.RequestStop());
+
+        // Suppress auth status messages that would corrupt Terminal.Gui display
+        // (AuthenticationOutput.Writer defaults to Console.WriteLine which Terminal.Gui captures)
+        AuthenticationOutput.Writer = null;
 
         Application.Init();
 

@@ -1,6 +1,7 @@
 using PPDS.Auth.Credentials;
 using PPDS.Cli.Infrastructure.Errors;
 using PPDS.Cli.Services.Environment;
+using PPDS.Cli.Tui.Infrastructure;
 using Terminal.Gui;
 
 namespace PPDS.Cli.Tui.Dialogs;
@@ -49,6 +50,7 @@ internal sealed class EnvironmentSelectorDialog : Dialog
 
         Width = 70;
         Height = 20;
+        ColorScheme = TuiColorPalette.Default;
 
         // Environment list
         var listFrame = new FrameView("Discovered Environments")

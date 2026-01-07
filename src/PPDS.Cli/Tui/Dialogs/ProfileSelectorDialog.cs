@@ -1,4 +1,5 @@
 using PPDS.Cli.Services.Profile;
+using PPDS.Cli.Tui.Infrastructure;
 using Terminal.Gui;
 
 namespace PPDS.Cli.Tui.Dialogs;
@@ -35,6 +36,7 @@ internal sealed class ProfileSelectorDialog : Dialog
 
         Width = 60;
         Height = 18;
+        ColorScheme = TuiColorPalette.Default;
 
         // Profile list
         var listFrame = new FrameView("Profiles")

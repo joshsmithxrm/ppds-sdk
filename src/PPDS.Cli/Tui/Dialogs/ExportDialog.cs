@@ -1,6 +1,8 @@
 using System.Data;
 using PPDS.Cli.Infrastructure;
+using PPDS.Cli.Infrastructure.Errors;
 using PPDS.Cli.Services.Export;
+using PPDS.Cli.Tui.Infrastructure;
 using Terminal.Gui;
 
 namespace PPDS.Cli.Tui.Dialogs;
@@ -33,6 +35,7 @@ internal sealed class ExportDialog : Dialog
 
         Width = 50;
         Height = 14;
+        ColorScheme = TuiColorPalette.Default;
 
         // Format selection
         var formatLabel = new Label("Format:")
@@ -116,6 +119,10 @@ internal sealed class ExportDialog : Dialog
             {
                 _statusLabel.Text = "Failed to copy to clipboard";
             }
+        }
+        catch (PpdsException ex)
+        {
+            _statusLabel.Text = $"Error: {ex.UserMessage}";
         }
         catch (Exception ex)
         {

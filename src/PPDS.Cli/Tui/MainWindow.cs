@@ -1,9 +1,7 @@
-using Microsoft.Extensions.Logging.Abstractions;
 using PPDS.Auth.Credentials;
-using PPDS.Auth.Profiles;
-using PPDS.Cli.Services.Environment;
 using PPDS.Cli.Services.Profile;
 using PPDS.Cli.Tui.Dialogs;
+using PPDS.Cli.Tui.Infrastructure;
 using PPDS.Cli.Tui.Screens;
 using Terminal.Gui;
 
@@ -19,6 +17,7 @@ internal sealed class MainWindow : Window
     private string? _environmentUrl;
     private readonly Action<DeviceCodeInfo>? _deviceCodeCallback;
     private readonly InteractiveSession _session;
+    private readonly ITuiThemeService _themeService;
     private readonly Label _statusLabel;
 
     public MainWindow(string? profileName, Action<DeviceCodeInfo>? deviceCodeCallback, InteractiveSession session)
@@ -26,6 +25,7 @@ internal sealed class MainWindow : Window
         _profileName = profileName;
         _deviceCodeCallback = deviceCodeCallback;
         _session = session;
+        _themeService = session.GetThemeService();
 
         Title = "PPDS - Power Platform Developer Suite";
         X = 0;
@@ -33,17 +33,17 @@ internal sealed class MainWindow : Window
         Width = Dim.Fill();
         Height = Dim.Fill();
 
-        // Status bar at bottom
+        // Apply dark theme to the main window
+        ColorScheme = TuiColorPalette.Default;
+
+        // Status bar at bottom - starts with default/unknown color, updated when environment loads
         _statusLabel = new Label
         {
             X = 0,
             Y = Pos.AnchorEnd(1),
             Width = Dim.Fill(),
             Height = 1,
-            ColorScheme = new ColorScheme
-            {
-                Normal = Application.Driver.MakeAttribute(Color.White, Color.Blue)
-            }
+            ColorScheme = TuiColorPalette.StatusBar_Default
         };
 
         SetupMenu();
@@ -56,12 +56,17 @@ internal sealed class MainWindow : Window
 
     private void SetupMenu()
     {
+        // Disabled menu items - show "(Coming Soon)" and do nothing when clicked
+        var dataMigrationItem = new MenuItem("_Data Migration (Coming Soon)", "", null, shortcut: Key.Null);
+        var solutionsItem = new MenuItem("_Solutions (Coming Soon)", "", null);
+        var pluginTracesItem = new MenuItem("_Plugin Traces (Coming Soon)", "", null);
+
         var menu = new MenuBar(new MenuBarItem[]
         {
             new("_File", new MenuItem[]
             {
                 new("_SQL Query", "Run SQL queries against Dataverse", () => NavigateToSqlQuery(), shortcut: Key.F2),
-                new("_Data Migration", "Import/export data", () => NavigateToDataMigration(), shortcut: Key.F3),
+                dataMigrationItem,
                 new("", "", () => {}, null, null, Key.Null), // Separator
                 new("Switch _Profile...", "Select a different authentication profile", () => ShowProfileSelector()),
                 new("Switch _Environment...", "Select a different environment", () => ShowEnvironmentSelector()),
@@ -70,8 +75,8 @@ internal sealed class MainWindow : Window
             }),
             new("_Tools", new MenuItem[]
             {
-                new("_Solutions", "Browse solutions", () => ShowNotImplemented("Solutions browser")),
-                new("_Plugin Traces", "View plugin traces", () => ShowNotImplemented("Plugin traces")),
+                solutionsItem,
+                pluginTracesItem,
             }),
             new("_Help", new MenuItem[]
             {
@@ -90,7 +95,8 @@ internal sealed class MainWindow : Window
             X = 0,
             Y = 1,
             Width = Dim.Fill(),
-            Height = Dim.Fill() - 1 // Leave room for status bar
+            Height = Dim.Fill() - 1, // Leave room for status bar
+            ColorScheme = TuiColorPalette.Default
         };
 
         var label = new Label("Welcome to PPDS Interactive Mode\n\nSelect an option from the menu or use keyboard shortcuts:")
@@ -108,12 +114,12 @@ internal sealed class MainWindow : Window
         };
         buttonSql.Clicked += () => NavigateToSqlQuery();
 
-        var buttonData = new Button("Data Migration (F3)")
+        var buttonData = new Button("Data Migration (Coming Soon)")
         {
             X = 2,
-            Y = 7
+            Y = 7,
+            Enabled = false
         };
-        buttonData.Clicked += () => NavigateToDataMigration();
 
         var buttonQuit = new Button("Quit (Ctrl+Q)")
         {
@@ -138,10 +144,7 @@ internal sealed class MainWindow : Window
                     NavigateToSqlQuery();
                     e.Handled = true;
                     break;
-                case Key.F3:
-                    NavigateToDataMigration();
-                    e.Handled = true;
-                    break;
+                // F3 disabled - Data Migration coming soon
             }
         };
     }
@@ -165,7 +168,7 @@ internal sealed class MainWindow : Window
 
     private async Task LoadProfileInfoInternalAsync()
     {
-        using var store = new ProfileStore();
+        var store = _session.GetProfileStore();
         var collection = await store.LoadAsync(CancellationToken.None);
         var profile = collection.ActiveProfile;
 
@@ -186,18 +189,28 @@ internal sealed class MainWindow : Window
         if (error != null)
         {
             _statusLabel.Text = $" {error}";
+            _statusLabel.ColorScheme = TuiColorPalette.Error;
             return;
         }
 
+        // Detect environment type and update color scheme
+        var envType = _themeService.DetectEnvironmentType(_environmentUrl);
+        _statusLabel.ColorScheme = _themeService.GetStatusBarScheme(envType);
+
+        // Build status text with environment type label
         var profilePart = _profileName != null ? $"Profile: {_profileName}" : "No profile";
         var envPart = _environmentName != null ? $"Environment: {_environmentName}" : "No environment";
-        _statusLabel.Text = $" {profilePart} | {envPart}";
+
+        // Add environment type label if detected (e.g., "[PROD]", "[DEV]", "[SANDBOX]")
+        var envLabel = _themeService.GetEnvironmentLabel(envType);
+        var labelPart = !string.IsNullOrEmpty(envLabel) ? $" [{envLabel}]" : "";
+
+        _statusLabel.Text = $" {profilePart} | {envPart}{labelPart}";
     }
 
     private void ShowProfileSelector()
     {
-        var store = new ProfileStore();
-        var service = new ProfileService(store, NullLogger<ProfileService>.Instance);
+        var service = _session.GetProfileService();
         var dialog = new ProfileSelectorDialog(service);
 
         Application.Run(dialog);
@@ -227,8 +240,7 @@ internal sealed class MainWindow : Window
 
     private async Task SetActiveProfileAsync(ProfileSummary profile)
     {
-        var store = new ProfileStore();
-        var service = new ProfileService(store, NullLogger<ProfileService>.Instance);
+        var service = _session.GetProfileService();
 
         await service.SetActiveProfileAsync(profile.DisplayIdentifier);
 
@@ -254,8 +266,7 @@ internal sealed class MainWindow : Window
             return;
         }
 
-        var store = new ProfileStore();
-        var service = new EnvironmentService(store, NullLogger<EnvironmentService>.Instance);
+        var service = _session.GetEnvironmentService();
         var dialog = new EnvironmentSelectorDialog(service, _deviceCodeCallback);
 
         Application.Run(dialog);
@@ -285,8 +296,7 @@ internal sealed class MainWindow : Window
 
     private async Task SetEnvironmentAsync(string url, string? displayName)
     {
-        var store = new ProfileStore();
-        var service = new EnvironmentService(store, NullLogger<EnvironmentService>.Instance);
+        var service = _session.GetEnvironmentService();
 
         var result = await service.SetEnvironmentAsync(url, _deviceCodeCallback);
 
@@ -308,16 +318,6 @@ internal sealed class MainWindow : Window
         Application.Run(sqlScreen);
     }
 
-    private void NavigateToDataMigration()
-    {
-        ShowNotImplemented("Data Migration");
-    }
-
-    private void ShowNotImplemented(string feature)
-    {
-        MessageBox.Query("Not Implemented", $"{feature} is not yet implemented.\n\nThis feature is planned for a future release.", "OK");
-    }
-
     private void ShowAbout()
     {
         var assembly = typeof(MainWindow).Assembly;
@@ -332,7 +332,6 @@ internal sealed class MainWindow : Window
         MessageBox.Query("Keyboard Shortcuts",
             "Global Shortcuts:\n" +
             "  F2       - SQL Query\n" +
-            "  F3       - Data Migration\n" +
             "  Ctrl+Q   - Quit\n\n" +
             "Table Navigation:\n" +
             "  Arrows   - Navigate cells\n" +

@@ -1,11 +1,11 @@
 using System.Data;
 using System.Net.Http;
 using PPDS.Auth.Credentials;
-using PPDS.Auth.Profiles;
 using PPDS.Cli.Services.Export;
 using PPDS.Cli.Services.History;
 using PPDS.Cli.Services.Query;
 using PPDS.Cli.Tui.Dialogs;
+using PPDS.Cli.Tui.Infrastructure;
 using PPDS.Cli.Tui.Views;
 using Terminal.Gui;
 
@@ -43,13 +43,17 @@ internal sealed class SqlQueryScreen : Window
         Width = Dim.Fill();
         Height = Dim.Fill();
 
+        // Apply dark theme
+        ColorScheme = TuiColorPalette.Default;
+
         // Query input area
         var queryFrame = new FrameView("Query (Ctrl+Enter to execute)")
         {
             X = 0,
             Y = 0,
             Width = Dim.Fill(),
-            Height = 6
+            Height = 6,
+            ColorScheme = TuiColorPalette.Default
         };
 
         _queryInput = new TextView
@@ -69,7 +73,8 @@ internal sealed class SqlQueryScreen : Window
             Y = Pos.Bottom(queryFrame),
             Width = Dim.Fill(),
             Height = 3,
-            Visible = false
+            Visible = false,
+            ColorScheme = TuiColorPalette.Default
         };
 
         _filterField = new TextField
@@ -99,10 +104,7 @@ internal sealed class SqlQueryScreen : Window
             Y = Pos.AnchorEnd(1),
             Width = Dim.Fill(),
             Height = 1,
-            ColorScheme = new ColorScheme
-            {
-                Normal = Application.Driver.MakeAttribute(Color.White, Color.Blue)
-            }
+            ColorScheme = TuiColorPalette.StatusBar_Default
         };
 
         Add(queryFrame, _filterFrame, _resultsTable, _statusLabel);
@@ -127,7 +129,7 @@ internal sealed class SqlQueryScreen : Window
 
     private async Task LoadProfileInfoAsync()
     {
-        using var store = new ProfileStore();
+        var store = _session.GetProfileStore();
         var collection = await store.LoadAsync(CancellationToken.None);
         var profile = collection.ActiveProfile;
 
@@ -211,21 +213,30 @@ internal sealed class SqlQueryScreen : Window
             return;
         }
 
-        _statusLabel.Text = "Executing query...";
-        Application.Refresh();
+        TuiDebugLog.Log($"Starting query execution for: {_environmentUrl}");
 
         try
         {
+            // Status: Connecting
+            UpdateStatus("Connecting to Dataverse...");
+            TuiDebugLog.Log("Getting SQL query service...");
+
             var service = await _session.GetSqlQueryServiceAsync(_environmentUrl, CancellationToken.None);
+            TuiDebugLog.Log("Got service, executing query...");
+
+            // Status: Executing
+            UpdateStatus("Executing query...");
 
             var request = new SqlQueryRequest
             {
                 Sql = sql,
-                PageNumber = 1,
+                // Don't set PageNumber for initial query - Dataverse rejects TOP with paging
+                PageNumber = null,
                 PagingCookie = null
             };
 
             var result = await service.ExecuteAsync(request, CancellationToken.None);
+            TuiDebugLog.Log($"Query complete: {result.Result.Count} rows in {result.Result.ExecutionTimeMs}ms");
 
             // Update UI on main thread
             Application.MainLoop?.Invoke(() =>
@@ -244,14 +255,21 @@ internal sealed class SqlQueryScreen : Window
             _ = SaveToHistoryAsync(sql, result.Result.Count, result.Result.ExecutionTimeMs);
 #pragma warning restore PPDS013
         }
-        catch (InvalidOperationException ex)
+        catch (Exception ex)
         {
+            TuiDebugLog.Log($"ERROR: {ex.GetType().Name}: {ex.Message}");
             Application.MainLoop?.Invoke(() => _statusLabel.Text = $"Error: {ex.Message}");
         }
-        catch (HttpRequestException ex)
+    }
+
+    private void UpdateStatus(string message)
+    {
+        TuiDebugLog.Log($"Status: {message}");
+        Application.MainLoop?.Invoke(() =>
         {
-            Application.MainLoop?.Invoke(() => _statusLabel.Text = $"Network error: {ex.Message}");
-        }
+            _statusLabel.Text = message;
+            Application.Refresh();
+        });
     }
 
     private async Task SaveToHistoryAsync(string sql, int rowCount, long executionTimeMs)
@@ -263,9 +281,21 @@ internal sealed class SqlQueryScreen : Window
             var historyService = await _session.GetQueryHistoryServiceAsync(_environmentUrl, CancellationToken.None);
             await historyService.AddQueryAsync(_environmentUrl, sql, rowCount, executionTimeMs);
         }
-        catch
+        catch (Exception ex)
         {
-            // Silently ignore history save failures
+            // History save failure is non-critical - show subtle warning but don't interrupt workflow
+            Application.MainLoop?.Invoke(() =>
+            {
+                // Append warning to existing status if there's a success message
+                var currentStatus = _statusLabel.Text?.ToString() ?? "";
+                if (!currentStatus.Contains("Warning"))
+                {
+                    _statusLabel.Text = $"{currentStatus} (Warning: history not saved)";
+                }
+            });
+
+            // Log to debug output for troubleshooting
+            System.Diagnostics.Debug.WriteLine($"[TUI] Failed to save query to history: {ex.Message}");
         }
     }
 

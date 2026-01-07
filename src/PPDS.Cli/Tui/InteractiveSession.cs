@@ -1,9 +1,15 @@
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using PPDS.Auth.Credentials;
+using PPDS.Auth.Profiles;
 using PPDS.Cli.Infrastructure;
+using PPDS.Cli.Services.Environment;
 using PPDS.Cli.Services.Export;
 using PPDS.Cli.Services.History;
+using PPDS.Cli.Services.Profile;
 using PPDS.Cli.Services.Query;
+using PPDS.Cli.Tui.Infrastructure;
 using PPDS.Dataverse.Pooling;
 
 namespace PPDS.Cli.Tui;
@@ -23,6 +29,7 @@ internal sealed class InteractiveSession : IAsyncDisposable
 {
     private readonly string _profileName;
     private readonly Action<DeviceCodeInfo>? _deviceCodeCallback;
+    private readonly ProfileStore _profileStore;
     private readonly SemaphoreSlim _lock = new(1, 1);
 
     private ServiceProvider? _serviceProvider;
@@ -38,10 +45,15 @@ internal sealed class InteractiveSession : IAsyncDisposable
     /// Creates a new interactive session for the specified profile.
     /// </summary>
     /// <param name="profileName">The profile name (null for active profile).</param>
+    /// <param name="profileStore">Shared profile store instance.</param>
     /// <param name="deviceCodeCallback">Callback for device code display.</param>
-    public InteractiveSession(string? profileName, Action<DeviceCodeInfo>? deviceCodeCallback = null)
+    public InteractiveSession(
+        string? profileName,
+        ProfileStore profileStore,
+        Action<DeviceCodeInfo>? deviceCodeCallback = null)
     {
         _profileName = profileName ?? string.Empty;
+        _profileStore = profileStore ?? throw new ArgumentNullException(nameof(profileStore));
         _deviceCodeCallback = deviceCodeCallback;
     }
 
@@ -169,6 +181,49 @@ internal sealed class InteractiveSession : IAsyncDisposable
             _lock.Release();
         }
     }
+
+    #region Local Services (no Dataverse connection required)
+
+    /// <summary>
+    /// Gets the profile service for profile management operations.
+    /// This service uses local file storage and does not require a Dataverse connection.
+    /// </summary>
+    /// <returns>The profile service.</returns>
+    public IProfileService GetProfileService()
+    {
+        return new ProfileService(_profileStore, NullLogger<ProfileService>.Instance);
+    }
+
+    /// <summary>
+    /// Gets the environment service for environment discovery and selection.
+    /// This service uses local file storage and does not require a Dataverse connection.
+    /// </summary>
+    /// <returns>The environment service.</returns>
+    public IEnvironmentService GetEnvironmentService()
+    {
+        return new EnvironmentService(_profileStore, NullLogger<EnvironmentService>.Instance);
+    }
+
+    /// <summary>
+    /// Gets the shared profile store for direct profile collection access.
+    /// Prefer using <see cref="GetProfileService"/> for business operations.
+    /// </summary>
+    /// <returns>The shared profile store.</returns>
+    public ProfileStore GetProfileStore()
+    {
+        return _profileStore;
+    }
+
+    /// <summary>
+    /// Gets the theme service for color scheme and environment detection.
+    /// </summary>
+    /// <returns>The theme service.</returns>
+    public ITuiThemeService GetThemeService()
+    {
+        return new TuiThemeService();
+    }
+
+    #endregion
 
     /// <inheritdoc />
     public async ValueTask DisposeAsync()

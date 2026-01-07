@@ -9,6 +9,7 @@ using PPDS.Cli.Services.Export;
 using PPDS.Cli.Services.History;
 using PPDS.Cli.Services.Profile;
 using PPDS.Cli.Services.Query;
+using PPDS.Cli.Tui.Infrastructure;
 using PPDS.Dataverse.Pooling;
 
 namespace PPDS.Cli.Services;
@@ -49,6 +50,9 @@ public static class ServiceRegistration
             var logger = sp.GetRequiredService<ILogger<PluginRegistrationService>>();
             return new PluginRegistrationService(pool, logger);
         });
+
+        // TUI theming
+        services.AddSingleton<ITuiThemeService, TuiThemeService>();
 
         // Connection service - requires profile-based token provider and environment ID
         // Registered as factory because it needs runtime values from ResolvedConnectionInfo

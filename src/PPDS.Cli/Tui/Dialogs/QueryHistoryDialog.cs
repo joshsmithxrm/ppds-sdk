@@ -1,4 +1,6 @@
+using PPDS.Cli.Infrastructure.Errors;
 using PPDS.Cli.Services.History;
+using PPDS.Cli.Tui.Infrastructure;
 using Terminal.Gui;
 
 namespace PPDS.Cli.Tui.Dialogs;
@@ -33,6 +35,7 @@ internal sealed class QueryHistoryDialog : Dialog
 
         Width = 80;
         Height = 22;
+        ColorScheme = TuiColorPalette.Default;
 
         // Search field
         var searchLabel = new Label("Search:")
@@ -157,6 +160,13 @@ internal sealed class QueryHistoryDialog : Dialog
                 : await _historyService.SearchHistoryAsync(_environmentUrl, searchPattern, 50);
 
             UpdateListView();
+        }
+        catch (PpdsException ex)
+        {
+            Application.MainLoop?.Invoke(() =>
+            {
+                _statusLabel.Text = $"Error loading history: {ex.UserMessage}";
+            });
         }
         catch (Exception ex)
         {

@@ -175,4 +175,5 @@ Hook: `pre-commit-validate.py` runs build + unit tests on commit (~10s)
 
 - `.claude/rules/DATAVERSE_PATTERNS.md` - Pool usage, parallelism
 - `.claude/rules/TESTING.md` - Test categories, CI behavior
+- `.claude/rules/TUI_TROUBLESHOOTING.md` - TUI debugging (check `~/.ppds/tui-debug.log`)
 - `docs/adr/` - Architecture decisions
