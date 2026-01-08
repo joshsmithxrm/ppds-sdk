@@ -318,13 +318,13 @@ public abstract class CliE2ETestBase : IAsyncLifetime
         var dir = new DirectoryInfo(startPath);
         while (dir != null)
         {
-            if (File.Exists(Path.Combine(dir.FullName, "PPDS.Sdk.sln")))
+            if (File.Exists(Path.Combine(dir.FullName, "PPDS.sln")))
                 return dir.FullName;
             dir = dir.Parent;
         }
 
         throw new InvalidOperationException(
-            $"Could not find PPDS.Sdk.sln starting from: {startPath}");
+            $"Could not find PPDS.sln starting from: {startPath}");
     }
 }
 
