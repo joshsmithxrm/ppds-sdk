@@ -306,7 +306,7 @@ public sealed class ProfileService : IProfileService
             }
 
             // Create credential provider
-            ICredentialProvider provider = CreateCredentialProvider(request, authMethod, cloud, deviceCodeCallback);
+            using ICredentialProvider provider = CreateCredentialProvider(request, authMethod, cloud, deviceCodeCallback);
 
             try
             {
@@ -345,10 +345,6 @@ public sealed class ProfileService : IProfileService
             {
                 await CleanupStoredCredentialAsync(credentialStore, storedCredentialKey, cancellationToken);
                 throw new PpdsAuthException(ErrorCodes.Auth.InvalidCredentials, $"Authentication failed: {ex.Message}", ex);
-            }
-            finally
-            {
-                provider.Dispose();
             }
 
             // Add to collection

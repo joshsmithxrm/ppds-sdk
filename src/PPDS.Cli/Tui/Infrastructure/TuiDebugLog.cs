@@ -52,6 +52,9 @@ internal static class TuiDebugLog
             if (File.Exists(LogPath))
                 File.Delete(LogPath);
         }
-        catch { }
+        catch
+        {
+            // Best-effort cleanup - logging utilities should never throw
+        }
     }
 }

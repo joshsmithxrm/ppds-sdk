@@ -36,6 +36,7 @@ public class EnvironmentServiceTests : IDisposable
         _store.Dispose();
         if (File.Exists(_tempFilePath))
         {
+            // Best-effort cleanup - test temp file deletion should not fail tests
             try { File.Delete(_tempFilePath); } catch { }
         }
     }
