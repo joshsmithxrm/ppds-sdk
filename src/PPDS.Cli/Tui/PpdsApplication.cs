@@ -54,6 +54,9 @@ internal sealed class PpdsApplication : IDisposable
         // (AuthenticationOutput.Writer defaults to Console.WriteLine which Terminal.Gui captures)
         AuthenticationOutput.Writer = null;
 
+        // Enable auth debug logging - redirect to TuiDebugLog for diagnostics
+        AuthDebugLog.Writer = msg => TuiDebugLog.Log($"[Auth] {msg}");
+
         Application.Init();
 
         try
@@ -66,6 +69,7 @@ internal sealed class PpdsApplication : IDisposable
         finally
         {
             Application.Shutdown();
+            AuthDebugLog.Reset();  // Clean up auth debug logging
             TuiDebugLog.Log("TUI shutdown, disposing session...");
 
             // Note: Sync-over-async is required here because Terminal.Gui's Application.Run()
