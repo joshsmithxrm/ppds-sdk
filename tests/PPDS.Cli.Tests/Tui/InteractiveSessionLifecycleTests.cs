@@ -174,7 +174,7 @@ public sealed class InteractiveSessionLifecycleTests : IDisposable
         // The re-warm is fire-and-forget, but we can verify the profile name
         // by calling GetServiceProviderAsync explicitly
         await session.GetServiceProviderAsync("https://env2.crm.dynamics.com");
-        Assert.True(_mockFactory.CreationLog.Any(c => c.ProfileName == "Profile2"));
+        Assert.Contains(_mockFactory.CreationLog, c => c.ProfileName == "Profile2");
     }
 
     [Fact]
