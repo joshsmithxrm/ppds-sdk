@@ -129,6 +129,6 @@ Bot instructions reference these Architecture Decision Records:
 
 ## Related Issues
 
-- [#231](https://github.com/joshsmithxrm/ppds-sdk/issues/231) - Tune code scanning tools to reduce noise
-- [#232](https://github.com/joshsmithxrm/ppds-sdk/issues/232) - ADR-0024 (style) - Prefer foreach over LINQ
-- [#246](https://github.com/joshsmithxrm/ppds-sdk/issues/246) - Analyzer triage process and PPDS013 refinement
+- [#231](https://github.com/joshsmithxrm/power-platform-developer-suite/issues/231) - Tune code scanning tools to reduce noise
+- [#232](https://github.com/joshsmithxrm/power-platform-developer-suite/issues/232) - ADR-0024 (style) - Prefer foreach over LINQ
+- [#246](https://github.com/joshsmithxrm/power-platform-developer-suite/issues/246) - Analyzer triage process and PPDS013 refinement

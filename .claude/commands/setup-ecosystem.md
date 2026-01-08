@@ -28,8 +28,7 @@ Multi-select (AskUserQuestion with multiSelect: true):
 
 | Option | Description |
 |--------|-------------|
-| `sdk` | NuGet packages & CLI (core) |
-| `extension` | VS Code extension |
+| `ppds` | NuGet packages, CLI & VS Code extension (monorepo) |
 | `tools` | PowerShell module |
 | `alm` | CI/CD templates |
 | `demo` | Reference implementation |
@@ -56,8 +55,7 @@ For each selected repo:
 4. If not exists: Clone from GitHub
 
 ```bash
-git clone https://github.com/joshsmithxrm/ppds-sdk.git {base}/sdk
-git clone https://github.com/joshsmithxrm/power-platform-developer-suite.git {base}/extension
+git clone https://github.com/joshsmithxrm/power-platform-developer-suite.git {base}/ppds
 git clone https://github.com/joshsmithxrm/ppds-tools.git {base}/tools
 git clone https://github.com/joshsmithxrm/ppds-alm.git {base}/alm
 git clone https://github.com/joshsmithxrm/ppds-demo.git {base}/demo
@@ -69,8 +67,7 @@ Generate `{base}/ppds.code-workspace`:
 ```json
 {
     "folders": [
-        { "path": "sdk" },
-        { "path": "extension" },
+        { "path": "ppds" },
         { "path": "tools" },
         { "path": "alm" },
         { "path": "demo" }
@@ -84,7 +81,7 @@ Only include folders that were actually cloned.
 
 Run the installer script:
 ```powershell
-& "{base}/sdk/scripts/Install-PpdsTerminalProfile.ps1" -PpdsBasePath "{base}"
+& "{base}/ppds/scripts/Install-PpdsTerminalProfile.ps1" -PpdsBasePath "{base}"
 ```
 
 This installs:
@@ -209,8 +206,8 @@ Display what was set up:
 Setup complete!
 
 Repositories cloned:
-  - sdk
-  - extension
+  - ppds
+  - tools
 
 Developer tools configured:
   - VS Code workspace: {base}/ppds.code-workspace
@@ -239,8 +236,7 @@ Next steps:
 
 | Shorthand | GitHub URL |
 |-----------|------------|
-| `sdk` | `https://github.com/joshsmithxrm/ppds-sdk.git` |
-| `extension` | `https://github.com/joshsmithxrm/power-platform-developer-suite.git` |
+| `ppds` | `https://github.com/joshsmithxrm/power-platform-developer-suite.git` |
 | `tools` | `https://github.com/joshsmithxrm/ppds-tools.git` |
 | `alm` | `https://github.com/joshsmithxrm/ppds-alm.git` |
 | `demo` | `https://github.com/joshsmithxrm/ppds-demo.git` |
@@ -267,8 +263,8 @@ User: [selects all: workspace, terminal, sound, status line]
 
 Claude: Setting up C:\VS\ppds...
 
-Cloning sdk... done
-Cloning extension... done
+Cloning ppds... done
+Cloning tools... done
 Creating ppds.code-workspace... done
 Installing terminal profile... done
 Configuring sound notification... done

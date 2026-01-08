@@ -1,10 +1,10 @@
-# PPDS SDK
+# Power Platform Developer Suite
 
-[![Build](https://github.com/joshsmithxrm/ppds-sdk/actions/workflows/build.yml/badge.svg)](https://github.com/joshsmithxrm/ppds-sdk/actions/workflows/build.yml)
-[![codecov](https://codecov.io/gh/joshsmithxrm/ppds-sdk/graph/badge.svg)](https://codecov.io/gh/joshsmithxrm/ppds-sdk)
+[![Build](https://github.com/joshsmithxrm/power-platform-developer-suite/actions/workflows/build.yml/badge.svg)](https://github.com/joshsmithxrm/power-platform-developer-suite/actions/workflows/build.yml)
+[![codecov](https://codecov.io/gh/joshsmithxrm/power-platform-developer-suite/graph/badge.svg)](https://codecov.io/gh/joshsmithxrm/power-platform-developer-suite)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-NuGet packages for Microsoft Dataverse development. Part of the [Power Platform Developer Suite](https://github.com/joshsmithxrm/power-platform-developer-suite) ecosystem.
+A comprehensive development platform for Microsoft Dataverse and Power Platform. Includes NuGet packages, CLI tool, VS Code extension, and TUI application.
 
 ## Packages
 
@@ -202,7 +202,7 @@ See [templates/claude/INSTALL.md](templates/claude/INSTALL.md) for installation 
 
 | Project | Description |
 |---------|-------------|
-| [power-platform-developer-suite](https://github.com/joshsmithxrm/power-platform-developer-suite) | VS Code extension |
+| [ppds-docs](https://github.com/joshsmithxrm/ppds-docs) | Documentation site |
 | [ppds-tools](https://github.com/joshsmithxrm/ppds-tools) | PowerShell deployment module |
 | [ppds-alm](https://github.com/joshsmithxrm/ppds-alm) | CI/CD pipeline templates |
 | [ppds-demo](https://github.com/joshsmithxrm/ppds-demo) | Reference implementation |

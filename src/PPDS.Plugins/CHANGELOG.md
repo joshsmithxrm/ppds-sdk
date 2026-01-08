@@ -59,8 +59,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Full XML documentation
 - Comprehensive unit test suite
 
-[Unreleased]: https://github.com/joshsmithxrm/ppds-sdk/compare/Plugins-v2.0.0...HEAD
-[2.0.0]: https://github.com/joshsmithxrm/ppds-sdk/compare/Plugins-v1.1.1...Plugins-v2.0.0
-[1.1.1]: https://github.com/joshsmithxrm/ppds-sdk/compare/Plugins-v1.1.0...Plugins-v1.1.1
-[1.1.0]: https://github.com/joshsmithxrm/ppds-sdk/compare/Plugins-v1.0.0...Plugins-v1.1.0
-[1.0.0]: https://github.com/joshsmithxrm/ppds-sdk/releases/tag/Plugins-v1.0.0
+[Unreleased]: https://github.com/joshsmithxrm/power-platform-developer-suite/compare/Plugins-v2.0.0...HEAD
+[2.0.0]: https://github.com/joshsmithxrm/power-platform-developer-suite/compare/Plugins-v1.1.1...Plugins-v2.0.0
+[1.1.1]: https://github.com/joshsmithxrm/power-platform-developer-suite/compare/Plugins-v1.1.0...Plugins-v1.1.1
+[1.1.0]: https://github.com/joshsmithxrm/power-platform-developer-suite/compare/Plugins-v1.0.0...Plugins-v1.1.0
+[1.0.0]: https://github.com/joshsmithxrm/power-platform-developer-suite/releases/tag/Plugins-v1.0.0

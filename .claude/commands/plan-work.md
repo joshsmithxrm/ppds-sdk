@@ -303,7 +303,7 @@ Note: .claude/session-prompt.md has been added to .gitignore
 
 **Issue not found:**
 ```
-Error: Issue #999 not found in joshsmithxrm/ppds-sdk
+Error: Issue #999 not found in joshsmithxrm/power-platform-developer-suite
 Continuing with remaining issues...
 ```
 

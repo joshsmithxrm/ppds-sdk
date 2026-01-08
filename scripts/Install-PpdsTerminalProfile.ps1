@@ -84,7 +84,7 @@ if (-not (Test-Path $profileDir)) {
 $profileContent = @"
 # PPDS Terminal Profile
 # Installed by Install-PpdsTerminalProfile.ps1
-# https://github.com/joshsmithxrm/ppds-sdk
+# https://github.com/joshsmithxrm/power-platform-developer-suite
 
 `$script:PpdsBasePath = "$PpdsBasePath"
 

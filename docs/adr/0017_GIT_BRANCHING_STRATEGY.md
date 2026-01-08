@@ -6,7 +6,7 @@
 
 ## Context
 
-The ppds-sdk repository uses git worktrees for parallel development. Without documented conventions:
+The power-platform-developer-suite repository uses git worktrees for parallel development. Without documented conventions:
 - Branch names are inconsistent
 - Worktree locations vary
 - Unclear when to create worktrees vs branches
