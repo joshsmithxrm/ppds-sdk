@@ -2,6 +2,7 @@
 
 [![Build](https://github.com/joshsmithxrm/power-platform-developer-suite/actions/workflows/build.yml/badge.svg)](https://github.com/joshsmithxrm/power-platform-developer-suite/actions/workflows/build.yml)
 [![codecov](https://codecov.io/gh/joshsmithxrm/power-platform-developer-suite/graph/badge.svg)](https://codecov.io/gh/joshsmithxrm/power-platform-developer-suite)
+[![Docs](https://img.shields.io/badge/docs-ppds--docs-blue)](https://joshsmithxrm.github.io/ppds-docs/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 A comprehensive development platform for Microsoft Dataverse and Power Platform. Includes NuGet packages, CLI tool, VS Code extension, and TUI application.
@@ -128,11 +129,19 @@ See [PPDS.Migration documentation](src/PPDS.Migration/README.md) for details.
 
 ## PPDS.Cli
 
-Unified CLI tool for Dataverse operations. Install as a .NET global tool:
+Interactive TUI and CLI tool for Dataverse operations. Install as a .NET global tool:
 
 ```bash
 dotnet tool install -g PPDS.Cli
 ```
+
+Running `ppds` without arguments launches the interactive TUI:
+
+```bash
+ppds  # Launches interactive TUI with guided workflows
+```
+
+Or run specific commands directly:
 
 ```bash
 # Create an auth profile (opens browser for login)
@@ -202,7 +211,7 @@ See [templates/claude/INSTALL.md](templates/claude/INSTALL.md) for installation 
 
 | Project | Description |
 |---------|-------------|
-| [ppds-docs](https://github.com/joshsmithxrm/ppds-docs) | Documentation site |
+| [ppds-docs](https://joshsmithxrm.github.io/ppds-docs/) | Documentation site ([source](https://github.com/joshsmithxrm/ppds-docs)) |
 | [ppds-tools](https://github.com/joshsmithxrm/ppds-tools) | PowerShell deployment module |
 | [ppds-alm](https://github.com/joshsmithxrm/ppds-alm) | CI/CD pipeline templates |
 | [ppds-demo](https://github.com/joshsmithxrm/ppds-demo) | Reference implementation |
