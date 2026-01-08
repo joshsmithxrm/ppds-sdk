@@ -10,7 +10,7 @@
     }
   ],
   "settings": {
-    "dotnet.defaultSolution": "PPDS.Sdk.sln",
+    "dotnet.defaultSolution": "PPDS.sln",
     "files.exclude": {
       "**/bin": true,
       "**/obj": true,
@@ -197,7 +197,7 @@
         "label": "build-dotnet",
         "type": "shell",
         "command": "dotnet",
-        "args": ["build", "PPDS.Sdk.sln", "--configuration", "Debug"],
+        "args": ["build", "PPDS.sln", "--configuration", "Debug"],
         "options": {
           "cwd": "${workspaceFolder:PPDS (Root)}"
         },
@@ -215,7 +215,7 @@
         "label": "rebuild-dotnet",
         "type": "shell",
         "command": "dotnet",
-        "args": ["build", "PPDS.Sdk.sln", "--configuration", "Debug", "--no-incremental"],
+        "args": ["build", "PPDS.sln", "--configuration", "Debug", "--no-incremental"],
         "options": {
           "cwd": "${workspaceFolder:PPDS (Root)}"
         },
@@ -230,7 +230,7 @@
         "label": "test-dotnet-unit",
         "type": "shell",
         "command": "dotnet",
-        "args": ["test", "PPDS.Sdk.sln", "--filter", "Category!=Integration"],
+        "args": ["test", "PPDS.sln", "--filter", "Category!=Integration"],
         "options": {
           "cwd": "${workspaceFolder:PPDS (Root)}"
         },
@@ -245,7 +245,7 @@
         "label": "test-dotnet-integration",
         "type": "shell",
         "command": "dotnet",
-        "args": ["test", "PPDS.Sdk.sln", "--filter", "Category=Integration"],
+        "args": ["test", "PPDS.sln", "--filter", "Category=Integration"],
         "options": {
           "cwd": "${workspaceFolder:PPDS (Root)}"
         },
@@ -260,7 +260,7 @@
         "label": "test-dotnet-tui",
         "type": "shell",
         "command": "dotnet",
-        "args": ["test", "PPDS.Sdk.sln", "--filter", "Category=TuiUnit"],
+        "args": ["test", "PPDS.sln", "--filter", "Category=TuiUnit"],
         "options": {
           "cwd": "${workspaceFolder:PPDS (Root)}"
         },
@@ -275,7 +275,7 @@
         "label": "test-dotnet-all",
         "type": "shell",
         "command": "dotnet",
-        "args": ["test", "PPDS.Sdk.sln"],
+        "args": ["test", "PPDS.sln"],
         "options": {
           "cwd": "${workspaceFolder:PPDS (Root)}"
         },

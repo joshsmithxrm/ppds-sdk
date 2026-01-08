@@ -145,7 +145,7 @@ public sealed class DaemonTestFixture : IAsyncLifetime, IAsyncDisposable
 
         while (dir != null)
         {
-            if (File.Exists(Path.Combine(dir.FullName, "PPDS.Sdk.sln")))
+            if (File.Exists(Path.Combine(dir.FullName, "PPDS.sln")))
             {
                 var cliPath = Path.Combine(dir.FullName, "src", "PPDS.Cli", "PPDS.Cli.csproj");
                 if (File.Exists(cliPath))
@@ -157,7 +157,7 @@ public sealed class DaemonTestFixture : IAsyncLifetime, IAsyncDisposable
         }
 
         throw new InvalidOperationException(
-            $"Could not find PPDS.Sdk.sln starting from: {testDir}");
+            $"Could not find PPDS.sln starting from: {testDir}");
     }
 }
 

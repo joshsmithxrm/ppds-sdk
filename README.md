@@ -4,10 +4,35 @@
 [![codecov](https://codecov.io/gh/joshsmithxrm/power-platform-developer-suite/graph/badge.svg)](https://codecov.io/gh/joshsmithxrm/power-platform-developer-suite)
 [![Docs](https://img.shields.io/badge/docs-ppds--docs-blue)](https://joshsmithxrm.github.io/ppds-docs/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![.NET](https://img.shields.io/badge/.NET-8.0%2B-512BD4)](https://dotnet.microsoft.com/)
+[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
 
-A comprehensive development platform for Microsoft Dataverse and Power Platform. Includes NuGet packages, CLI tool, VS Code extension, and TUI application.
+Pro-grade tooling for Power Platform developers. CLI, TUI, MCP server, VS Code extension, and NuGet libraries.
 
-## Packages
+## Quick Start
+
+```bash
+# Install the CLI tool
+dotnet tool install -g PPDS.Cli
+
+# Launch interactive TUI
+ppds
+
+# Or run commands directly
+ppds auth create --name dev
+ppds env select --environment "My Environment"
+ppds data export --schema schema.xml --output data.zip
+```
+
+## Platform Overview
+
+| Component | Type | Install |
+|-----------|------|---------|
+| **ppds** | CLI + TUI | `dotnet tool install -g PPDS.Cli` |
+| **ppds-mcp-server** | MCP Server | `dotnet tool install -g PPDS.Mcp` |
+| **VS Code Extension** | IDE Extension | [Marketplace](https://marketplace.visualstudio.com/items?itemName=JoshSmithXRM.power-platform-developer-suite) |
+
+### NuGet Libraries
 
 | Package | NuGet | Description |
 |---------|-------|-------------|
@@ -15,9 +40,10 @@ A comprehensive development platform for Microsoft Dataverse and Power Platform.
 | **PPDS.Dataverse** | [![NuGet](https://img.shields.io/nuget/v/PPDS.Dataverse.svg)](https://www.nuget.org/packages/PPDS.Dataverse/) | High-performance connection pooling and bulk operations |
 | **PPDS.Migration** | [![NuGet](https://img.shields.io/nuget/v/PPDS.Migration.svg)](https://www.nuget.org/packages/PPDS.Migration/) | High-performance data migration engine |
 | **PPDS.Auth** | [![NuGet](https://img.shields.io/nuget/v/PPDS.Auth.svg)](https://www.nuget.org/packages/PPDS.Auth/) | Authentication profiles and credential management |
-| **PPDS.Cli** | [![NuGet](https://img.shields.io/nuget/v/PPDS.Cli.svg)](https://www.nuget.org/packages/PPDS.Cli/) | Unified CLI tool (.NET tool) |
+| **PPDS.Cli** | [![NuGet](https://img.shields.io/nuget/v/PPDS.Cli.svg)](https://www.nuget.org/packages/PPDS.Cli/) | CLI tool with TUI (.NET tool) |
+| **PPDS.Mcp** | [![NuGet](https://img.shields.io/nuget/v/PPDS.Mcp.svg)](https://www.nuget.org/packages/PPDS.Mcp/) | MCP server for AI assistants (.NET tool) |
 
-## Compatibility
+### Compatibility
 
 | Package | Target Frameworks |
 |---------|-------------------|
@@ -26,6 +52,65 @@ A comprehensive development platform for Microsoft Dataverse and Power Platform.
 | PPDS.Migration | net8.0, net9.0, net10.0 |
 | PPDS.Auth | net8.0, net9.0, net10.0 |
 | PPDS.Cli | net8.0, net9.0, net10.0 |
+| PPDS.Mcp | net8.0, net9.0, net10.0 |
+
+---
+
+## Interactive TUI
+
+Running `ppds` without arguments launches the interactive Terminal User Interface:
+
+```bash
+ppds  # Launches interactive TUI with guided workflows
+```
+
+The TUI provides a menu-driven interface for all PPDS operations, ideal for exploration and one-off tasks.
+
+---
+
+## MCP Server
+
+The MCP server enables AI assistants like Claude Code to interact with Dataverse:
+
+```bash
+# Install the MCP server
+dotnet tool install -g PPDS.Mcp
+
+# Add to Claude Code MCP settings
+ppds-mcp-server
+```
+
+**Capabilities:**
+- Query Dataverse using natural language
+- Explore entity metadata
+- Analyze plugin registrations
+- Execute FetchXML and SQL queries
+
+---
+
+## VS Code Extension
+
+The VS Code extension provides IDE integration via JSON-RPC with the PPDS daemon:
+
+- Environment and profile management
+- Query execution with results view
+- Plugin deployment workflows
+
+Install from the [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=JoshSmithXRM.power-platform-developer-suite).
+
+---
+
+## CLI Commands
+
+| Command | Purpose |
+|---------|---------|
+| `ppds auth` | Authentication profiles (create, list, select, delete, update, who) |
+| `ppds env` | Environment discovery and selection (list, select, who) |
+| `ppds data` | Data operations (export, import, copy, schema, users, load, truncate) |
+| `ppds plugins` | Plugin registration (extract, deploy, diff, list, clean) |
+| `ppds metadata` | Entity browsing (entities, attributes, relationships, keys, optionsets) |
+| `ppds query` | Execute queries (fetch, sql) |
+| `ppds serve` | Run RPC daemon for VS Code extension |
 
 ---
 
@@ -127,48 +212,6 @@ See [PPDS.Migration documentation](src/PPDS.Migration/README.md) for details.
 
 ---
 
-## PPDS.Cli
-
-Interactive TUI and CLI tool for Dataverse operations. Install as a .NET global tool:
-
-```bash
-dotnet tool install -g PPDS.Cli
-```
-
-Running `ppds` without arguments launches the interactive TUI:
-
-```bash
-ppds  # Launches interactive TUI with guided workflows
-```
-
-Or run specific commands directly:
-
-```bash
-# Create an auth profile (opens browser for login)
-ppds auth create --name dev
-
-# Select your environment
-ppds env select --environment "My Environment"
-
-# Export data
-ppds data export --schema schema.xml --output data.zip
-
-# Import data
-ppds data import --data data.zip --mode Upsert
-```
-
-**Commands:**
-- `ppds auth` - Authentication profiles (create, list, select, delete, update, who)
-- `ppds env` - Environment discovery and selection (list, select, who)
-- `ppds data` - Data operations (export, import, copy, schema, users, load)
-- `ppds plugins` - Plugin registration (extract, deploy, diff, list, clean)
-- `ppds metadata` - Entity browsing (entities, attributes, relationships, keys, optionsets)
-- `ppds query` - Execute queries (fetch, sql)
-
-See [PPDS.Cli documentation](src/PPDS.Cli/README.md) for details.
-
----
-
 ## Development
 
 ### Prerequisites
@@ -195,7 +238,7 @@ This provides:
 
 ```bash
 # Build .NET solution
-dotnet build PPDS.Sdk.sln
+dotnet build PPDS.sln
 
 # Build extension
 cd extension && npm run compile
@@ -230,22 +273,13 @@ dotnet test --filter Category=TuiUnit
 
 ## Architecture Decisions
 
-Key design decisions are documented as ADRs:
+Key design decisions are documented as ADRs in [docs/adr/](docs/adr/README.md):
 
-- [ADR-0001: Disable Affinity Cookie by Default](docs/adr/0001_DISABLE_AFFINITY_COOKIE.md)
 - [ADR-0002: Multi-Connection Pooling](docs/adr/0002_MULTI_CONNECTION_POOLING.md)
-- [ADR-0003: Throttle-Aware Connection Selection](docs/adr/0003_THROTTLE_AWARE_SELECTION.md)
-- [ADR-0004: Throttle Recovery Strategy](docs/adr/0004_THROTTLE_RECOVERY_STRATEGY.md)
 - [ADR-0005: DOP-Based Parallelism](docs/adr/0005_DOP_BASED_PARALLELISM.md)
-- [ADR-0006: Connection Source Abstraction](docs/adr/0006_CONNECTION_SOURCE_ABSTRACTION.md)
 - [ADR-0007: Unified CLI and Shared Authentication](docs/adr/0007_UNIFIED_CLI_AND_AUTH.md)
 - [ADR-0008: CLI Output Architecture](docs/adr/0008_CLI_OUTPUT_ARCHITECTURE.md)
-- [ADR-0009: CLI Command Taxonomy](docs/adr/0009_CLI_COMMAND_TAXONOMY.md)
-- [ADR-0010: Published vs Unpublished Default](docs/adr/0010_PUBLISHED_UNPUBLISHED_DEFAULT.md)
-- [ADR-0011: Deployment Settings Format](docs/adr/0011_DEPLOYMENT_SETTINGS_FORMAT.md)
-- [ADR-0012: Hybrid Filter Design](docs/adr/0012_HYBRID_FILTER_DESIGN.md)
-- [ADR-0013: CLI Dry-Run Convention](docs/adr/0013_CLI_DRY_RUN_CONVENTION.md)
-- [ADR-0014: CSV Mapping Schema](docs/adr/0014_CSV_MAPPING_SCHEMA.md)
+- [ADR-0015: Application Service Layer](docs/adr/0015_APPLICATION_SERVICE_LAYER.md)
 
 ## Patterns
 
@@ -274,6 +308,10 @@ See [templates/claude/INSTALL.md](templates/claude/INSTALL.md) for installation 
 | [ppds-tools](https://github.com/joshsmithxrm/ppds-tools) | PowerShell deployment module |
 | [ppds-alm](https://github.com/joshsmithxrm/ppds-alm) | CI/CD pipeline templates |
 | [ppds-demo](https://github.com/joshsmithxrm/ppds-demo) | Reference implementation |
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines on contributing to PPDS.
 
 ## License
 

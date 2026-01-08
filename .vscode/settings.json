@@ -1,5 +1,5 @@
 {
-  "dotnet.defaultSolution": "PPDS.Sdk.sln",
+  "dotnet.defaultSolution": "PPDS.sln",
   "files.exclude": {
     "**/bin": true,
     "**/obj": true,
