@@ -172,4 +172,4 @@ We follow **coordinated disclosure**:
 
 ---
 
-**Thank you for helping keep PPDS SDK secure!**
+**Thank you for helping keep PPDS secure!**

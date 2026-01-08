@@ -1,8 +1,8 @@
-# PPDS SDK Roadmap
+# PPDS Feature Roadmap
 
 ## Epic: Extension Feature Parity
 
-**Goal:** SDK CLI parity with VS Code extension to enable CLI daemon migration (Extension issues #51-54).
+**Goal:** CLI parity with VS Code extension to enable CLI daemon migration (Extension issues #51-54).
 
 **Status:** In Progress
 

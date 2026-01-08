@@ -2,7 +2,7 @@
 
 ## Overview
 
-This document records the baseline code coverage for each PPDS SDK package, used to track progress toward the targets defined in [Issue #55](https://github.com/joshsmithxrm/power-platform-developer-suite/issues/55).
+This document records the baseline code coverage for each PPDS package, used to track progress toward the targets defined in [Issue #55](https://github.com/joshsmithxrm/power-platform-developer-suite/issues/55).
 
 ## Current Baseline
 

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Pre-commit validation hook for PPDS SDK.
+Pre-commit validation hook for PPDS.
 Runs dotnet build and test before allowing git commit.
 
 Note: This hook is only triggered for 'git commit' commands via the

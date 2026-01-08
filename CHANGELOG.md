@@ -1,4 +1,4 @@
-# PPDS SDK Changelog Index
+# PPDS Changelog Index
 
 This repository contains multiple packages with independent release cycles.
 

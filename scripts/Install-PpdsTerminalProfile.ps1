@@ -94,7 +94,7 @@ $profileContent = @"
 .SYNOPSIS
     Runs the ppds CLI from your current worktree automatically.
 .DESCRIPTION
-    When you're in a PPDS SDK worktree (sdk/, sdk-tui-ux/, etc.), this runs
+    When you're in a PPDS worktree (ppds/, ppds-feature-x/, etc.), this runs
     that worktree's CLI via 'dotnet run'. Outside worktrees, uses the global tool.
 #>
 function ppds {

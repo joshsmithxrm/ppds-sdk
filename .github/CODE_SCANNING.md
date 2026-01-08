@@ -1,6 +1,6 @@
 # Code Scanning Configuration
 
-This document explains how code scanning tools are configured for the PPDS SDK repository.
+This document explains how code scanning tools are configured for the PPDS repository.
 
 ## Overview
 

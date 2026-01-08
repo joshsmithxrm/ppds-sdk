@@ -1,6 +1,6 @@
 # PPDS Roadmap - Issue Triage & Project Management
 
-**The [PPDS Roadmap](https://github.com/users/joshsmithxrm/projects/3) is a public GitHub Project that tracks work across the PPDS SDK repository.**
+**The [PPDS Roadmap](https://github.com/users/joshsmithxrm/projects/3) is a public GitHub Project that tracks work across the PPDS repository.**
 
 This document provides complete guidelines for triaging issues, using project fields, and managing the roadmap effectively.
 
