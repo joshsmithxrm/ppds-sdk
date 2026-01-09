@@ -45,7 +45,7 @@ public sealed class WindowsTerminalWorkerSpawner : IWorkerSpawner
 Write-Host 'Worker session for issue #{request.IssueNumber}' -ForegroundColor Cyan
 Write-Host 'Prompt file: {request.PromptFilePath}' -ForegroundColor Gray
 Write-Host ''
-claude
+claude --permission-mode dontAsk
 ";
         File.WriteAllText(launcherPath, launcherContent);
 
