@@ -23,7 +23,7 @@ public static class UpdateCommand
 
         var statusOption = new Option<string>("--status", "-s")
         {
-            Description = "New status: planning, planning_complete, working, stuck, paused, complete",
+            Description = "New status: registered, planning, planning_complete, working, stuck, paused, complete, cancelled",
             Required = true
         };
 
@@ -74,7 +74,7 @@ public static class UpdateCommand
         {
             if (!Enum.TryParse<SessionStatus>(statusStr, true, out var status))
             {
-                throw new ArgumentException($"Invalid status '{statusStr}'. Valid values: working, stuck, paused, complete, cancelled");
+                throw new ArgumentException($"Invalid status '{statusStr}'. Valid values: registered, planning, planningcomplete, working, stuck, paused, complete, cancelled");
             }
 
             if (status == SessionStatus.Stuck && string.IsNullOrEmpty(reason))

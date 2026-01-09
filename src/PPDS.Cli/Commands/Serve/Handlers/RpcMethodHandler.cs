@@ -920,7 +920,7 @@ public class RpcMethodHandler
         {
             throw new RpcException(
                 ErrorCodes.Validation.InvalidArguments,
-                $"Invalid status '{status}'. Valid values: registered, working, stuck, paused, complete, cancelled");
+                $"Invalid status '{status}'. Valid values: registered, planning, planningcomplete, working, stuck, paused, complete, cancelled");
         }
 
         var spawner = new Services.Session.WindowsTerminalWorkerSpawner();

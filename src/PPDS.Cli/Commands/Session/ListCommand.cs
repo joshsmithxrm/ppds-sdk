@@ -78,8 +78,9 @@ public static class ListCommand
 
                         var statusIcon = isStale ? "[?]" : session.Status switch
                         {
+                            SessionStatus.Registered => "[ ]",
                             SessionStatus.Planning => "[~]",
-                            SessionStatus.PlanningComplete => "[~]",
+                            SessionStatus.PlanningComplete => "[P]",
                             SessionStatus.Working => "[*]",
                             SessionStatus.Stuck => "[!]",
                             SessionStatus.Paused => "[-]",

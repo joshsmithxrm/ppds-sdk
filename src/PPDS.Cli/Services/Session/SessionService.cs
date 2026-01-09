@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.Extensions.Logging;
+using PPDS.Cli.Infrastructure.Errors;
 using PPDS.Cli.Infrastructure.Progress;
 
 namespace PPDS.Cli.Services.Session;
@@ -64,9 +65,17 @@ public sealed class SessionService : ISessionService
         progress ??= NullProgressReporter.Instance;
         var sessionId = issueNumber.ToString();
 
+        // Check spawner availability first
+        if (!_workerSpawner.IsAvailable())
+        {
+            throw new PpdsException(
+                ErrorCodes.Operation.NotSupported,
+                "Worker spawner is not available. On Windows, ensure Windows Terminal (wt.exe) is installed and in your PATH.");
+        }
+
         if (_sessions.ContainsKey(sessionId))
         {
-            throw new InvalidOperationException($"Session for issue #{issueNumber} already exists");
+            throw new PpdsException(ErrorCodes.Session.AlreadyExists, $"Session for issue #{issueNumber} already exists");
         }
 
         // Phase 1: Fetch issue from GitHub
@@ -176,7 +185,7 @@ public sealed class SessionService : ISessionService
     {
         if (!_sessions.TryGetValue(sessionId, out var session))
         {
-            throw new KeyNotFoundException($"Session '{sessionId}' not found");
+            throw new PpdsException(ErrorCodes.Session.NotFound, $"Session '{sessionId}' not found");
         }
 
         session = session with
@@ -202,7 +211,7 @@ public sealed class SessionService : ISessionService
     {
         if (!_sessions.TryGetValue(sessionId, out var session))
         {
-            throw new KeyNotFoundException($"Session '{sessionId}' not found");
+            throw new PpdsException(ErrorCodes.Session.NotFound, $"Session '{sessionId}' not found");
         }
 
         if (session.Status == SessionStatus.Paused)
@@ -227,7 +236,7 @@ public sealed class SessionService : ISessionService
     {
         if (!_sessions.TryGetValue(sessionId, out var session))
         {
-            throw new KeyNotFoundException($"Session '{sessionId}' not found");
+            throw new PpdsException(ErrorCodes.Session.NotFound, $"Session '{sessionId}' not found");
         }
 
         if (session.Status != SessionStatus.Paused)
@@ -255,7 +264,7 @@ public sealed class SessionService : ISessionService
     {
         if (!_sessions.TryGetValue(sessionId, out var session))
         {
-            throw new KeyNotFoundException($"Session '{sessionId}' not found");
+            throw new PpdsException(ErrorCodes.Session.NotFound, $"Session '{sessionId}' not found");
         }
 
         session = session with
@@ -307,7 +316,7 @@ public sealed class SessionService : ISessionService
     {
         if (!_sessions.TryGetValue(sessionId, out var session))
         {
-            throw new KeyNotFoundException($"Session '{sessionId}' not found");
+            throw new PpdsException(ErrorCodes.Session.NotFound, $"Session '{sessionId}' not found");
         }
 
         session = session with
@@ -352,7 +361,7 @@ public sealed class SessionService : ISessionService
     {
         if (!_sessions.TryGetValue(sessionId, out var session))
         {
-            throw new KeyNotFoundException($"Session '{sessionId}' not found");
+            throw new PpdsException(ErrorCodes.Session.NotFound, $"Session '{sessionId}' not found");
         }
 
         session = session with
