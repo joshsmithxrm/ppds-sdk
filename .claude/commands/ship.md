@@ -107,23 +107,42 @@ After PR creation, poll for all automated reviewers to complete:
 # 1. Wait for CI to complete
 gh pr checks --watch
 
-# 2. Poll for Copilot review
-gh api repos/{owner}/{repo}/pulls/{pr}/reviews \
-  --jq '.[] | select(.user.login | test("copilot|github-copilot"))'
-
-# 3. Poll for Gemini review
-gh api repos/{owner}/{repo}/pulls/{pr}/reviews \
-  --jq '.[] | select(.user.login | test("gemini|google-gemini"))'
-
-# 4. Check for CodeQL alerts
+# 2. Check for CodeQL alerts
 gh api "repos/{owner}/{repo}/code-scanning/alerts?ref=refs/pull/{pr}/merge&state=open"
 ```
 
-**Wait until ALL of these complete before proceeding to fix issues:**
-- GitHub Actions CI
-- Copilot review comments (if enabled)
-- Gemini Code Assist review (if enabled)
-- CodeQL security scan
+**Wait until CI and CodeQL complete before proceeding.**
+
+### 6. Enumerate ALL Bot Reviewers
+
+**CRITICAL: Before addressing ANY comments, enumerate all reviewers:**
+
+```bash
+# List all reviewers and their comment counts
+gh api repos/{owner}/{repo}/pulls/{pr}/comments \
+  --jq '[.[] | .user.login] | group_by(.) | map({reviewer: .[0], count: length}) | .[]'
+```
+
+**Checklist - confirm you have captured comments from ALL:**
+- [ ] Copilot (user.login contains "Copilot" or "copilot")
+- [ ] Gemini (user.login contains "gemini")
+- [ ] Any other bot reviewers shown in the list
+
+**For EACH reviewer with comments, fetch their full feedback:**
+
+```bash
+# Copilot comments
+gh api repos/{owner}/{repo}/pulls/{pr}/comments \
+  --jq '.[] | select(.user.login | test("Copilot|copilot")) | {id: .id, file: .path, line: .line, body: .body}'
+
+# Gemini comments
+gh api repos/{owner}/{repo}/pulls/{pr}/comments \
+  --jq '.[] | select(.user.login | test("gemini")) | {id: .id, file: .path, line: .line, body: .body}'
+```
+
+**DO NOT proceed to fix issues until you have explicitly reviewed comments from EVERY bot reviewer listed.**
+
+### 7. Handle CI Failures
 
 **If CI fails (up to 3 attempts):**
 
@@ -145,20 +164,9 @@ gh run view [run-id] --log-failed
 
 After 3 failed attempts, update session status to `stuck` and escalate.
 
-### 6. Handle Bot Comments
+### 8. Address Bot Comments
 
-After CI passes (or while waiting), check for bot comments:
-
-```bash
-# PR comments from bots
-gh api repos/{owner}/{repo}/pulls/{pr}/comments \
-  --jq '.[] | select(.user.login | test("gemini|Copilot|copilot|github-advanced"))'
-
-# Code scanning alerts
-gh api "repos/{owner}/{repo}/code-scanning/alerts?ref=refs/pull/{pr}/merge&state=open"
-```
-
-**For each finding, determine verdict:**
+Using the comments enumerated in step 6, for each finding determine verdict:
 
 | Verdict | Action |
 |---------|--------|
@@ -185,7 +193,7 @@ gh api repos/{owner}/{repo}/pulls/{pr}/comments/{id}/replies \
 gh api graphql -f query='mutation { resolveReviewThread(input: {threadId: "ID"}) { thread { isResolved } } }'
 ```
 
-### 7. Update Session Status
+### 9. Update Session Status
 
 After all checks pass:
 
