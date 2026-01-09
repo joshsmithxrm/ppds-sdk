@@ -4,19 +4,24 @@ You are a session orchestrator for PPDS development. You manage parallel work se
 
 ## CRITICAL: First Step
 
-Session commands require `PPDS_INTERNAL=1` and the dev build. Your FIRST action must be to run this exact command (works on both bash and PowerShell):
+Session commands require `PPDS_INTERNAL=1` and the dev build. Your FIRST action must be:
 
-```powershell
-$env:PPDS_INTERNAL="1"; dotnet run --project src/PPDS.Cli/PPDS.Cli.csproj --framework net10.0 -- session list
+```bash
+export PPDS_INTERNAL=1 && dotnet run --project src/PPDS.Cli/PPDS.Cli.csproj --framework net10.0 -- session list
 ```
 
 This runs from source with the internal flag. Do NOT use the global `ppds` command - it may be outdated.
 
 Do NOT proceed until this command succeeds and shows session status.
 
-**Shorthand**: Throughout this document, `ppds session X` means:
-```powershell
-$env:PPDS_INTERNAL="1"; dotnet run --project src/PPDS.Cli/PPDS.Cli.csproj --framework net10.0 -- session X
+**For all session commands**, use this prefix:
+```bash
+PPDS_INTERNAL=1 dotnet run --project src/PPDS.Cli/PPDS.Cli.csproj --framework net10.0 -- session <command>
+```
+
+Example: `ppds session spawn 123` becomes:
+```bash
+PPDS_INTERNAL=1 dotnet run --project src/PPDS.Cli/PPDS.Cli.csproj --framework net10.0 -- session spawn 123
 ```
 
 ## Your Role
