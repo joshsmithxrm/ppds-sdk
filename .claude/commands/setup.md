@@ -1,10 +1,12 @@
-# Setup PPDS Ecosystem
+# Setup
 
-Set up PPDS repositories and developer tools on a new machine.
+Set up PPDS development environment on a new machine.
 
 ## Usage
 
-`/setup-ecosystem`
+`/setup` - Interactive wizard
+`/setup --terminal` - Just install terminal profile
+`/setup --update` - Update existing installation
 
 ## What It Does
 
@@ -14,18 +16,18 @@ Interactive wizard that:
 3. Installs terminal helpers (`ppds`, `goto`, `ppdsw`)
 4. Configures Claude notifications and status line
 
-## Flow
+## Process
 
 ### Step 1: Choose Base Path
 
 Ask where to put repos (use AskUserQuestion):
 - Suggest common paths: `C:\Dev`, `D:\Projects`, `~/dev`, etc.
 - User can specify any path via "Other" option
-- No hardcoded default - always ask the user
+- No hardcoded default - always ask
 
 ### Step 2: Select Repositories
 
-Multi-select (AskUserQuestion with multiSelect: true):
+Multi-select:
 
 | Option | Description |
 |--------|-------------|
@@ -37,14 +39,14 @@ Multi-select (AskUserQuestion with multiSelect: true):
 
 ### Step 3: Developer Experience Options
 
-Multi-select (AskUserQuestion with multiSelect: true):
+Multi-select:
 
 | Option | Description |
 |--------|-------------|
 | VS Code workspace | Create `ppds.code-workspace` file |
 | Terminal profile | Install `ppds`, `goto`, `ppdsw` commands |
 | Sound notification | Play Windows sound when Claude finishes |
-| Status line | Show directory and git branch in Claude's status bar |
+| Status line | Show directory and git branch in Claude UI |
 
 ### Step 4: Execute Setup
 
@@ -90,8 +92,8 @@ Run the installer script:
 
 This installs:
 - `ppds` - Runs CLI from current worktree
-- `goto` - Quick navigation to worktrees
-- `ppdsw` - Open new terminal tabs/panes
+- `goto` - Quick navigation to worktrees with tab completion
+- `ppdsw` - Open new terminal tabs/panes per worktree
 - Custom prompt showing `[worktree:branch]`
 
 #### Setup Sound Notification (if selected)
@@ -119,14 +121,11 @@ Read existing settings.json first, merge the hooks section, then write back.
 
 #### Setup Status Line (if selected)
 
-**Important:** The statusLine command requires an absolute path - `~` does not expand correctly on Windows.
+**Important:** The statusLine command requires an absolute path.
 
-1. First, detect the user's home directory:
+1. Detect user's home directory:
 ```powershell
-# Windows
 $homePath = [Environment]::GetFolderPath('UserProfile')
-# macOS/Linux
-$homePath = $env:HOME
 ```
 
 2. Create status line script at `{homePath}/.claude/statusline.ps1`:
@@ -145,7 +144,6 @@ try {
     Pop-Location
 } catch {}
 
-# ANSI colors: cyan for dir, magenta for branch
 $cyan = "$([char]27)[96m"
 $magenta = "$([char]27)[95m"
 $reset = "$([char]27)[0m"
@@ -157,29 +155,7 @@ if ($branch) {
 }
 ```
 
-**macOS/Linux version** (bash):
-```bash
-#!/bin/bash
-# PPDS Claude status line - shows directory and git branch with colors
-read -r json
-dir=$(echo "$json" | jq -r '.workspace.current_dir' | xargs basename)
-branch=$(git -C "$(echo "$json" | jq -r '.workspace.current_dir')" branch --show-current 2>/dev/null)
-
-# ANSI colors: cyan for dir, magenta for branch
-cyan='\033[96m'
-magenta='\033[95m'
-reset='\033[0m'
-
-if [ -n "$branch" ]; then
-    echo -e "${cyan}${dir}${reset} ${magenta}(${branch})${reset}"
-else
-    echo -e "${cyan}${dir}${reset}"
-fi
-```
-
-3. Add statusLine config to `~/.claude/settings.json` with **absolute path**:
-
-**Windows:**
+3. Add statusLine config to `~/.claude/settings.json` with absolute path:
 ```json
 {
   "statusLine": {
@@ -189,40 +165,38 @@ fi
 }
 ```
 
-**macOS/Linux:**
-```json
-{
-  "statusLine": {
-    "type": "command",
-    "command": "bash /Users/USERNAME/.claude/statusline.sh"
-  }
-}
-```
-
-Replace `USERNAME` with the actual username from the detected home path.
-
-This shows `sdk (feature/my-branch)` at the bottom of Claude's UI with cyan directory and magenta branch - great for split panes!
-
 ### Step 5: Summary
 
-Display what was set up:
 ```
 Setup complete!
 
 Repositories cloned:
-  - sdk
-  - extension
+  - ppds
+  - ppds-docs
 
 Developer tools configured:
   - VS Code workspace: {base}/ppds.code-workspace
   - Terminal profile: ppds, goto, ppdsw commands installed
   - Sound notification: Plays when Claude finishes
-  - Status line: Shows directory and git branch in Claude UI
+  - Status line: Shows directory and git branch
 
 Next steps:
   - Open workspace: code "{base}/ppds.code-workspace"
   - Restart terminal to load profile
-  - Restart Claude Code for hooks/status line to take effect
+  - Restart Claude Code for hooks/status line
+```
+
+## Terminal Profile Only
+
+If `/setup --terminal` is used, skip repository cloning and just run:
+
+```powershell
+& {path-to-ppds}\scripts\Install-PpdsTerminalProfile.ps1 -PpdsBasePath "{base}" -Force
+```
+
+Then reload:
+```powershell
+. $PROFILE
 ```
 
 ## Idempotent Behavior
@@ -246,38 +220,18 @@ Next steps:
 | `ppds-tools` | `https://github.com/joshsmithxrm/ppds-tools.git` |
 | `ppds-demo` | `https://github.com/joshsmithxrm/ppds-demo.git` |
 
-## Example Session
+## When to Use
 
-```
-User: /setup-ecosystem
+- Setting up a new development machine
+- Adding a new developer to the project
+- Updating tools after changes (`--update`)
+- Reinstalling terminal profile (`--terminal`)
 
-Claude: Where should PPDS repos live?
-[AskUserQuestion with options: C:\Dev, D:\Projects, ~/dev, Other]
+## Verification
 
-User: C:\Dev
-
-Claude: Which repos do you need?
-[AskUserQuestion multiSelect]
-
-User: [selects ppds, ppds-docs]
-
-Claude: Which developer tools do you want?
-[AskUserQuestion multiSelect]
-
-User: [selects all: workspace, terminal, sound, status line]
-
-Claude: Setting up C:\Dev...
-
-Cloning ppds... done
-Cloning ppds-docs... done
-Creating ppds.code-workspace... done
-Installing terminal profile... done
-Configuring sound notification... done
-Setting up status line... done
-
-Setup complete!
-
-To open in VS Code: code "C:\Dev\ppds.code-workspace"
-Restart your terminal to load the profile.
-Restart Claude Code for hooks and status line to take effect.
+After setup, test:
+```powershell
+cd {base}\ppds
+ppds --version
+goto  # Should show worktree list
 ```
