@@ -23,6 +23,7 @@ NuGet packages & CLI for Power Platform: plugin attributes, Dataverse connectivi
 | Use comma-separated issues in `Closes` | GitHub only auto-closes first; use separate `Closes #N` lines |
 | Add TUI service code without tests | Use MockServiceProviderFactory for testability (ADR-0028) |
 | Use bash-specific syntax in C# process commands | `2>/dev/null`, `||`, pipes don't work on Windows; handle errors in code |
+| File issues in wrong repo | Issues belong in target repo (ppds-docs issues in ppds-docs, not ppds) |
 
 ## ALWAYS
 

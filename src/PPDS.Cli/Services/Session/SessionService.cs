@@ -74,10 +74,12 @@ public sealed class SessionService : ISessionService
         var issueInfo = await FetchIssueAsync(issueNumber, cancellationToken);
 
         // Phase 2: Create worktree
-        progress.ReportPhase("Creating worktree", $"Setting up ppds-issue-{issueNumber}...");
+        // Use the repo folder name so each repo gets its own worktree namespace
+        var repoName = Path.GetFileName(_repoRoot);
+        var worktreeName = $"{repoName}-issue-{issueNumber}";
+        progress.ReportPhase("Creating worktree", $"Setting up {worktreeName}...");
         var branchName = $"issue-{issueNumber}";
-        var worktreePath = Path.Combine(Path.GetDirectoryName(_repoRoot)!, $"ppds-issue-{issueNumber}");
-
+        var worktreePath = Path.Combine(Path.GetDirectoryName(_repoRoot)!, worktreeName);
         await CreateWorktreeAsync(worktreePath, branchName, cancellationToken);
 
         // Phase 3: Write worker prompt
