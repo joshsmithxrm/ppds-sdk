@@ -42,7 +42,10 @@ public sealed class WindowsTerminalWorkerSpawner : IWorkerSpawner
         // Write a launcher script to avoid quote escaping issues with wt -> powershell
         var launcherPath = Path.Combine(request.WorkingDirectory, ".claude", "start-worker.ps1");
         var launcherContent = $@"$env:PPDS_INTERNAL = '1'
-claude '/ralph-loop --file ""{request.PromptFilePath}"" --max-iterations {request.MaxIterations} --completion-promise PR_READY'
+Write-Host 'Worker session for issue #{request.IssueNumber}' -ForegroundColor Cyan
+Write-Host 'Prompt file: {request.PromptFilePath}' -ForegroundColor Gray
+Write-Host ''
+claude
 ";
         File.WriteAllText(launcherPath, launcherContent);
 
