@@ -6,6 +6,7 @@ using PPDS.Auth.Profiles;
 using PPDS.Cli.Infrastructure;
 using PPDS.Cli.Infrastructure.Errors;
 using PPDS.Cli.Plugins.Registration;
+using PPDS.Cli.Services.Session;
 using PPDS.Dataverse.Pooling;
 using PPDS.Dataverse.Query;
 using PPDS.Dataverse.Sql.Ast;
@@ -26,15 +27,18 @@ namespace PPDS.Cli.Commands.Serve.Handlers;
 public class RpcMethodHandler
 {
     private readonly IDaemonConnectionPoolManager _poolManager;
+    private readonly ISessionService _sessionService;
     private JsonRpc? _rpc;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="RpcMethodHandler"/> class.
     /// </summary>
     /// <param name="poolManager">The connection pool manager for caching Dataverse pools.</param>
-    public RpcMethodHandler(IDaemonConnectionPoolManager poolManager)
+    /// <param name="sessionService">The session service for managing worker sessions.</param>
+    public RpcMethodHandler(IDaemonConnectionPoolManager poolManager, ISessionService sessionService)
     {
         _poolManager = poolManager ?? throw new ArgumentNullException(nameof(poolManager));
+        _sessionService = sessionService ?? throw new ArgumentNullException(nameof(sessionService));
     }
 
     /// <summary>
@@ -778,18 +782,8 @@ public class RpcMethodHandler
                 "Issue number must be a positive integer");
         }
 
-        var spawner = new Services.Session.WindowsTerminalWorkerSpawner();
-        if (!spawner.IsAvailable())
-        {
-            throw new RpcException(
-                ErrorCodes.Operation.NotSupported,
-                "Windows Terminal (wt.exe) is not available");
-        }
-
-        var logger = Microsoft.Extensions.Logging.Abstractions.NullLogger<Services.Session.SessionService>.Instance;
-        var service = new Services.Session.SessionService(spawner, logger);
-
-        var session = await service.SpawnAsync(issueNumber, cancellationToken: cancellationToken);
+        // SpawnAsync now checks spawner availability internally and throws PpdsException
+        var session = await _sessionService.SpawnAsync(issueNumber, cancellationToken: cancellationToken);
 
         return new SessionSpawnResponse
         {
@@ -809,11 +803,7 @@ public class RpcMethodHandler
     [JsonRpcMethod("session/list")]
     public async Task<SessionListResponse> SessionListAsync(CancellationToken cancellationToken = default)
     {
-        var spawner = new Services.Session.WindowsTerminalWorkerSpawner();
-        var logger = Microsoft.Extensions.Logging.Abstractions.NullLogger<Services.Session.SessionService>.Instance;
-        var service = new Services.Session.SessionService(spawner, logger);
-
-        var sessions = await service.ListAsync(cancellationToken);
+        var sessions = await _sessionService.ListAsync(cancellationToken);
 
         return new SessionListResponse
         {
@@ -830,7 +820,7 @@ public class RpcMethodHandler
                 StuckReason = s.StuckReason,
                 ForwardedMessage = s.ForwardedMessage,
                 PullRequestUrl = s.PullRequestUrl,
-                IsStale = DateTimeOffset.UtcNow - s.LastHeartbeat > Services.Session.SessionService.StaleThreshold
+                IsStale = DateTimeOffset.UtcNow - s.LastHeartbeat > SessionService.StaleThreshold
             }).ToList()
         };
     }
@@ -850,11 +840,7 @@ public class RpcMethodHandler
                 "The 'sessionId' parameter is required");
         }
 
-        var spawner = new Services.Session.WindowsTerminalWorkerSpawner();
-        var logger = Microsoft.Extensions.Logging.Abstractions.NullLogger<Services.Session.SessionService>.Instance;
-        var service = new Services.Session.SessionService(spawner, logger);
-
-        var session = await service.GetAsync(sessionId, cancellationToken);
+        var session = await _sessionService.GetAsync(sessionId, cancellationToken);
         if (session == null)
         {
             throw new RpcException(
@@ -862,7 +848,7 @@ public class RpcMethodHandler
                 $"Session '{sessionId}' not found");
         }
 
-        var worktreeStatus = await service.GetWorktreeStatusAsync(sessionId, cancellationToken);
+        var worktreeStatus = await _sessionService.GetWorktreeStatusAsync(sessionId, cancellationToken);
 
         return new SessionGetResponse
         {
@@ -877,7 +863,7 @@ public class RpcMethodHandler
             StuckReason = session.StuckReason,
             ForwardedMessage = session.ForwardedMessage,
             PullRequestUrl = session.PullRequestUrl,
-            IsStale = DateTimeOffset.UtcNow - session.LastHeartbeat > Services.Session.SessionService.StaleThreshold,
+            IsStale = DateTimeOffset.UtcNow - session.LastHeartbeat > SessionService.StaleThreshold,
             Worktree = worktreeStatus != null ? new WorktreeStatusDto
             {
                 FilesChanged = worktreeStatus.FilesChanged,
@@ -916,18 +902,14 @@ public class RpcMethodHandler
                 "The 'status' parameter is required");
         }
 
-        if (!Enum.TryParse<Services.Session.SessionStatus>(status, true, out var sessionStatus))
+        if (!Enum.TryParse<SessionStatus>(status, true, out var sessionStatus))
         {
             throw new RpcException(
                 ErrorCodes.Validation.InvalidArguments,
                 $"Invalid status '{status}'. Valid values: registered, planning, planningcomplete, working, stuck, paused, complete, cancelled");
         }
 
-        var spawner = new Services.Session.WindowsTerminalWorkerSpawner();
-        var logger = Microsoft.Extensions.Logging.Abstractions.NullLogger<Services.Session.SessionService>.Instance;
-        var service = new Services.Session.SessionService(spawner, logger);
-
-        await service.UpdateAsync(sessionId, sessionStatus, reason, prUrl, cancellationToken);
+        await _sessionService.UpdateAsync(sessionId, sessionStatus, reason, prUrl, cancellationToken);
 
         return new SessionUpdateResponse
         {
@@ -952,11 +934,7 @@ public class RpcMethodHandler
                 "The 'sessionId' parameter is required");
         }
 
-        var spawner = new Services.Session.WindowsTerminalWorkerSpawner();
-        var logger = Microsoft.Extensions.Logging.Abstractions.NullLogger<Services.Session.SessionService>.Instance;
-        var service = new Services.Session.SessionService(spawner, logger);
-
-        await service.PauseAsync(sessionId, cancellationToken);
+        await _sessionService.PauseAsync(sessionId, cancellationToken);
 
         return new SessionActionResponse
         {
@@ -981,11 +959,7 @@ public class RpcMethodHandler
                 "The 'sessionId' parameter is required");
         }
 
-        var spawner = new Services.Session.WindowsTerminalWorkerSpawner();
-        var logger = Microsoft.Extensions.Logging.Abstractions.NullLogger<Services.Session.SessionService>.Instance;
-        var service = new Services.Session.SessionService(spawner, logger);
-
-        await service.ResumeAsync(sessionId, cancellationToken);
+        await _sessionService.ResumeAsync(sessionId, cancellationToken);
 
         return new SessionActionResponse
         {
@@ -1011,11 +985,7 @@ public class RpcMethodHandler
                 "The 'sessionId' parameter is required");
         }
 
-        var spawner = new Services.Session.WindowsTerminalWorkerSpawner();
-        var logger = Microsoft.Extensions.Logging.Abstractions.NullLogger<Services.Session.SessionService>.Instance;
-        var service = new Services.Session.SessionService(spawner, logger);
-
-        await service.CancelAsync(sessionId, keepWorktree, cancellationToken);
+        await _sessionService.CancelAsync(sessionId, keepWorktree, cancellationToken);
 
         return new SessionActionResponse
         {
@@ -1033,11 +1003,7 @@ public class RpcMethodHandler
         bool keepWorktrees = false,
         CancellationToken cancellationToken = default)
     {
-        var spawner = new Services.Session.WindowsTerminalWorkerSpawner();
-        var logger = Microsoft.Extensions.Logging.Abstractions.NullLogger<Services.Session.SessionService>.Instance;
-        var service = new Services.Session.SessionService(spawner, logger);
-
-        var count = await service.CancelAllAsync(keepWorktrees, cancellationToken);
+        var count = await _sessionService.CancelAllAsync(keepWorktrees, cancellationToken);
 
         return new SessionCancelAllResponse
         {
@@ -1069,11 +1035,7 @@ public class RpcMethodHandler
                 "The 'message' parameter is required");
         }
 
-        var spawner = new Services.Session.WindowsTerminalWorkerSpawner();
-        var logger = Microsoft.Extensions.Logging.Abstractions.NullLogger<Services.Session.SessionService>.Instance;
-        var service = new Services.Session.SessionService(spawner, logger);
-
-        await service.ForwardAsync(sessionId, message, cancellationToken);
+        await _sessionService.ForwardAsync(sessionId, message, cancellationToken);
 
         return new SessionActionResponse
         {
@@ -1098,11 +1060,7 @@ public class RpcMethodHandler
                 "The 'sessionId' parameter is required");
         }
 
-        var spawner = new Services.Session.WindowsTerminalWorkerSpawner();
-        var logger = Microsoft.Extensions.Logging.Abstractions.NullLogger<Services.Session.SessionService>.Instance;
-        var service = new Services.Session.SessionService(spawner, logger);
-
-        await service.HeartbeatAsync(sessionId, cancellationToken);
+        await _sessionService.HeartbeatAsync(sessionId, cancellationToken);
 
         return new SessionActionResponse
         {
