@@ -17,8 +17,11 @@ public static class SessionCommandGroup
             ListCommand.Create(),
             SpawnCommand.Create(),
             GetCommand.Create(),
+            PauseCommand.Create(),
+            ResumeCommand.Create(),
             CancelCommand.Create(),
             CancelAllCommand.Create(),
+            ForwardCommand.Create(),
             UpdateCommand.Create()
         };
 

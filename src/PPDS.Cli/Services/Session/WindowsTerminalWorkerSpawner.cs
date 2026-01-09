@@ -43,9 +43,8 @@ public sealed class WindowsTerminalWorkerSpawner : IWorkerSpawner
         var launcherPath = Path.Combine(request.WorkingDirectory, ".claude", "start-worker.ps1");
         var launcherContent = $@"$env:PPDS_INTERNAL = '1'
 Write-Host 'Worker session for issue #{request.IssueNumber}' -ForegroundColor Cyan
-Write-Host 'Prompt file: {request.PromptFilePath}' -ForegroundColor Gray
 Write-Host ''
-claude --permission-mode dontAsk
+claude --permission-mode dontAsk ""Read .claude/session-prompt.md and implement issue #{request.IssueNumber}. Start by understanding the issue, then implement the fix.""
 ";
         File.WriteAllText(launcherPath, launcherContent);
 
