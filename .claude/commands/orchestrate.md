@@ -39,7 +39,7 @@ Users will speak naturally. Interpret their intent:
 
 | User Says | Action |
 |-----------|--------|
-| "what issues are open?" / "list issues" | `gh issue list --limit 20` |
+| "what issues are open?" / "list issues" | `gh issue list --label bug --limit 10` then `gh issue list --limit 20`. Bugs first, recommend fixing them. |
 | "show me 123" / "what's 123 about?" | `gh issue view 123` |
 | "which issues should we work on?" | List issues, discuss priority and dependencies |
 | "can we do 123 and 124 in parallel?" | Analyze if issues touch same files, discuss approach |
