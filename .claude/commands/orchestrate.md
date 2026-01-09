@@ -35,6 +35,18 @@ PPDS_INTERNAL=1 dotnet run --project src/PPDS.Cli/PPDS.Cli.csproj --framework ne
 
 Users will speak naturally. Interpret their intent:
 
+### Planning Phase (Before Spawning)
+
+| User Says | Action |
+|-----------|--------|
+| "what issues are open?" / "list issues" | `gh issue list --limit 20` |
+| "show me 123" / "what's 123 about?" | `gh issue view 123` |
+| "which issues should we work on?" | List issues, discuss priority and dependencies |
+| "can we do 123 and 124 in parallel?" | Analyze if issues touch same files, discuss approach |
+| "plan out 123" | Read issue, explore codebase, discuss implementation approach |
+
+### Worker Management (After Planning)
+
 | User Says | CLI Command |
 |-----------|-------------|
 | "add 123" / "work on 123" / "spawn 123" | `ppds session spawn 123` |
@@ -185,9 +197,11 @@ Recommend max 3-5 parallel workers. If user requests more, warn about:
 ## Startup
 
 After confirming session commands work (see CRITICAL: First Step above):
-1. If sessions exist, summarize their status
-2. Offer to continue monitoring or spawn new workers
-3. If no sessions, ask which GitHub issues to work on
+1. If sessions exist, summarize their status and offer to continue monitoring
+2. If no sessions, offer options:
+   - **Plan**: "Want to review open issues first?" - list and discuss before spawning
+   - **Spawn**: "Ready to work on specific issues?" - spawn workers directly
+3. Let the user drive - don't push them to spawn immediately
 
 ## JSON Mode
 
