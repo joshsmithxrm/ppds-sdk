@@ -1,6 +1,6 @@
 # Start Work
 
-Begin a work session by fetching GitHub issues and creating a session prompt.
+Begin a work session by fetching GitHub issues, creating a session prompt, and registering with the orchestrator.
 
 ## Usage
 
@@ -31,7 +31,7 @@ No session prompt found and no issue numbers provided.
 Usage: /start-work <issue-numbers>
 Example: /start-work 200 202
 
-Tip: /next-work provides issue numbers in its output.
+Tip: /plan-work provides issue numbers in its output.
 ```
 
 ### 2. Fetch Issue Details
@@ -42,7 +42,26 @@ For each issue number:
 gh issue view <number> --json number,title,body,labels
 ```
 
-### 3. Write Session Prompt
+### 3. Create Session Status File
+
+Create `~/.ppds/sessions/work-<primary-issue>.json`:
+
+```json
+{
+  "id": "work-<primary-issue>",
+  "status": "working",
+  "issues": ["#200", "#202"],
+  "branch": "<current-branch>",
+  "worktree": "<current-directory>",
+  "started": "<ISO-timestamp>",
+  "lastUpdate": "<ISO-timestamp>",
+  "stuck": null
+}
+```
+
+This registers the session with the orchestrator for monitoring.
+
+### 4. Write Session Prompt
 
 Create `.claude/session-prompt.md` with fetched issue context:
 
@@ -62,7 +81,7 @@ Create `.claude/session-prompt.md` with fetched issue context:
 2. Enter plan mode to design the approach
 ```
 
-### 4. Show Branch Context
+### 5. Show Branch Context
 
 ```bash
 git branch --show-current
@@ -75,11 +94,11 @@ Branch: feature/import-bugs
 Status: Clean
 ```
 
-### 5. Display Session Prompt
+### 6. Display Session Prompt
 
 Output the generated session prompt content.
 
-### 6. Enter Plan Mode
+### 7. Enter Plan Mode
 
 Use the EnterPlanMode tool to begin planning.
 
@@ -104,9 +123,29 @@ SESSION CONTEXT
 Entering plan mode to verify and plan implementation...
 ```
 
+## Session Status Updates
+
+During work, update the session status file when:
+- Hitting a domain gate (Auth/Security, Performance) → set `status: "stuck"`
+- Encountering blockers → set `status: "stuck"` with context
+- Completing work → handled by `/ship`
+
+Example stuck status:
+```json
+{
+  "status": "stuck",
+  "stuck": {
+    "reason": "Auth/Security decision needed",
+    "context": "Token refresh approach unclear",
+    "options": ["sliding", "fixed"],
+    "since": "<ISO-timestamp>"
+  }
+}
+```
+
 ## When to Use
 
-- Starting a new Claude session in a worktree after `/next-work`
+- Starting a new Claude session in a worktree after `/plan-work`
 - Resuming work after a break (no arguments if session-prompt.md exists)
 - Setting up a worktree for specific issues
 
@@ -114,7 +153,11 @@ Entering plan mode to verify and plan implementation...
 
 | Command | Purpose |
 |---------|---------|
-| `/next-work` | Get recommendations and create worktrees |
-| `/create-worktree` | Create worktree for ad-hoc work |
-| `/pre-pr` | Validate before creating PR |
-| `/handoff` | Generate context summary for next session |
+| `/plan-work` | Orchestrator: analyze, plan, spawn sessions |
+| `/test` | Run tests with auto-detection |
+| `/ship` | Complete work: validate + commit + PR |
+
+## Reference
+
+- [Parallel Work Workflow](.claude/workflows/parallel-work.md)
+- [Autonomous Session](.claude/workflows/autonomous-session.md)
