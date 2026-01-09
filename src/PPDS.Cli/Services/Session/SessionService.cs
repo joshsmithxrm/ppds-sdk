@@ -134,6 +134,9 @@ public sealed class SessionService : ISessionService
         _sessions[sessionId] = session;
         await PersistSessionAsync(session, cancellationToken);
 
+        // Write initial state to worktree so worker can check for messages
+        await WriteWorktreeStateAsync(session, cancellationToken);
+
         progress.ReportInfo($"Worker spawned for #{issueNumber}");
         return session;
     }
