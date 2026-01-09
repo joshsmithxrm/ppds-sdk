@@ -74,7 +74,9 @@ public static class ListCommand
 
                     foreach (var session in sessions)
                     {
-                        var statusIcon = session.Status switch
+                        var isStale = DateTimeOffset.UtcNow - session.LastHeartbeat > SessionService.StaleThreshold;
+
+                        var statusIcon = isStale ? "[?]" : session.Status switch
                         {
                             SessionStatus.Working => "[*]",
                             SessionStatus.Stuck => "[!]",
@@ -89,8 +91,10 @@ public static class ListCommand
                             ? $"{elapsed.TotalHours:F0}h {elapsed.Minutes}m"
                             : $"{elapsed.TotalMinutes:F0}m";
 
+                        var statusText = isStale ? "STALE (no heartbeat)" : session.Status.ToString();
+
                         Console.WriteLine($"  {statusIcon} #{session.IssueNumber} - {session.IssueTitle}");
-                        Console.WriteLine($"      Status: {session.Status} ({elapsedStr})");
+                        Console.WriteLine($"      Status: {statusText} ({elapsedStr})");
                         Console.WriteLine($"      Branch: {session.Branch}");
 
                         if (session.Status == SessionStatus.Stuck && !string.IsNullOrEmpty(session.StuckReason))
