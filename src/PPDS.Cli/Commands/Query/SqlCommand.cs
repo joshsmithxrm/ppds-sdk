@@ -181,10 +181,13 @@ public static class SqlCommand
                     writer.WriteSuccess(queryResult.Result);
                     break;
                 case OutputFormat.Csv:
-                    WriteCsvOutput(queryResult.Result);
+                    QueryResultFormatter.WriteCsvOutput(queryResult.Result);
                     break;
                 default:
-                    WriteTableOutput(queryResult.Result, queryResult.TranspiledFetchXml, globalOptions.Verbose);
+                    QueryResultFormatter.WriteTableOutput(
+                        queryResult.Result,
+                        globalOptions.Verbose,
+                        queryResult.TranspiledFetchXml);
                     break;
             }
 
@@ -239,129 +242,4 @@ public static class SqlCommand
         throw new InvalidOperationException("No SQL source provided.");
     }
 
-    private static void WriteTableOutput(QueryResult result, string fetchXml, bool verbose)
-    {
-        Console.Error.WriteLine();
-
-        if (result.Count == 0)
-        {
-            Console.Error.WriteLine("No records found.");
-            return;
-        }
-
-        Console.Error.WriteLine($"Entity: {result.EntityLogicalName}");
-        Console.Error.WriteLine($"Records: {result.Count}");
-
-        if (result.TotalCount.HasValue)
-        {
-            Console.Error.WriteLine($"Total Count: {result.TotalCount}");
-        }
-
-        if (result.MoreRecords)
-        {
-            Console.Error.WriteLine("More records available (use --page or --paging-cookie for continuation)");
-        }
-
-        Console.Error.WriteLine($"Execution Time: {result.ExecutionTimeMs}ms");
-
-        if (verbose)
-        {
-            Console.Error.WriteLine();
-            Console.Error.WriteLine("Executed FetchXML:");
-            Console.Error.WriteLine(fetchXml);
-        }
-
-        Console.Error.WriteLine();
-
-        // Print table header
-        var columns = result.Columns;
-        var columnWidths = new int[columns.Count];
-
-        for (var i = 0; i < columns.Count; i++)
-        {
-            columnWidths[i] = Math.Max(
-                columns[i].Alias?.Length ?? columns[i].LogicalName.Length,
-                20);
-        }
-
-        // Header row
-        var header = string.Join(" | ", columns.Select((c, i) =>
-            (c.Alias ?? c.LogicalName).PadRight(columnWidths[i])));
-        Console.WriteLine(header);
-        Console.WriteLine(new string('-', header.Length));
-
-        // Data rows
-        foreach (var record in result.Records)
-        {
-            var row = new List<string>();
-            for (var i = 0; i < columns.Count; i++)
-            {
-                var columnName = columns[i].Alias ?? columns[i].LogicalName;
-                if (record.TryGetValue(columnName, out var queryValue) && queryValue != null)
-                {
-                    var displayValue = queryValue.FormattedValue ?? queryValue.Value?.ToString() ?? "";
-                    row.Add(TruncateValue(displayValue, columnWidths[i]));
-                }
-                else
-                {
-                    row.Add("".PadRight(columnWidths[i]));
-                }
-            }
-
-            Console.WriteLine(string.Join(" | ", row));
-        }
-
-        if (result.MoreRecords && !string.IsNullOrEmpty(result.PagingCookie))
-        {
-            Console.Error.WriteLine();
-            Console.Error.WriteLine($"Paging cookie (for continuation):");
-            Console.Error.WriteLine(result.PagingCookie);
-        }
-    }
-
-    private static string TruncateValue(string value, int maxLength)
-    {
-        if (value.Length <= maxLength)
-        {
-            return value.PadRight(maxLength);
-        }
-
-        return value.Substring(0, maxLength - 3) + "...";
-    }
-
-    private static void WriteCsvOutput(QueryResult result)
-    {
-        if (result.Count == 0)
-        {
-            return;
-        }
-
-        // Header row
-        var headers = result.Columns.Select(c => EscapeCsvField(c.Alias ?? c.LogicalName));
-        Console.WriteLine(string.Join(",", headers));
-
-        // Data rows
-        foreach (var record in result.Records)
-        {
-            var values = result.Columns.Select(c =>
-            {
-                var key = c.Alias ?? c.LogicalName;
-                if (record.TryGetValue(key, out var qv) && qv != null)
-                {
-                    return EscapeCsvField(qv.FormattedValue ?? qv.Value?.ToString() ?? "");
-                }
-                return "";
-            });
-            Console.WriteLine(string.Join(",", values));
-        }
-    }
-
-    private static string EscapeCsvField(string value)
-    {
-        if (value.Contains(',') || value.Contains('"') || value.Contains('\n') || value.Contains('\r'))
-        {
-            return $"\"{value.Replace("\"", "\"\"")}\"";
-        }
-        return value;
-    }
 }
