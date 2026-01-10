@@ -154,7 +154,7 @@ public static class ExecuteCommand
 
         if (result.MoreRecords)
         {
-            Console.Error.WriteLine("More records available (use --page or --paging-cookie for continuation)");
+            Console.Error.WriteLine("More records available (use 'ppds query sql' with --page for continuation)");
         }
 
         Console.Error.WriteLine($"Execution Time: {result.ExecutionTimeMs}ms");
@@ -201,7 +201,7 @@ public static class ExecuteCommand
         if (result.MoreRecords && !string.IsNullOrEmpty(result.PagingCookie))
         {
             Console.Error.WriteLine();
-            Console.Error.WriteLine("Paging cookie (for continuation):");
+            Console.Error.WriteLine("Paging cookie (use with 'ppds query sql --paging-cookie' for continuation):");
             Console.Error.WriteLine(result.PagingCookie);
         }
     }

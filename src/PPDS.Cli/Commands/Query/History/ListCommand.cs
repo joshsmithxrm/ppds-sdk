@@ -83,15 +83,9 @@ public static class ListCommand
                 Console.Error.WriteLine();
             }
 
-            IReadOnlyList<QueryHistoryEntry> entries;
-            if (string.IsNullOrWhiteSpace(filter))
-            {
-                entries = await historyService.GetHistoryAsync(environmentUrl, limit, cancellationToken);
-            }
-            else
-            {
-                entries = await historyService.SearchHistoryAsync(environmentUrl, filter, limit, cancellationToken);
-            }
+            var entries = string.IsNullOrWhiteSpace(filter)
+                ? await historyService.GetHistoryAsync(environmentUrl, limit, cancellationToken)
+                : await historyService.SearchHistoryAsync(environmentUrl, filter, limit, cancellationToken);
 
             if (entries.Count == 0)
             {
@@ -160,13 +154,8 @@ public static class ListCommand
 
     private static string GetQueryPreview(string sql, int maxLength)
     {
-        var normalized = sql.Replace('\n', ' ').Replace('\r', ' ').Replace('\t', ' ');
-        // Collapse multiple spaces
-        while (normalized.Contains("  "))
-        {
-            normalized = normalized.Replace("  ", " ");
-        }
-        normalized = normalized.Trim();
+        // Efficiently collapse all whitespace to single spaces using regex
+        var normalized = System.Text.RegularExpressions.Regex.Replace(sql, @"\s+", " ").Trim();
 
         if (normalized.Length <= maxLength)
         {
