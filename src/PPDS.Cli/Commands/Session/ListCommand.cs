@@ -74,9 +74,10 @@ public static class ListCommand
 
                     foreach (var session in sessions)
                     {
-                        var isStale = DateTimeOffset.UtcNow - session.LastHeartbeat > SessionService.StaleThreshold;
-
-                        var statusIcon = isStale ? "[?]" : session.Status switch
+                        // Show actual status - don't override based on time since last update
+                        // Workers report state transitions, not heartbeats, so silence during
+                        // active implementation is normal
+                        var statusIcon = session.Status switch
                         {
                             SessionStatus.Registered => "[ ]",
                             SessionStatus.Planning => "[~]",
@@ -97,7 +98,23 @@ public static class ListCommand
                             ? $"{elapsed.TotalHours:F0}h {elapsed.Minutes}m"
                             : $"{elapsed.TotalMinutes:F0}m";
 
-                        var statusText = isStale ? "STALE (no heartbeat)" : session.Status.ToString();
+                        // For active sessions, show time since last update as informational
+                        var timeSinceUpdate = DateTimeOffset.UtcNow - session.LastHeartbeat;
+                        var lastUpdateStr = timeSinceUpdate.TotalHours >= 1
+                            ? $"{timeSinceUpdate.TotalHours:F0}h {timeSinceUpdate.Minutes}m"
+                            : $"{timeSinceUpdate.TotalMinutes:F0}m";
+
+                        var isActiveSession = session.Status is SessionStatus.Working
+                            or SessionStatus.Planning
+                            or SessionStatus.PlanningComplete
+                            or SessionStatus.Shipping
+                            or SessionStatus.ReviewsInProgress;
+
+                        var statusText = session.Status.ToString();
+                        if (isActiveSession && timeSinceUpdate.TotalSeconds > 60)
+                        {
+                            statusText += $" (last update: {lastUpdateStr} ago)";
+                        }
 
                         Console.WriteLine($"  {statusIcon} #{session.IssueNumber} - {session.IssueTitle}");
                         Console.WriteLine($"      Status: {statusText} ({elapsedStr})");
