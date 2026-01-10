@@ -6,8 +6,8 @@ NuGet packages & CLI for Power Platform: plugin attributes, Dataverse connectivi
 
 | Property | Value |
 |----------|-------|
-| Owner | joshsmithxrm |
-| Repo | power-platform-developer-suite |
+| Owner | `joshsmithxrm` |
+| Repo | `power-platform-developer-suite` |
 
 ## NEVER
 
