@@ -1,6 +1,7 @@
 using PPDS.Cli.Infrastructure.Errors;
 using PPDS.Cli.Services.Profile;
 using PPDS.Cli.Tui.Infrastructure;
+using PPDS.Cli.Tui.Views;
 using Terminal.Gui;
 
 namespace PPDS.Cli.Tui.Dialogs;
@@ -14,6 +15,7 @@ internal sealed class ProfileSelectorDialog : Dialog
     private readonly InteractiveSession? _session;
     private readonly ListView _listView;
     private readonly Label _detailLabel;
+    private readonly TuiSpinner _spinner;
     private readonly Label _hintLabel;
 
     private IReadOnlyList<ProfileSummary> _profiles = Array.Empty<ProfileSummary>();
@@ -66,14 +68,24 @@ internal sealed class ProfileSelectorDialog : Dialog
         _listView.OpenSelectedItem += OnItemActivated;
         listFrame.Add(_listView);
 
-        // Detail label
+        // Spinner for loading animation
+        _spinner = new TuiSpinner
+        {
+            X = 1,
+            Y = Pos.Bottom(listFrame),
+            Width = Dim.Fill() - 2,
+            Height = 1
+        };
+
+        // Detail label (hidden while loading)
         _detailLabel = new Label
         {
             X = 1,
             Y = Pos.Bottom(listFrame),
             Width = Dim.Fill() - 2,
             Height = 1,
-            Text = string.Empty
+            Text = string.Empty,
+            Visible = false
         };
 
         // Hint label for keyboard shortcuts
@@ -116,7 +128,10 @@ internal sealed class ProfileSelectorDialog : Dialog
         };
         cancelButton.Clicked += () => { Application.RequestStop(); };
 
-        Add(listFrame, _detailLabel, _hintLabel, selectButton, createButton, deleteButton, cancelButton);
+        Add(listFrame, _spinner, _detailLabel, _hintLabel, selectButton, createButton, deleteButton, cancelButton);
+
+        // Start spinner while loading
+        _spinner.Start("Loading profiles...");
 
         // Handle keyboard shortcuts
         KeyPress += OnKeyPress;
@@ -139,7 +154,9 @@ internal sealed class ProfileSelectorDialog : Dialog
             {
                 Application.MainLoop?.Invoke(() =>
                 {
+                    _spinner.Stop();
                     _detailLabel.Text = $"Error: {t.Exception.InnerException?.Message ?? t.Exception.Message}";
+                    _detailLabel.Visible = true;
                 });
             }
         }, TaskScheduler.Default);
@@ -156,6 +173,10 @@ internal sealed class ProfileSelectorDialog : Dialog
     {
         Application.MainLoop?.Invoke(() =>
         {
+            // Stop spinner and show detail label
+            _spinner.Stop();
+            _detailLabel.Visible = true;
+
             var items = new List<string>();
 
             foreach (var profile in _profiles)

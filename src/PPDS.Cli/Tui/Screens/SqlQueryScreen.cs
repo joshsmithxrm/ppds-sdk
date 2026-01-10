@@ -1,8 +1,6 @@
-using System.Data;
 using System.Net.Http;
 using PPDS.Auth.Credentials;
 using PPDS.Cli.Services.Export;
-using PPDS.Cli.Services.History;
 using PPDS.Cli.Services.Query;
 using PPDS.Cli.Tui.Dialogs;
 using PPDS.Cli.Tui.Infrastructure;
@@ -23,6 +21,7 @@ internal sealed class SqlQueryScreen : Window
     private readonly TextView _queryInput;
     private readonly QueryResultsTableView _resultsTable;
     private readonly Label _statusLabel;
+    private readonly TuiSpinner _statusSpinner;
     private readonly TextField _filterField;
     private readonly FrameView _filterFrame;
 
@@ -97,6 +96,16 @@ internal sealed class SqlQueryScreen : Window
         };
         _resultsTable.LoadMoreRequested += OnLoadMoreRequested;
 
+        // Status spinner (for animated feedback during operations)
+        _statusSpinner = new TuiSpinner
+        {
+            X = 0,
+            Y = Pos.AnchorEnd(1),
+            Width = Dim.Fill(),
+            Height = 1,
+            Visible = false
+        };
+
         // Status bar
         _statusLabel = new Label("Ready. Press Ctrl+Enter to execute query.")
         {
@@ -107,7 +116,7 @@ internal sealed class SqlQueryScreen : Window
             ColorScheme = TuiColorPalette.StatusBar_Default
         };
 
-        Add(queryFrame, _filterFrame, _resultsTable, _statusLabel);
+        Add(queryFrame, _filterFrame, _resultsTable, _statusSpinner, _statusLabel);
 
         // Subscribe to environment changes from the session
         _session.EnvironmentChanged += OnEnvironmentChanged;
@@ -223,15 +232,15 @@ internal sealed class SqlQueryScreen : Window
 
         try
         {
-            // Status: Connecting
-            UpdateStatus("Connecting to Dataverse...");
+            // Status: Connecting (with animated spinner)
+            UpdateStatus("Connecting to Dataverse...", showSpinner: true);
             TuiDebugLog.Log($"Getting SQL query service for URL: {_environmentUrl}");
 
             var service = await _session.GetSqlQueryServiceAsync(_environmentUrl, CancellationToken.None);
             TuiDebugLog.Log("Got service, executing query...");
 
-            // Status: Executing
-            UpdateStatus("Executing query...");
+            // Status: Executing (with animated spinner)
+            UpdateStatus("Executing query...", showSpinner: true);
 
             var request = new SqlQueryRequest
             {
@@ -253,7 +262,7 @@ internal sealed class SqlQueryScreen : Window
                 _lastPageNumber = result.Result.PageNumber;
 
                 var moreText = result.Result.MoreRecords ? " (more available)" : "";
-                _statusLabel.Text = $"Returned {result.Result.Count} rows in {result.Result.ExecutionTimeMs}ms{moreText}";
+                UpdateStatus($"Returned {result.Result.Count} rows in {result.Result.ExecutionTimeMs}ms{moreText}", showSpinner: false);
             });
 
             // Save to history (fire-and-forget)
@@ -264,16 +273,26 @@ internal sealed class SqlQueryScreen : Window
         catch (Exception ex)
         {
             TuiDebugLog.Log($"ERROR: {ex.GetType().Name}: {ex.Message}");
-            Application.MainLoop?.Invoke(() => _statusLabel.Text = $"Error: {ex.Message}");
+            UpdateStatus($"Error: {ex.Message}", showSpinner: false);
         }
     }
 
-    private void UpdateStatus(string message)
+    private void UpdateStatus(string message, bool showSpinner = false)
     {
         TuiDebugLog.Log($"Status: {message}");
         Application.MainLoop?.Invoke(() =>
         {
-            _statusLabel.Text = message;
+            if (showSpinner)
+            {
+                _statusLabel.Visible = false;
+                _statusSpinner.Start(message);
+            }
+            else
+            {
+                _statusSpinner.Stop();
+                _statusLabel.Text = message;
+                _statusLabel.Visible = true;
+            }
             Application.Refresh();
         });
     }

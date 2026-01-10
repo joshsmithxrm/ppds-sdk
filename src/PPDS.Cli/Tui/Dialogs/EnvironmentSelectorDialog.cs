@@ -2,6 +2,7 @@ using PPDS.Auth.Credentials;
 using PPDS.Cli.Infrastructure.Errors;
 using PPDS.Cli.Services.Environment;
 using PPDS.Cli.Tui.Infrastructure;
+using PPDS.Cli.Tui.Views;
 using Terminal.Gui;
 
 namespace PPDS.Cli.Tui.Dialogs;
@@ -16,6 +17,7 @@ internal sealed class EnvironmentSelectorDialog : Dialog
     private readonly TextField _filterField;
     private readonly ListView _listView;
     private readonly Label _statusLabel;
+    private readonly TuiSpinner _spinner;
     private readonly TextField _urlField;
     private readonly Button _selectButton;
 
@@ -108,13 +110,23 @@ internal sealed class EnvironmentSelectorDialog : Dialog
         };
         _urlField.TextChanged += OnUrlChanged;
 
-        // Status label
-        _statusLabel = new Label("Loading environments...")
+        // Spinner for loading animation
+        _spinner = new TuiSpinner
         {
             X = 1,
             Y = Pos.Bottom(_urlField) + 1,
             Width = Dim.Fill() - 2,
             Height = 1
+        };
+
+        // Status label (shown after spinner stops)
+        _statusLabel = new Label(string.Empty)
+        {
+            X = 1,
+            Y = Pos.Bottom(_urlField) + 1,
+            Width = Dim.Fill() - 2,
+            Height = 1,
+            Visible = false
         };
 
         // Buttons
@@ -132,7 +144,10 @@ internal sealed class EnvironmentSelectorDialog : Dialog
         };
         cancelButton.Clicked += () => { Application.RequestStop(); };
 
-        Add(filterLabel, _filterField, listFrame, urlLabel, _urlField, _statusLabel, _selectButton, cancelButton);
+        Add(filterLabel, _filterField, listFrame, urlLabel, _urlField, _spinner, _statusLabel, _selectButton, cancelButton);
+
+        // Start spinner and discover environments asynchronously
+        _spinner.Start("Loading environments...");
 
         // Discover environments asynchronously (fire-and-forget with error handling)
 #pragma warning disable PPDS013 // Fire-and-forget with explicit error handling via ContinueWith
@@ -142,7 +157,9 @@ internal sealed class EnvironmentSelectorDialog : Dialog
             {
                 Application.MainLoop?.Invoke(() =>
                 {
+                    _spinner.Stop();
                     _statusLabel.Text = $"Error: {t.Exception.InnerException?.Message ?? t.Exception.Message}";
+                    _statusLabel.Visible = true;
                 });
             }
         }, TaskScheduler.Default);
@@ -160,7 +177,9 @@ internal sealed class EnvironmentSelectorDialog : Dialog
         {
             Application.MainLoop?.Invoke(() =>
             {
+                _spinner.Stop();
                 _statusLabel.Text = ex.UserMessage;
+                _statusLabel.Visible = true;
                 _listView.SetSource(new List<string> { "(Enter URL manually)" });
             });
         }
@@ -200,6 +219,10 @@ internal sealed class EnvironmentSelectorDialog : Dialog
     {
         Application.MainLoop?.Invoke(() =>
         {
+            // Stop spinner when we have results
+            _spinner.Stop();
+            _statusLabel.Visible = true;
+
             var items = new List<string>();
 
             foreach (var env in _filteredEnvironments)
