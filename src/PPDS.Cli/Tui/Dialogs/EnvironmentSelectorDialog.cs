@@ -230,13 +230,12 @@ internal sealed class EnvironmentSelectorDialog : Dialog
     private void OnSelectedItemChanged(ListViewItemEventArgs args)
     {
         // Show URL of selected environment (only if not typing a manual URL)
-        if (_listView.SelectedItem >= 0 && _listView.SelectedItem < _filteredEnvironments.Count)
+        if (_listView.SelectedItem >= 0
+            && _listView.SelectedItem < _filteredEnvironments.Count
+            && string.IsNullOrEmpty(_urlField.Text?.ToString()))
         {
-            if (string.IsNullOrEmpty(_urlField.Text?.ToString()))
-            {
-                var env = _filteredEnvironments[_listView.SelectedItem];
-                _statusLabel.Text = env.Url;
-            }
+            var env = _filteredEnvironments[_listView.SelectedItem];
+            _statusLabel.Text = env.Url;
         }
     }
 
