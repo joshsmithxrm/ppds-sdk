@@ -63,10 +63,17 @@ public sealed class WindowsTerminalWorkerSpawner : IWorkerSpawner
 
         // Write a launcher script to avoid quote escaping issues with wt -> powershell
         var launcherPath = Path.Combine(request.WorkingDirectory, ".claude", "start-worker.ps1");
+
+        // Use bypassPermissions to allow autonomous operation without manual approval prompts.
+        // SECURITY: This mode relies on project-level .claude/settings.json to restrict dangerous operations.
+        // The worktree MUST have settings.json configured with:
+        // - deny rules: block commands like git push --force, rm -rf, etc.
+        // - allow rules: specific skills like /ship, /test, /commit
+        // The final gate is human review of pull requests created by /ship (Claude never merges).
         var launcherContent = $@"$env:PPDS_INTERNAL = '1'
 Write-Host 'Worker session for issue #{request.IssueNumber}' -ForegroundColor Cyan
 Write-Host ''
-claude --permission-mode acceptEdits ""Read .claude/session-prompt.md and implement issue #{request.IssueNumber}. Start by understanding the issue, then implement the fix.""
+claude --permission-mode bypassPermissions ""Read .claude/session-prompt.md and implement issue #{request.IssueNumber}. Start by understanding the issue, then implement the fix.""
 ";
         await File.WriteAllTextAsync(launcherPath, launcherContent, cancellationToken);
 
