@@ -47,10 +47,7 @@ Write the ralph loop state file:
 # Get session ID
 SESSION_ID="${CLAUDE_SESSION_ID:-default}"
 
-# Create state directory
-mkdir -p ~/.ppds/ralph
-
-# Write state file
+# Write state file (Python creates directory if needed)
 python -c "
 import json
 import os

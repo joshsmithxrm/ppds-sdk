@@ -58,7 +58,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "py -3 .claude/hooks/ralph-hook.py"
+            "command": "py -3 .claude/hooks/ralph-hook.py",
+            "timeout": 30
           }
         ]
       }

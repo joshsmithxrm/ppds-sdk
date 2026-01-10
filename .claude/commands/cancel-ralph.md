@@ -22,6 +22,7 @@ STATE_FILE="$HOME/.ppds/ralph/${SESSION_ID}.json"
 ```bash
 python -c "
 import json
+import sys
 import os
 from pathlib import Path
 from datetime import datetime
@@ -31,17 +32,17 @@ state_file = Path.home() / '.ppds' / 'ralph' / f'{session_id}.json'
 
 if not state_file.exists():
     print('No active Ralph loop found.')
-    exit(0)
+    sys.exit(0)
 
-state = json.loads(state_file.read_text())
+state = json.loads(state_file.read_text(encoding='utf-8'))
 if not state.get('active'):
     print('Ralph loop already inactive.')
-    exit(0)
+    sys.exit(0)
 
 state['active'] = False
 state['cancelled_at'] = datetime.now().isoformat()
 state['exit_reason'] = 'user_cancelled'
-state_file.write_text(json.dumps(state, indent=2))
+state_file.write_text(json.dumps(state, indent=2), encoding='utf-8')
 
 print(f'Ralph loop cancelled after {state.get(\"current_iteration\", 0)} iterations.')
 "

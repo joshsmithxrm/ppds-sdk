@@ -22,6 +22,7 @@ import sys
 import os
 from pathlib import Path
 from datetime import datetime
+from typing import Optional
 
 
 def get_state_dir() -> Path:
@@ -34,7 +35,7 @@ def get_state_file(session_id: str) -> Path:
     return get_state_dir() / f"{session_id}.json"
 
 
-def load_state(session_id: str) -> dict | None:
+def load_state(session_id: str) -> Optional[dict]:
     """Load ralph loop state for a session. Returns None if no active loop."""
     state_file = get_state_file(session_id)
     if not state_file.exists():
@@ -54,7 +55,7 @@ def save_state(session_id: str, state: dict) -> None:
     )
 
 
-def check_completion(transcript_path: str | None, promise: str) -> bool:
+def check_completion(transcript_path: Optional[str], promise: str) -> bool:
     """
     Check if completion promise appears in recent transcript output.
 
