@@ -110,9 +110,12 @@ public sealed class TuiSpinner : View
             _timer = null;
         }
 
-        // Clear the display
-        Clear();
-        Visible = false;
+        // Clear the display on the main thread
+        Application.MainLoop?.Invoke(() =>
+        {
+            Clear();
+            Visible = false;
+        });
     }
 
     /// <summary>

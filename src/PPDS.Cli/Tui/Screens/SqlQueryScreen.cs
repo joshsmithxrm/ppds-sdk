@@ -293,7 +293,6 @@ internal sealed class SqlQueryScreen : Window
                 _statusLabel.Text = message;
                 _statusLabel.Visible = true;
             }
-            Application.Refresh();
         });
     }
 
