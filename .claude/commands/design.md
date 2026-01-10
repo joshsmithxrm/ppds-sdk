@@ -164,10 +164,10 @@ Design Session Flow:
 
 Before proposing new work, design sessions MUST complete this checklist:
 
-- [ ] **Check existing milestone** - Run `gh issue list --milestone "<milestone>" --state all` to see existing work
+- [ ] **Check existing milestone** - Find the current milestone with `gh milestone list --state open`, then run `gh issue list --milestone "<milestone>" --state all` to see existing work
 - [ ] **Search for duplicates** - Run `gh issue list --search "<feature-keywords>" --limit 20`
 - [ ] **Scope alignment** - Explicitly confirm if TUI/Extension/CLI should have feature parity
-- [ ] **Platform-specific vs shared** - Identify features unique to one interface (e.g., notebooks are VS Code-only)
+- [ ] **Platform-specific vs shared** - Identify features unique to one UI layer (e.g., notebooks are VS Code-only)
 - [ ] **Design for orchestration** - Plan wave labels and include query patterns for worker dispatch
 - [ ] **Integrate existing backlog** - Consider labeling existing open issues into wave structure
 - [ ] **Session boundary clarity** - Be explicit: what happens THIS session vs FUTURE worker sessions
