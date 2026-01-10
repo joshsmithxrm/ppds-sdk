@@ -1,3 +1,4 @@
+using PPDS.Cli.Infrastructure.Errors;
 using PPDS.Cli.Services.Profile;
 using PPDS.Cli.Tui.Infrastructure;
 using Terminal.Gui;
@@ -12,6 +13,7 @@ internal sealed class ProfileSelectorDialog : Dialog
     private readonly IProfileService _profileService;
     private readonly ListView _listView;
     private readonly Label _detailLabel;
+    private readonly Label _hintLabel;
 
     private IReadOnlyList<ProfileSummary> _profiles = Array.Empty<ProfileSummary>();
     private bool _createNewSelected;
@@ -66,8 +68,19 @@ internal sealed class ProfileSelectorDialog : Dialog
             X = 1,
             Y = Pos.Bottom(listFrame),
             Width = Dim.Fill() - 2,
-            Height = 2,
+            Height = 1,
             Text = string.Empty
+        };
+
+        // Hint label for keyboard shortcuts
+        _hintLabel = new Label
+        {
+            X = 1,
+            Y = Pos.Bottom(_detailLabel),
+            Width = Dim.Fill() - 2,
+            Height = 1,
+            Text = "F2 to rename",
+            ColorScheme = TuiColorPalette.StatusBar_Default
         };
 
         // Buttons
@@ -92,7 +105,10 @@ internal sealed class ProfileSelectorDialog : Dialog
         };
         cancelButton.Clicked += () => { Application.RequestStop(); };
 
-        Add(listFrame, _detailLabel, selectButton, createButton, cancelButton);
+        Add(listFrame, _detailLabel, _hintLabel, selectButton, createButton, cancelButton);
+
+        // F2 to rename selected profile
+        KeyPress += OnKeyPress;
 
         // Load profiles asynchronously (fire-and-forget with error handling)
 #pragma warning disable PPDS013 // Fire-and-forget with explicit error handling via ContinueWith
@@ -180,5 +196,129 @@ internal sealed class ProfileSelectorDialog : Dialog
         _createNewSelected = true;
         _selectedProfile = null;
         Application.RequestStop();
+    }
+
+    private void OnKeyPress(KeyEventEventArgs e)
+    {
+        if (e.KeyEvent.Key == Key.F2)
+        {
+            ShowRenameDialog();
+            e.Handled = true;
+        }
+    }
+
+    private void ShowRenameDialog()
+    {
+        if (_listView.SelectedItem < 0 || _listView.SelectedItem >= _profiles.Count)
+        {
+            return;
+        }
+
+        var profile = _profiles[_listView.SelectedItem];
+        var currentName = profile.Name ?? string.Empty;
+
+        // Create rename dialog
+        var dialog = new Dialog("Rename Profile")
+        {
+            Width = 50,
+            Height = 8,
+            ColorScheme = TuiColorPalette.Default
+        };
+
+        var label = new Label("New name:")
+        {
+            X = 1,
+            Y = 1
+        };
+
+        var textField = new TextField(currentName)
+        {
+            X = 12,
+            Y = 1,
+            Width = Dim.Fill() - 2
+        };
+
+        var okButton = new Button("_OK")
+        {
+            X = Pos.Center() - 10,
+            Y = Pos.AnchorEnd(1)
+        };
+
+        var cancelButton = new Button("_Cancel")
+        {
+            X = Pos.Center() + 2,
+            Y = Pos.AnchorEnd(1)
+        };
+
+        var doRename = false;
+
+        okButton.Clicked += () =>
+        {
+            var newName = textField.Text?.ToString()?.Trim() ?? string.Empty;
+
+            if (string.IsNullOrWhiteSpace(newName))
+            {
+                MessageBox.ErrorQuery("Validation Error", "Profile name cannot be empty.", "OK");
+                return;
+            }
+
+            doRename = true;
+            Application.RequestStop();
+        };
+
+        cancelButton.Clicked += () =>
+        {
+            Application.RequestStop();
+        };
+
+        // Allow Enter to submit
+        textField.KeyPress += (args) =>
+        {
+            if (args.KeyEvent.Key == Key.Enter)
+            {
+                okButton.OnClicked();
+                args.Handled = true;
+            }
+        };
+
+        dialog.Add(label, textField, okButton, cancelButton);
+        textField.SetFocus();
+
+        Application.Run(dialog);
+
+        if (doRename)
+        {
+            var newName = textField.Text?.ToString()?.Trim() ?? string.Empty;
+            PerformRename(profile, newName);
+        }
+    }
+
+    private void PerformRename(ProfileSummary profile, string newName)
+    {
+#pragma warning disable PPDS013 // Fire-and-forget with explicit error handling via ContinueWith
+        _ = PerformRenameAsync(profile, newName).ContinueWith(t =>
+        {
+            if (t.IsFaulted && t.Exception != null)
+            {
+                var ex = t.Exception.InnerException;
+                var message = ex is PpdsException ppdsEx ? ppdsEx.UserMessage : ex?.Message ?? "Unknown error";
+                Application.MainLoop?.Invoke(() =>
+                {
+                    MessageBox.ErrorQuery("Rename Failed", message, "OK");
+                });
+            }
+        }, TaskScheduler.Default);
+#pragma warning restore PPDS013
+    }
+
+    private async Task PerformRenameAsync(ProfileSummary profile, string newName)
+    {
+        await _profileService.UpdateProfileAsync(profile.DisplayIdentifier, newName);
+        await LoadProfilesAsync();
+
+        Application.MainLoop?.Invoke(() =>
+        {
+            _detailLabel.Text = $"Renamed to '{newName}'";
+        });
     }
 }
