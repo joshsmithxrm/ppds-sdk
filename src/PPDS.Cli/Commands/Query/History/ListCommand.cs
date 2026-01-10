@@ -1,5 +1,4 @@
 using System.CommandLine;
-using System.Text.Json.Serialization;
 using Microsoft.Extensions.DependencyInjection;
 using PPDS.Cli.Infrastructure;
 using PPDS.Cli.Infrastructure.Errors;
@@ -91,7 +90,7 @@ public static class ListCommand
             {
                 if (globalOptions.IsJsonMode)
                 {
-                    writer.WriteSuccess(new ListOutput { Entries = [] });
+                    writer.WriteSuccess(new HistoryListOutput { Entries = [] });
                 }
                 else
                 {
@@ -102,7 +101,7 @@ public static class ListCommand
 
             if (globalOptions.IsJsonMode)
             {
-                var output = new ListOutput
+                var output = new HistoryListOutput
                 {
                     Entries = entries.Select(e => new HistoryEntryOutput
                     {
@@ -165,37 +164,4 @@ public static class ListCommand
         return normalized[..(maxLength - 3)] + "...";
     }
 
-    #region Output Models
-
-    private sealed class ListOutput
-    {
-        [JsonPropertyName("entries")]
-        public List<HistoryEntryOutput> Entries { get; set; } = [];
-    }
-
-    private sealed class HistoryEntryOutput
-    {
-        [JsonPropertyName("id")]
-        public string Id { get; set; } = "";
-
-        [JsonPropertyName("sql")]
-        public string Sql { get; set; } = "";
-
-        [JsonPropertyName("executedAt")]
-        public DateTimeOffset ExecutedAt { get; set; }
-
-        [JsonPropertyName("rowCount")]
-        public int? RowCount { get; set; }
-
-        [JsonPropertyName("executionTimeMs")]
-        public long? ExecutionTimeMs { get; set; }
-
-        [JsonPropertyName("success")]
-        public bool Success { get; set; }
-
-        [JsonPropertyName("errorMessage")]
-        public string? ErrorMessage { get; set; }
-    }
-
-    #endregion
 }

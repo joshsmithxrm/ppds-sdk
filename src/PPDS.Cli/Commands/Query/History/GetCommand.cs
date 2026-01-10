@@ -1,5 +1,4 @@
 using System.CommandLine;
-using System.Text.Json.Serialization;
 using Microsoft.Extensions.DependencyInjection;
 using PPDS.Cli.Infrastructure;
 using PPDS.Cli.Infrastructure.Errors;
@@ -130,31 +129,4 @@ public static class GetCommand
         Console.WriteLine(entry.Sql);
     }
 
-    #region Output Models
-
-    private sealed class HistoryEntryOutput
-    {
-        [JsonPropertyName("id")]
-        public string Id { get; set; } = "";
-
-        [JsonPropertyName("sql")]
-        public string Sql { get; set; } = "";
-
-        [JsonPropertyName("executedAt")]
-        public DateTimeOffset ExecutedAt { get; set; }
-
-        [JsonPropertyName("rowCount")]
-        public int? RowCount { get; set; }
-
-        [JsonPropertyName("executionTimeMs")]
-        public long? ExecutionTimeMs { get; set; }
-
-        [JsonPropertyName("success")]
-        public bool Success { get; set; }
-
-        [JsonPropertyName("errorMessage")]
-        public string? ErrorMessage { get; set; }
-    }
-
-    #endregion
 }
