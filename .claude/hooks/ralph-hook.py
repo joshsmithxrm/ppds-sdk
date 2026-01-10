@@ -59,7 +59,7 @@ def check_completion(transcript_path: str | None, promise: str) -> bool:
     Check if completion promise appears in recent transcript output.
 
     Args:
-        transcript_path: Path to the session transcript JSON
+        transcript_path: Path to the session transcript JSONL file
         promise: The exact string to look for (e.g., "DONE")
 
     Returns:
@@ -73,28 +73,37 @@ def check_completion(transcript_path: str | None, promise: str) -> bool:
         if not transcript_file.exists():
             return False
 
-        transcript = json.loads(transcript_file.read_text(encoding="utf-8"))
+        # Transcript is JSONL format (one JSON object per line)
+        lines = transcript_file.read_text(encoding="utf-8").strip().split("\n")
 
-        # Look for promise in last 5 assistant messages
-        messages = transcript.get("messages", [])
-        assistant_messages = [
-            m for m in messages
-            if m.get("role") == "assistant"
-        ][-5:]
+        # Parse last 50 lines and look for assistant messages
+        recent_lines = lines[-50:] if len(lines) > 50 else lines
+        assistant_contents = []
 
-        for msg in assistant_messages:
-            content = msg.get("content", "")
-            # Handle both string and list content
-            if isinstance(content, list):
-                content = " ".join(
-                    c.get("text", "") for c in content
-                    if isinstance(c, dict) and c.get("type") == "text"
-                )
-            if promise in str(content):
+        for line in recent_lines:
+            if not line.strip():
+                continue
+            try:
+                entry = json.loads(line)
+                # Check for assistant role in message
+                if entry.get("role") == "assistant":
+                    content = entry.get("content", "")
+                    if isinstance(content, list):
+                        content = " ".join(
+                            c.get("text", "") for c in content
+                            if isinstance(c, dict) and c.get("type") == "text"
+                        )
+                    assistant_contents.append(str(content))
+            except json.JSONDecodeError:
+                continue
+
+        # Check last 5 assistant messages for the promise
+        for content in assistant_contents[-5:]:
+            if promise in content:
                 return True
 
         return False
-    except (json.JSONDecodeError, OSError, KeyError):
+    except OSError:
         return False
 
 
@@ -106,6 +115,10 @@ def main():
         hook_input = json.loads(raw_input) if raw_input.strip() else {}
     except json.JSONDecodeError:
         hook_input = {}
+
+    # Note: stop_hook_active indicates Claude is continuing from a previous
+    # stop hook. This is expected in Ralph loops - we rely on max_iterations
+    # to prevent runaway loops, not this flag.
 
     # Get session ID - fall back to environment variable or "default"
     session_id = hook_input.get("session_id")

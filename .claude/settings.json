@@ -46,7 +46,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python .claude/hooks/pre-commit-validate.py",
+            "command": "py -3 .claude/hooks/pre-commit-validate.py",
             "timeout": 120
           }
         ]
@@ -58,7 +58,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python .claude/hooks/ralph-hook.py"
+            "command": "py -3 .claude/hooks/ralph-hook.py"
           }
         ]
       }
