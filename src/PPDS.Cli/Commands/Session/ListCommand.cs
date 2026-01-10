@@ -13,6 +13,11 @@ namespace PPDS.Cli.Commands.Session;
 /// </summary>
 public static class ListCommand
 {
+    /// <summary>
+    /// Threshold in seconds before showing "last update" time for active sessions.
+    /// </summary>
+    private const int LastUpdateDisplayThresholdSeconds = 60;
+
     public static Command Create()
     {
         var command = new Command("list", "List all active worker sessions");
@@ -94,15 +99,11 @@ public static class ListCommand
                         };
 
                         var elapsed = DateTimeOffset.UtcNow - session.StartedAt;
-                        var elapsedStr = elapsed.TotalHours >= 1
-                            ? $"{elapsed.TotalHours:F0}h {elapsed.Minutes}m"
-                            : $"{elapsed.TotalMinutes:F0}m";
+                        var elapsedStr = FormatDuration(elapsed);
 
                         // For active sessions, show time since last update as informational
                         var timeSinceUpdate = DateTimeOffset.UtcNow - session.LastHeartbeat;
-                        var lastUpdateStr = timeSinceUpdate.TotalHours >= 1
-                            ? $"{timeSinceUpdate.TotalHours:F0}h {timeSinceUpdate.Minutes}m"
-                            : $"{timeSinceUpdate.TotalMinutes:F0}m";
+                        var lastUpdateStr = FormatDuration(timeSinceUpdate);
 
                         var isActiveSession = session.Status is SessionStatus.Working
                             or SessionStatus.Planning
@@ -111,7 +112,7 @@ public static class ListCommand
                             or SessionStatus.ReviewsInProgress;
 
                         var statusText = session.Status.ToString();
-                        if (isActiveSession && timeSinceUpdate.TotalSeconds > 60)
+                        if (isActiveSession && timeSinceUpdate.TotalSeconds > LastUpdateDisplayThresholdSeconds)
                         {
                             statusText += $" (last update: {lastUpdateStr} ago)";
                         }
@@ -143,6 +144,19 @@ public static class ListCommand
             writer.WriteError(error);
             return ExceptionMapper.ToExitCode(ex);
         }
+    }
+
+    /// <summary>
+    /// Formats a TimeSpan as a friendly duration string (e.g., "1h 30m" or "45m").
+    /// Uses integer truncation to avoid rounding issues.
+    /// </summary>
+    private static string FormatDuration(TimeSpan duration)
+    {
+        if (duration.TotalHours >= 1)
+        {
+            return $"{(int)duration.TotalHours}h {duration.Minutes}m";
+        }
+        return $"{(int)duration.TotalMinutes}m";
     }
 
     #region Output Models
