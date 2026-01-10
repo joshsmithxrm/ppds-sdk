@@ -25,19 +25,19 @@ public sealed class HistoryEntryOutput
     /// The unique identifier for this history entry.
     /// </summary>
     [JsonPropertyName("id")]
-    public string Id { get; set; } = "";
+    public required string Id { get; set; }
 
     /// <summary>
     /// The SQL query that was executed.
     /// </summary>
     [JsonPropertyName("sql")]
-    public string Sql { get; set; } = "";
+    public required string Sql { get; set; }
 
     /// <summary>
     /// When the query was executed.
     /// </summary>
     [JsonPropertyName("executedAt")]
-    public DateTimeOffset ExecutedAt { get; set; }
+    public required DateTimeOffset ExecutedAt { get; set; }
 
     /// <summary>
     /// The number of rows returned, if successful.
@@ -55,7 +55,7 @@ public sealed class HistoryEntryOutput
     /// Whether the query executed successfully.
     /// </summary>
     [JsonPropertyName("success")]
-    public bool Success { get; set; }
+    public required bool Success { get; set; }
 
     /// <summary>
     /// The error message if the query failed.

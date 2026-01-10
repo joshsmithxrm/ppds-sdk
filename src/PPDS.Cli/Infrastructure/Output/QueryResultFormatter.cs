@@ -9,6 +9,11 @@ namespace PPDS.Cli.Infrastructure.Output;
 public static class QueryResultFormatter
 {
     /// <summary>
+    /// Minimum width for table columns to ensure readability.
+    /// </summary>
+    private const int MinColumnWidth = 20;
+
+    /// <summary>
     /// Writes query results as an aligned table to stdout.
     /// Metadata (entity name, record count, timing) goes to stderr.
     /// </summary>
@@ -63,7 +68,7 @@ public static class QueryResultFormatter
         {
             columnWidths[i] = Math.Max(
                 columns[i].Alias?.Length ?? columns[i].LogicalName.Length,
-                20);
+                MinColumnWidth);
         }
 
         // Header row
