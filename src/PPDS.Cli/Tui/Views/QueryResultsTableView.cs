@@ -475,8 +475,5 @@ internal sealed class QueryResultsTableView : FrameView
         _guidColumnsHidden = !_guidColumnsHidden;
         ApplyColumnSizing();
         UpdateStatus();
-
-        var message = _guidColumnsHidden ? "GUID columns hidden" : "GUID columns visible";
-        _statusLabel.Text = message;
     }
 }
