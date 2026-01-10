@@ -43,13 +43,34 @@ internal sealed class PpdsApplication : IDisposable
         // Create shared ProfileStore singleton for all local services
         _profileStore = new ProfileStore();
 
+        // UI thread ID - set after Application.Init() to enable thread detection in callback
+        int uiThreadId = -1;
+
         // Callback invoked before browser opens for interactive authentication.
         // Shows a dialog giving user control: Open Browser, Use Device Code, or Cancel.
         Func<Action<DeviceCodeInfo>?, PreAuthDialogResult> beforeInteractiveAuth = (deviceCodeCallback) =>
         {
-            // Marshal to UI thread if Terminal.Gui is running
-            if (Application.MainLoop != null)
+            // Terminal.Gui not yet initialized - default to browser auth
+            if (Application.MainLoop == null)
             {
+                TuiDebugLog.Log("Interactive auth triggered before TUI initialized - browser will open");
+                return PreAuthDialogResult.OpenBrowser;
+            }
+
+            // Check if we're already on the UI thread to avoid deadlock.
+            // If on UI thread, show dialog directly; if on background thread, marshal and wait.
+            if (uiThreadId > 0 && Thread.CurrentThread.ManagedThreadId == uiThreadId)
+            {
+                // Already on UI thread - show dialog directly (avoids deadlock)
+                TuiDebugLog.Log("Pre-auth dialog requested from UI thread - showing directly");
+                var dialog = new Dialogs.PreAuthenticationDialog(deviceCodeCallback);
+                Application.Run(dialog);
+                TuiDebugLog.Log($"Pre-auth dialog result: {dialog.Result}");
+                return dialog.Result;
+            }
+            else
+            {
+                // Background thread - marshal to UI thread and wait
                 var result = PreAuthDialogResult.OpenBrowser;
                 using var waitHandle = new ManualResetEventSlim(false);
                 Application.MainLoop.Invoke(() =>
@@ -68,12 +89,6 @@ internal sealed class PpdsApplication : IDisposable
                 });
                 waitHandle.Wait();
                 return result;
-            }
-            else
-            {
-                // Terminal.Gui not yet initialized - default to browser auth
-                TuiDebugLog.Log("Interactive auth triggered before TUI initialized - browser will open");
-                return PreAuthDialogResult.OpenBrowser;
             }
         };
 
@@ -97,6 +112,10 @@ internal sealed class PpdsApplication : IDisposable
         AuthDebugLog.Writer = msg => TuiDebugLog.Log($"[Auth] {msg}");
 
         Application.Init();
+
+        // Capture UI thread ID for deadlock prevention in beforeInteractiveAuth callback
+        uiThreadId = Thread.CurrentThread.ManagedThreadId;
+        TuiDebugLog.Log($"UI thread ID captured: {uiThreadId}");
 
         try
         {
