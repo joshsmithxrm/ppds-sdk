@@ -232,7 +232,7 @@ internal sealed class MainWindow : Window
             return;
         }
 
-        var dialog = new EnvironmentDetailsDialog(_session, _environmentUrl, _environmentName);
+        using var dialog = new EnvironmentDetailsDialog(_session, _environmentUrl, _environmentName);
         Application.Run(dialog);
     }
 

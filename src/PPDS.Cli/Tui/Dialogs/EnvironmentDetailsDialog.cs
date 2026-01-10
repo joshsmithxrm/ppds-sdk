@@ -1,6 +1,5 @@
 using Microsoft.Crm.Sdk.Messages;
 using Microsoft.Extensions.DependencyInjection;
-using PPDS.Auth.Profiles;
 using PPDS.Cli.Tui.Infrastructure;
 using PPDS.Dataverse.Pooling;
 using Terminal.Gui;
@@ -17,6 +16,7 @@ internal sealed class EnvironmentDetailsDialog : Dialog
     private readonly string _environmentUrl;
     private readonly string? _environmentDisplayName;
     private readonly ITuiThemeService _themeService;
+    private readonly CancellationTokenSource _cancellationSource = new();
 
     private readonly Label _envNameLabel;
     private readonly Label _urlLabel;
@@ -66,8 +66,8 @@ internal sealed class EnvironmentDetailsDialog : Dialog
             ColorScheme = _themeService.GetStatusBarScheme(envType)
         };
 
-        // Separator
-        var separator = new Label(new string('─', 61))
+        // Separator using LineView for proper line drawing
+        var separator = new LineView
         {
             X = 1,
             Y = 2,
@@ -127,7 +127,18 @@ internal sealed class EnvironmentDetailsDialog : Dialog
             _statusLabel, _refreshButton, closeButton);
 
         // Load details asynchronously
-        LoadDetailsAsync();
+        LoadDetailsAsync(_cancellationSource.Token);
+    }
+
+    /// <inheritdoc />
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing)
+        {
+            _cancellationSource.Cancel();
+            _cancellationSource.Dispose();
+        }
+        base.Dispose(disposing);
     }
 
     private Label CreateDetailRow(string labelText, ref int row, int labelWidth)
@@ -154,16 +165,21 @@ internal sealed class EnvironmentDetailsDialog : Dialog
         return valueLabel;
     }
 
-    private void LoadDetailsAsync()
+    private void LoadDetailsAsync(CancellationToken cancellationToken)
     {
         _refreshButton.Enabled = false;
         _statusLabel.Text = "Loading environment details...";
 
 #pragma warning disable PPDS013 // Fire-and-forget with explicit error handling
-        _ = LoadDetailsInternalAsync().ContinueWith(t =>
+        _ = LoadDetailsInternalAsync(cancellationToken).ContinueWith(t =>
         {
             Application.MainLoop?.Invoke(() =>
             {
+                if (cancellationToken.IsCancellationRequested)
+                {
+                    return;
+                }
+
                 _refreshButton.Enabled = true;
 
                 if (t.IsFaulted && t.Exception != null)
@@ -177,15 +193,21 @@ internal sealed class EnvironmentDetailsDialog : Dialog
 #pragma warning restore PPDS013
     }
 
-    private async Task LoadDetailsInternalAsync()
+    private async Task LoadDetailsInternalAsync(CancellationToken cancellationToken)
     {
-        var provider = await _session.GetServiceProviderAsync(_environmentUrl);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        var provider = await _session.GetServiceProviderAsync(_environmentUrl, cancellationToken);
         var pool = provider.GetRequiredService<IDataverseConnectionPool>();
 
-        await using var client = await pool.GetClientAsync();
+        cancellationToken.ThrowIfCancellationRequested();
+
+        await using var client = await pool.GetClientAsync(cancellationToken: cancellationToken);
+
+        cancellationToken.ThrowIfCancellationRequested();
 
         // Execute WhoAmI to get user info
-        var whoAmIResponse = (WhoAmIResponse)await client.ExecuteAsync(new WhoAmIRequest());
+        var whoAmIResponse = (WhoAmIResponse)await client.ExecuteAsync(new WhoAmIRequest(), cancellationToken);
 
         // Get org info from client properties
         var orgName = client.ConnectedOrgFriendlyName;
@@ -195,7 +217,7 @@ internal sealed class EnvironmentDetailsDialog : Dialog
 
         // Get profile info for connected user identity
         var store = _session.GetProfileStore();
-        var collection = await store.LoadAsync(CancellationToken.None);
+        var collection = await store.LoadAsync(cancellationToken);
         var profile = collection.ActiveProfile;
         var connectedAs = profile?.Username ?? "(unknown)";
 
@@ -203,10 +225,19 @@ internal sealed class EnvironmentDetailsDialog : Dialog
         var envInfo = profile?.Environment;
         var envType = envInfo?.Type;
         var region = envInfo?.Region;
-        var environmentId = envInfo?.EnvironmentId;
+
+        if (cancellationToken.IsCancellationRequested)
+        {
+            return;
+        }
 
         Application.MainLoop?.Invoke(() =>
         {
+            if (cancellationToken.IsCancellationRequested)
+            {
+                return;
+            }
+
             // Update header with actual name
             var detectedEnvType = _themeService.DetectEnvironmentType(_environmentUrl);
             var envLabel = _themeService.GetEnvironmentLabel(detectedEnvType);
@@ -239,7 +270,7 @@ internal sealed class EnvironmentDetailsDialog : Dialog
 
     private void OnRefreshClicked()
     {
-        LoadDetailsAsync();
+        LoadDetailsAsync(_cancellationSource.Token);
     }
 
     private static ColorScheme GetTypeColorScheme(string? envType)
