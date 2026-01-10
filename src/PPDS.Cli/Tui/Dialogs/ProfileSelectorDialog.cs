@@ -242,14 +242,11 @@ internal sealed class ProfileSelectorDialog : Dialog
             return;
         }
 
-        if (_listView.SelectedItem < 0 || _listView.SelectedItem >= _profiles.Count)
-        {
-            return;
-        }
-
-        // Show the profile details dialog
-        // Note: This shows the active profile details, not the selected list item
-        // (The selected list item would require loading the full AuthProfile)
+        // Show the profile details dialog for the active profile.
+        // Design note: ProfileDetailsDialog shows the active profile because it needs
+        // full AuthProfile data (token expiration, authority, etc.) which is only readily
+        // available for the active profile. Showing details for a non-active profile would
+        // require additional profile loading logic and potentially re-authentication.
         var dialog = new ProfileDetailsDialog(_session);
         Application.Run(dialog);
     }

@@ -273,6 +273,7 @@ internal sealed class ProfileDetailsDialog : Dialog
                 _tenantLabel.Text = "-";
                 _authorityLabel.Text = "-";
                 _tokenStatusLabel.Text = "-";
+                _tokenStatusLabel.ColorScheme = TuiColorPalette.Default;
                 _createdLabel.Text = "-";
                 _lastUsedLabel.Text = "-";
                 _environmentLabel.Text = "-";
@@ -358,9 +359,13 @@ internal sealed class ProfileDetailsDialog : Dialog
             {
                 timeRemaining = $"{(int)remaining.TotalHours} hour(s)";
             }
-            else
+            else if (remaining.TotalMinutes >= 1)
             {
                 timeRemaining = $"{(int)remaining.TotalMinutes} minute(s)";
+            }
+            else
+            {
+                timeRemaining = "less than 1 minute";
             }
 
             _tokenStatusLabel.Text = $"Valid (expires in {timeRemaining})";
