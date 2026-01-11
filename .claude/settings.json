@@ -153,7 +153,7 @@
       "Bash(git reset --hard:*)",
       "Bash(git clean:*)",
       "Bash(dotnet nuget push:*)",
-      "Bash(npm publish)",
+      "Bash(npm publish:*)",
       "Bash(npm install -g:*)",
       "Bash(Publish-Module:*)",
       "Bash(curl:*)",
@@ -162,7 +162,7 @@
       "Bash(chmod 777:*)",
       "Bash(sudo:*)",
       "Bash(su:*)",
-      "Bash(rm -rf /)",
+      "Bash(rm -rf /:*)",
       "Bash(ppds data truncate:*)"
     ],
     "ask": [
