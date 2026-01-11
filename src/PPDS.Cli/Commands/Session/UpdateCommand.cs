@@ -141,13 +141,25 @@ public static class UpdateCommand
     }
 
     /// <summary>
-    /// Emits ANSI OSC escape sequence to update Windows Terminal tab title.
-    /// Uses stderr per PPDS convention (stdout is for data).
+    /// Updates Windows Terminal tab title via SetConsoleTitle API.
+    /// Uses Console.Title which calls SetConsoleTitle - a direct API call that
+    /// works from subprocesses because they share the parent console.
     /// </summary>
     private static void EmitTabTitleUpdate(string title)
     {
-        // OSC 0 = set icon name and window title; BEL (0x07) terminates
-        Console.Error.Write($"\u001b]0;{title}\u0007");
+        if (OperatingSystem.IsWindows())
+        {
+            try
+            {
+                Console.Title = title;
+            }
+            catch (IOException)
+            {
+                // Console.Title throws IOException when not running in an interactive console
+                // (e.g., output redirected). This is a non-critical cosmetic feature, so we
+                // silently ignore the error to avoid blocking the main operation.
+            }
+        }
     }
 
     #region Output Models
