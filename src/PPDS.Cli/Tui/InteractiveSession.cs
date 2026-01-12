@@ -121,6 +121,7 @@ internal sealed class InteractiveSession : IAsyncDisposable
 
         if (profile?.Environment?.Url != null)
         {
+            _currentEnvironmentUrl = profile.Environment.Url;
             _currentEnvironmentDisplayName = profile.Environment.DisplayName;
             TuiDebugLog.Log($"Environment configured: {profile.Environment.DisplayName} ({profile.Environment.Url}) - will connect on first query");
 
@@ -159,6 +160,7 @@ internal sealed class InteractiveSession : IAsyncDisposable
         await InvalidateAsync().ConfigureAwait(false);
 
         // Update local state
+        _currentEnvironmentUrl = environmentUrl;
         _currentEnvironmentDisplayName = displayName;
 
         // Warm new connection (fire-and-forget)
@@ -368,8 +370,15 @@ internal sealed class InteractiveSession : IAsyncDisposable
         // Re-warm with new profile credentials if environment is known
         if (!string.IsNullOrWhiteSpace(environmentUrl))
         {
+            // Set URL immediately so it's available to consumers
+            _currentEnvironmentUrl = environmentUrl;
+
             TuiDebugLog.Log($"Re-warming connection for {environmentDisplayName ?? environmentUrl}");
 
+            // Notify listeners synchronously (like SetEnvironmentAsync does)
+            EnvironmentChanged?.Invoke(environmentUrl, environmentDisplayName);
+
+            // Then warm pool asynchronously
 #pragma warning disable PPDS013 // Fire-and-forget with explicit error handling
             _ = GetServiceProviderAsync(environmentUrl, cancellationToken)
                 .ContinueWith(t =>
@@ -381,7 +390,6 @@ internal sealed class InteractiveSession : IAsyncDisposable
                     else
                     {
                         TuiDebugLog.Log("New profile connection warmed successfully");
-                        EnvironmentChanged?.Invoke(environmentUrl, environmentDisplayName);
                     }
                 }, TaskScheduler.Default);
 #pragma warning restore PPDS013
