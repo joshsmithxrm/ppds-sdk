@@ -1,6 +1,6 @@
 # CLAUDE.md - Power Platform Developer Suite
 
-NuGet packages & CLI for Power Platform: plugin attributes, Dataverse connectivity, migration tooling.
+SDK, CLI, TUI, VS Code Extension, and MCP server for Power Platform development.
 
 ## Repository
 
