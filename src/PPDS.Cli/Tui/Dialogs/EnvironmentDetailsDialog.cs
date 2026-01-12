@@ -30,6 +30,7 @@ internal sealed class EnvironmentDetailsDialog : Dialog
     private readonly Label _connectedAsLabel;
     private readonly Label _statusLabel;
     private readonly Button _refreshButton;
+    private bool _disposed;
 
     /// <summary>
     /// Creates a new environment details dialog.
@@ -133,8 +134,9 @@ internal sealed class EnvironmentDetailsDialog : Dialog
     /// <inheritdoc />
     protected override void Dispose(bool disposing)
     {
-        if (disposing)
+        if (disposing && !_disposed)
         {
+            _disposed = true;
             _cancellationSource.Cancel();
             _cancellationSource.Dispose();
         }
@@ -175,7 +177,8 @@ internal sealed class EnvironmentDetailsDialog : Dialog
         {
             Application.MainLoop?.Invoke(() =>
             {
-                if (cancellationToken.IsCancellationRequested)
+                // Check _disposed before accessing token (CTS may be disposed)
+                if (_disposed)
                 {
                     return;
                 }
@@ -233,7 +236,8 @@ internal sealed class EnvironmentDetailsDialog : Dialog
 
         Application.MainLoop?.Invoke(() =>
         {
-            if (cancellationToken.IsCancellationRequested)
+            // Check _disposed before accessing token (CTS may be disposed)
+            if (_disposed)
             {
                 return;
             }
