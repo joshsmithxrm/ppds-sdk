@@ -143,7 +143,7 @@ After PR creation, poll only REQUIRED checks (don't wait for optional ones).
 **Timing:**
 - **Initial wait:** 10 minutes (600 seconds) before first check - CI typically takes 5-8 minutes
 - **Subsequent checks:** 3 minutes (180 seconds) between each check if still running
-- **Timeout:** 15 minutes total - if required checks don't complete, continue to bot review phase
+- **Timeout:** 20 minutes total - if required checks don't complete, continue to bot review phase
 
 **Required checks (must pass):**
 - `build` or `build-status`
@@ -171,7 +171,7 @@ gh api repos/{owner}/{repo}/commits/$SHA/check-runs \
         | {name: .name, status: .status, conclusion: .conclusion}'
 
 # If any required checks still running, wait 3 minutes and check again
-# Repeat until all complete or 15-minute timeout reached
+# Repeat until all complete or 20-minute timeout reached
 ```
 
 **Important:** Do NOT use `gh pr checks --watch` - it waits for ALL checks including optional ones.
