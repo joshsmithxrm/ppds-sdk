@@ -127,15 +127,15 @@ public static class TuiColorPalette
 
     /// <summary>
     /// Status bar for UNKNOWN environments.
-    /// Neutral theme - white on dark gray.
+    /// Neutral theme - black on gray for maximum readability.
     /// </summary>
     public static ColorScheme StatusBar_Default => new()
     {
-        Normal = MakeAttr(Color.White, Color.DarkGray),
-        Focus = MakeAttr(Color.White, Color.Gray),
-        HotNormal = MakeAttr(Color.Cyan, Color.DarkGray),
-        HotFocus = MakeAttr(Color.Cyan, Color.Gray),
-        Disabled = MakeAttr(Color.Gray, Color.DarkGray)
+        Normal = MakeAttr(Color.Black, Color.Gray),
+        Focus = MakeAttr(Color.Black, Color.BrightYellow),
+        HotNormal = MakeAttr(Color.Blue, Color.Gray),
+        HotFocus = MakeAttr(Color.Blue, Color.BrightYellow),
+        Disabled = MakeAttr(Color.DarkGray, Color.Gray)
     };
 
     #endregion

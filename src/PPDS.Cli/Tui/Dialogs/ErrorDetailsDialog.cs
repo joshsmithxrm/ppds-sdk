@@ -97,14 +97,14 @@ internal sealed class ErrorDetailsDialog : Dialog
         };
         openLogButton.Clicked += OnOpenLogClicked;
 
-        var clearButton = new Button("C_lear All")
+        var clearButton = new Button("Clear _All")
         {
             X = Pos.Right(openLogButton) + 2,
             Y = Pos.AnchorEnd(1)
         };
         clearButton.Clicked += OnClearClicked;
 
-        var closeButton = new Button("_Close")
+        var closeButton = new Button("Clos_e")
         {
             X = Pos.AnchorEnd(12),
             Y = Pos.AnchorEnd(1)
