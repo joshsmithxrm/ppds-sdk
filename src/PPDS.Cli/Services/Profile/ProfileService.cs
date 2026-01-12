@@ -238,9 +238,8 @@ public sealed class ProfileService : IProfileService
             cloud = CloudEnvironment.Public;
         }
 
-        // Check for environment variable bypass
-        var envSpnSecret = System.Environment.GetEnvironmentVariable(CredentialProviderFactory.SpnSecretEnvVar);
-        var bypassCredentialStore = !string.IsNullOrWhiteSpace(envSpnSecret);
+        // Check for environment variable bypass (PPDS_SPN_SECRET or PPDS_TEST_CLIENT_SECRET)
+        var bypassCredentialStore = CredentialProviderFactory.ShouldBypassCredentialStore();
 
         NativeCredentialStore? credentialStore = null;
         string? storedCredentialKey = null;

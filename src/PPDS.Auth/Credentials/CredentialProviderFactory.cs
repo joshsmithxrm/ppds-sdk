@@ -23,6 +23,20 @@ public static class CredentialProviderFactory
     public const string TestClientSecretEnvVar = "PPDS_TEST_CLIENT_SECRET";
 
     /// <summary>
+    /// Gets the SPN secret from environment variables, checking both production and test variables.
+    /// Returns null if neither is set.
+    /// </summary>
+    public static string? GetSpnSecretFromEnvironment() =>
+        Environment.GetEnvironmentVariable(SpnSecretEnvVar)
+        ?? Environment.GetEnvironmentVariable(TestClientSecretEnvVar);
+
+    /// <summary>
+    /// Returns true if credential store should be bypassed (SPN secret is available via environment).
+    /// </summary>
+    public static bool ShouldBypassCredentialStore() =>
+        !string.IsNullOrWhiteSpace(GetSpnSecretFromEnvironment());
+
+    /// <summary>
     /// Creates a credential provider for the specified auth profile.
     /// </summary>
     /// <param name="profile">The auth profile.</param>
@@ -43,9 +57,7 @@ public static class CredentialProviderFactory
             throw new ArgumentNullException(nameof(profile));
 
         // Check for environment variable override for SPN secret
-        // PPDS_SPN_SECRET takes precedence, PPDS_TEST_CLIENT_SECRET is fallback for test scenarios
-        var envSecret = Environment.GetEnvironmentVariable(SpnSecretEnvVar)
-            ?? Environment.GetEnvironmentVariable(TestClientSecretEnvVar);
+        var envSecret = GetSpnSecretFromEnvironment();
 
         return profile.AuthMethod switch
         {
@@ -89,9 +101,7 @@ public static class CredentialProviderFactory
             throw new ArgumentNullException(nameof(profile));
 
         // Check for environment variable override for SPN secret
-        // PPDS_SPN_SECRET takes precedence, PPDS_TEST_CLIENT_SECRET is fallback for test scenarios
-        var envSecret = Environment.GetEnvironmentVariable(SpnSecretEnvVar)
-            ?? Environment.GetEnvironmentVariable(TestClientSecretEnvVar);
+        var envSecret = GetSpnSecretFromEnvironment();
 
         return profile.AuthMethod switch
         {
