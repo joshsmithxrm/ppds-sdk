@@ -456,6 +456,10 @@ internal sealed class MainWindow : Window
 
     private void NavigateToSqlQuery()
     {
+        // Prevent nested SqlQueryScreen creation - if we're already in one, do nothing
+        if (_hotkeyRegistry.ActiveScreen is SqlQueryScreen)
+            return;
+
         var sqlScreen = new SqlQueryScreen(_profileName, _deviceCodeCallback, _session);
         Application.Run(sqlScreen);
     }

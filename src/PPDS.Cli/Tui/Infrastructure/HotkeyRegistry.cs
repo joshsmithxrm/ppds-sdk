@@ -79,6 +79,11 @@ public interface IHotkeyRegistry
     void SetActiveScreen(object? screen);
 
     /// <summary>
+    /// Gets the current active screen.
+    /// </summary>
+    object? ActiveScreen { get; }
+
+    /// <summary>
     /// Sets the current open dialog for dialog-scope filtering.
     /// </summary>
     void SetActiveDialog(object? dialog);
@@ -195,6 +200,8 @@ internal sealed class HotkeyRegistry : IHotkeyRegistry
         _activeScreen = screen;
         TuiDebugLog.Log($"Active screen: {screen?.GetType().Name ?? "null"}");
     }
+
+    public object? ActiveScreen => _activeScreen;
 
     public void SetActiveDialog(object? dialog)
     {
