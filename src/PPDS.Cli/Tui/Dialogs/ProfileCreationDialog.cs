@@ -266,8 +266,8 @@ internal sealed class ProfileCreationDialog : Dialog
         // Update UI based on initial selection
         OnAuthMethodChanged(new SelectedItemChangedArgs(_authMethodRadio.SelectedItem, -1));
 
-        // Set initial focus to name field for proper cursor positioning
-        _nameField.SetFocus();
+        // Defer focus to name field until after layout is complete
+        Ready += () => _nameField.SetFocus();
     }
 
     private void OnAuthMethodChanged(SelectedItemChangedArgs args)
