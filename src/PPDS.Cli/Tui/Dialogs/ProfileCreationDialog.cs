@@ -117,6 +117,17 @@ internal sealed class ProfileCreationDialog : Dialog
         _authMethodRadio.SelectedItem = InteractiveBrowserCredentialProvider.IsAvailable() ? 1 : 0;
         _authMethodRadio.SelectedItemChanged += OnAuthMethodChanged;
 
+        // Enter on RadioGroup selects the item (Terminal.Gui only binds Space by default)
+        _authMethodRadio.KeyPress += (args) =>
+        {
+            if (args.KeyEvent.Key == Key.Enter)
+            {
+                // Simulate Space key to trigger selection
+                _authMethodRadio.ProcessKey(new KeyEvent(Key.Space, new KeyModifiers()));
+                args.Handled = true;
+            }
+        };
+
         // Environment URL (common for all methods)
         var urlLabel = new Label("Environment URL:")
         {

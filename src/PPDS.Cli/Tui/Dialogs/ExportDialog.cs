@@ -51,12 +51,13 @@ internal sealed class ExportDialog : Dialog
         };
         _formatGroup.SelectedItem = 0;
 
-        // Enter on RadioGroup triggers export (user expects Enter to work)
+        // Enter on RadioGroup selects the item (Terminal.Gui only binds Space by default)
         _formatGroup.KeyPress += (args) =>
         {
             if (args.KeyEvent.Key == Key.Enter)
             {
-                OnExportClicked();
+                // Simulate Space key to trigger selection
+                _formatGroup.ProcessKey(new KeyEvent(Key.Space, new KeyModifiers()));
                 args.Handled = true;
             }
         };
