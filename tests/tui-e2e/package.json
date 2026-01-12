@@ -9,7 +9,7 @@
     "test:headed": "npx playwright test --headed"
   },
   "devDependencies": {
-    "@microsoft/tui-test": "^0.2.0",
+    "@microsoft/tui-test": "^0.0.1-rc.5",
     "@playwright/test": "^1.40.0"
   }
 }
