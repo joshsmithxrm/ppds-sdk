@@ -257,6 +257,11 @@ internal sealed class ProfileSelectorDialog : Dialog
             ShowProfileDetailsDialog();
             e.Handled = true;
         }
+        else if (e.KeyEvent.Key == Key.Esc)
+        {
+            Application.RequestStop();
+            e.Handled = true;
+        }
     }
 
     private void ShowProfileDetailsDialog()

@@ -131,6 +131,17 @@ internal sealed class ProfileCreationDialog : Dialog
             Text = string.Empty,
             ColorScheme = TuiColorPalette.TextInput
         };
+
+        // Enter on RadioGroup advances focus to next field (user expects Enter to work)
+        _authMethodRadio.KeyPress += (args) =>
+        {
+            if (args.KeyEvent.Key == Key.Enter)
+            {
+                _environmentUrlField.SetFocus();
+                args.Handled = true;
+            }
+        };
+
         _discoverButton = new Button("Discover...")
         {
             X = Pos.Right(_environmentUrlField) + 1,
@@ -262,6 +273,16 @@ internal sealed class ProfileCreationDialog : Dialog
         Add(nameLabel, _nameField, methodLabel, _authMethodRadio,
             urlLabel, _environmentUrlField, _discoverButton,
             _spnFrame, _statusLabel, _authenticateButton, cancelButton);
+
+        // Escape closes dialog (if not authenticating)
+        KeyPress += (e) =>
+        {
+            if (e.KeyEvent.Key == Key.Esc && !_isAuthenticating)
+            {
+                Application.RequestStop();
+                e.Handled = true;
+            }
+        };
 
         // Update UI based on initial selection
         OnAuthMethodChanged(new SelectedItemChangedArgs(_authMethodRadio.SelectedItem, -1));

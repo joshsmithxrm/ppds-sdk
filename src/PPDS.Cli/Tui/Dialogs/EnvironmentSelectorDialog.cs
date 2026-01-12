@@ -112,6 +112,16 @@ internal sealed class EnvironmentSelectorDialog : Dialog
         };
         _urlField.TextChanged += OnUrlChanged;
 
+        // Enter on URL field triggers select
+        _urlField.KeyPress += (args) =>
+        {
+            if (args.KeyEvent.Key == Key.Enter)
+            {
+                OnSelectClicked();
+                args.Handled = true;
+            }
+        };
+
         // Spinner for loading animation
         _spinner = new TuiSpinner
         {
@@ -147,6 +157,16 @@ internal sealed class EnvironmentSelectorDialog : Dialog
         cancelButton.Clicked += () => { Application.RequestStop(); };
 
         Add(filterLabel, _filterField, listFrame, urlLabel, _urlField, _spinner, _statusLabel, _selectButton, cancelButton);
+
+        // Escape closes dialog
+        KeyPress += (e) =>
+        {
+            if (e.KeyEvent.Key == Key.Esc)
+            {
+                Application.RequestStop();
+                e.Handled = true;
+            }
+        };
 
         // Start spinner and discover environments asynchronously
         _spinner.Start("Loading environments...");

@@ -51,6 +51,16 @@ internal sealed class ExportDialog : Dialog
         };
         _formatGroup.SelectedItem = 0;
 
+        // Enter on RadioGroup triggers export (user expects Enter to work)
+        _formatGroup.KeyPress += (args) =>
+        {
+            if (args.KeyEvent.Key == Key.Enter)
+            {
+                OnExportClicked();
+                args.Handled = true;
+            }
+        };
+
         // Options
         _includeHeadersCheck = new CheckBox("Include column headers")
         {
@@ -85,6 +95,16 @@ internal sealed class ExportDialog : Dialog
         cancelButton.Clicked += () => { Application.RequestStop(); };
 
         Add(formatLabel, _formatGroup, _includeHeadersCheck, _statusLabel, exportButton, cancelButton);
+
+        // Escape closes dialog
+        KeyPress += (e) =>
+        {
+            if (e.KeyEvent.Key == Key.Esc)
+            {
+                Application.RequestStop();
+                e.Handled = true;
+            }
+        };
     }
 
     private void OnExportClicked()
