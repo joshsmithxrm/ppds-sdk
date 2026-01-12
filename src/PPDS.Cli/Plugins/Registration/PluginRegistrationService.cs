@@ -660,6 +660,8 @@ public sealed class PluginRegistrationService : IPluginRegistrationService
                 SdkMessageProcessingStep.Fields.ImpersonatingUserId,
                 SdkMessageProcessingStep.Fields.AsyncAutoDelete,
                 SdkMessageProcessingStep.Fields.EventHandler,
+                SdkMessageProcessingStep.Fields.IsManaged,
+                SdkMessageProcessingStep.Fields.IsCustomizable,
                 SdkMessageProcessingStep.Fields.CreatedOn,
                 SdkMessageProcessingStep.Fields.ModifiedOn),
             LinkEntities =
@@ -726,6 +728,8 @@ public sealed class PluginRegistrationService : IPluginRegistrationService
             AsyncAutoDelete = entity.GetAttributeValue<bool?>(SdkMessageProcessingStep.Fields.AsyncAutoDelete) ?? false,
             PluginTypeId = entity.GetAttributeValue<EntityReference>(SdkMessageProcessingStep.Fields.EventHandler)?.Id,
             PluginTypeName = entity.GetAttributeValue<AliasedValue>($"plugintype.{PluginType.Fields.TypeName}")?.Value?.ToString(),
+            IsManaged = entity.GetAttributeValue<bool?>(SdkMessageProcessingStep.Fields.IsManaged) ?? false,
+            IsCustomizable = GetBooleanManagedProperty(entity, SdkMessageProcessingStep.Fields.IsCustomizable),
             CreatedOn = entity.GetAttributeValue<DateTime?>(SdkMessageProcessingStep.Fields.CreatedOn),
             ModifiedOn = entity.GetAttributeValue<DateTime?>(SdkMessageProcessingStep.Fields.ModifiedOn)
         };
@@ -749,6 +753,8 @@ public sealed class PluginRegistrationService : IPluginRegistrationService
                 SdkMessageProcessingStepImage.Fields.Attributes1,
                 SdkMessageProcessingStepImage.Fields.MessagePropertyName,
                 SdkMessageProcessingStepImage.Fields.SdkMessageProcessingStepId,
+                SdkMessageProcessingStepImage.Fields.IsManaged,
+                SdkMessageProcessingStepImage.Fields.IsCustomizable,
                 SdkMessageProcessingStepImage.Fields.CreatedOn,
                 SdkMessageProcessingStepImage.Fields.ModifiedOn),
             LinkEntities =
@@ -786,6 +792,8 @@ public sealed class PluginRegistrationService : IPluginRegistrationService
             MessagePropertyName = entity.GetAttributeValue<string>(SdkMessageProcessingStepImage.Fields.MessagePropertyName),
             StepId = entity.GetAttributeValue<EntityReference>(SdkMessageProcessingStepImage.Fields.SdkMessageProcessingStepId)?.Id,
             StepName = entity.GetAttributeValue<AliasedValue>($"step.{SdkMessageProcessingStep.Fields.Name}")?.Value?.ToString(),
+            IsManaged = entity.GetAttributeValue<bool?>(SdkMessageProcessingStepImage.Fields.IsManaged) ?? false,
+            IsCustomizable = GetBooleanManagedProperty(entity, SdkMessageProcessingStepImage.Fields.IsCustomizable),
             CreatedOn = entity.GetAttributeValue<DateTime?>(SdkMessageProcessingStepImage.Fields.CreatedOn),
             ModifiedOn = entity.GetAttributeValue<DateTime?>(SdkMessageProcessingStepImage.Fields.ModifiedOn)
         };

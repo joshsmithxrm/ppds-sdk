@@ -621,16 +621,16 @@ public static class UpdateCommand
     private sealed class UpdateResult
     {
         [JsonPropertyName("type")]
-        public string Type { get; set; } = string.Empty;
+        public string Type { get; init; } = string.Empty;
 
         [JsonPropertyName("name")]
-        public string Name { get; set; } = string.Empty;
+        public string Name { get; init; } = string.Empty;
 
         [JsonPropertyName("id")]
-        public Guid Id { get; set; }
+        public Guid Id { get; init; }
 
         [JsonPropertyName("changes")]
-        public List<string> Changes { get; set; } = [];
+        public List<string> Changes { get; init; } = [];
     }
 
     #endregion
