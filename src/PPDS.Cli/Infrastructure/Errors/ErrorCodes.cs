@@ -187,4 +187,13 @@ public static class ErrorCodes
         /// <summary>External service is unavailable.</summary>
         public const string ServiceUnavailable = "External.ServiceUnavailable";
     }
+
+    /// <summary>
+    /// Solution-related errors.
+    /// </summary>
+    public static class Solution
+    {
+        /// <summary>The requested solution was not found.</summary>
+        public const string NotFound = "Solution.NotFound";
+    }
 }
