@@ -7,11 +7,26 @@ Visual snapshot tests for the PPDS TUI using [@microsoft/tui-test](https://githu
 - **Node.js 20 LTS** (required by @microsoft/tui-test dependencies)
 - PPDS CLI built (`dotnet build src/PPDS.Cli/PPDS.Cli.csproj`)
 
+## Installing Node 20 (Windows)
+
+If you don't have a Node version manager, install **nvm-windows**:
+
+1. Download installer from: https://github.com/coreybutler/nvm-windows/releases
+2. Run `nvm-setup.exe`
+3. **Restart your terminal** after installation
+
+Then install and use Node 20:
+```powershell
+nvm install 20
+nvm use 20
+node --version  # Should show v20.x.x
+```
+
 ## Setup
 
 ```bash
 # Switch to Node 20 (if using nvm)
-nvm use
+nvm use 20
 
 # Install dependencies
 npm install
