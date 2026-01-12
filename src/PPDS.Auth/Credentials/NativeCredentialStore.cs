@@ -208,8 +208,12 @@ public sealed class NativeCredentialStore : ISecureCredentialStore, IDisposable
         await _migrationLock.WaitAsync().ConfigureAwait(false);
         try
         {
+            // Double-checked locking: first check is outside lock (line 205), second is inside.
+            // Analyzer doesn't understand that other threads may have set this while we waited.
+#pragma warning disable S2583 // Conditionally executed code should be reachable
             if (_migrationAttempted)
                 return;
+#pragma warning restore S2583
 
             _migrationAttempted = true;
 

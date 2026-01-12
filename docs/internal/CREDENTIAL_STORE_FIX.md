@@ -1,7 +1,7 @@
 # Fix: Credential Store Persistence Bug
 
-**Status:** Implementation Plan
-**Branch:** `fix/credential-store-persistence`
+**Status:** Completed (superseded by ADR-0032)
+**Branch:** `fix/credential-store-persistence` (merged)
 **Date:** 2026-01-12
 
 ## Summary

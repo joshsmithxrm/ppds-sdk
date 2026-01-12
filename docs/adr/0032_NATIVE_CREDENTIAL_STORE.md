@@ -99,4 +99,4 @@ internal NativeCredentialStore(bool allowCleartextFallback, ICredentialStore? st
 - [Devlooped.CredentialManager](https://github.com/devlooped/CredentialManager)
 - [Git Credential Manager Credential Stores](https://github.com/git-ecosystem/git-credential-manager/blob/main/docs/credstores.md)
 - ADR-0024: Shared Local State Architecture
-- `docs/internal/CREDENTIAL_STORE_FIX - Option B.md` - Original implementation plan
+- `docs/internal/CREDENTIAL_STORE_FIX.md` - Original implementation plan
