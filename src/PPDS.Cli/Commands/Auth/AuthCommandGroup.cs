@@ -209,8 +209,7 @@ public static class AuthCommandGroup
     {
         // Check if secret is provided via environment variable (CI/automation scenario).
         // If so, skip secure credential store entirely - secrets will be provided at runtime.
-        var envSpnSecret = Environment.GetEnvironmentVariable(CredentialProviderFactory.SpnSecretEnvVar);
-        var bypassCredentialStore = !string.IsNullOrWhiteSpace(envSpnSecret);
+        var bypassCredentialStore = CredentialProviderFactory.ShouldBypassCredentialStore();
 
         // Store secrets in secure credential store (not in profile), unless bypassed
         // Declared outside try block so finally can dispose it
