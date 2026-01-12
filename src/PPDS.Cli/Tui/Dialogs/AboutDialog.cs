@@ -19,8 +19,8 @@ internal sealed class AboutDialog : Dialog
     /// </summary>
     public AboutDialog() : base("About PPDS")
     {
-        Width = 72;
-        Height = 16;
+        Width = 78;
+        Height = 18;
         ColorScheme = TuiColorPalette.Default;
 
         var version = typeof(AboutDialog).Assembly.GetName().Version?.ToString() ?? "Unknown";
@@ -47,7 +47,7 @@ internal sealed class AboutDialog : Dialog
         };
 
         // Separator
-        var separator1 = new Label(new string('─', 68))
+        var separator1 = new Label(new string('─', 74))
         {
             X = 1,
             Y = 7
@@ -82,7 +82,7 @@ internal sealed class AboutDialog : Dialog
         };
 
         // Separator
-        var separator2 = new Label(new string('─', 68))
+        var separator2 = new Label(new string('─', 74))
         {
             X = 1,
             Y = 12
@@ -92,7 +92,7 @@ internal sealed class AboutDialog : Dialog
         var copyrightLabel = new Label(Copyright)
         {
             X = Pos.Center(),
-            Y = 13
+            Y = 14
         };
 
         // Close button
