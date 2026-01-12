@@ -965,9 +965,7 @@ public sealed class PluginRegistrationService : IPluginRegistrationService
         {
             ColumnSet = new ColumnSet(
                 PluginType.Fields.TypeName,
-                PluginType.Fields.FriendlyName,
-                PluginType.Fields.Name,
-                PluginType.Fields.PluginAssemblyId),
+                PluginType.Fields.FriendlyName),
             Criteria = new FilterExpression
             {
                 Conditions =

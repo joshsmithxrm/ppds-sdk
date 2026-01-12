@@ -114,13 +114,6 @@ public class RegisterCommandTests : IDisposable
         Assert.NotNull(argument);
     }
 
-    [Fact]
-    public void Assembly_HasIsolationOption()
-    {
-        var subcommand = _command.Subcommands.First(c => c.Name == "assembly");
-        var option = subcommand.Options.FirstOrDefault(o => o.Name == "--isolation");
-        Assert.NotNull(option);
-    }
 
     [Fact]
     public void Assembly_HasProfileOption()
@@ -148,7 +141,7 @@ public class RegisterCommandTests : IDisposable
     [Fact]
     public void Assembly_Parse_WithAllOptions_Succeeds()
     {
-        var result = _command.Parse($"assembly \"{_tempDllFile}\" --profile dev --solution MySolution --isolation Sandbox");
+        var result = _command.Parse($"assembly \"{_tempDllFile}\" --profile dev --solution MySolution");
         Assert.Empty(result.Errors);
     }
 

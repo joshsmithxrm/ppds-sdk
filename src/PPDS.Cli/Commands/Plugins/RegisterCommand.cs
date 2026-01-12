@@ -41,19 +41,12 @@ public static class RegisterCommand
             Description = "Path to the plugin assembly DLL file"
         }.AcceptExistingOnly();
 
-        var isolationOption = new Option<IsolationMode>("--isolation")
-        {
-            Description = "Isolation mode for the assembly",
-            DefaultValueFactory = _ => IsolationMode.Sandbox
-        };
-
         var command = new Command("assembly", "Register a plugin assembly (DLL)")
         {
             pathArgument,
             PluginsCommandGroup.ProfileOption,
             PluginsCommandGroup.EnvironmentOption,
-            PluginsCommandGroup.SolutionOption,
-            isolationOption
+            PluginsCommandGroup.SolutionOption
         };
 
         GlobalOptions.AddToCommand(command);
@@ -64,10 +57,9 @@ public static class RegisterCommand
             var profile = parseResult.GetValue(PluginsCommandGroup.ProfileOption);
             var environment = parseResult.GetValue(PluginsCommandGroup.EnvironmentOption);
             var solution = parseResult.GetValue(PluginsCommandGroup.SolutionOption);
-            var isolation = parseResult.GetValue(isolationOption);
             var globalOptions = GlobalOptions.GetValues(parseResult);
 
-            return await ExecuteAssemblyAsync(path, profile, environment, solution, isolation, globalOptions, cancellationToken);
+            return await ExecuteAssemblyAsync(path, profile, environment, solution, globalOptions, cancellationToken);
         });
 
         return command;
@@ -78,7 +70,6 @@ public static class RegisterCommand
         string? profile,
         string? environment,
         string? solution,
-        IsolationMode isolation,
         GlobalOptionValues globalOptions,
         CancellationToken cancellationToken)
     {
@@ -902,16 +893,4 @@ public static class RegisterCommand
     }
 
     #endregion
-}
-
-/// <summary>
-/// Plugin assembly isolation mode.
-/// </summary>
-public enum IsolationMode
-{
-    /// <summary>Sandbox isolation (recommended for cloud).</summary>
-    Sandbox,
-
-    /// <summary>No isolation (on-premises only).</summary>
-    None
 }
