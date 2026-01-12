@@ -23,8 +23,6 @@ internal sealed class TuiStatusBar : View
     private readonly InteractiveSession _session;
     private readonly ITuiThemeService _themeService;
 
-    private string? _statusMessage;
-
     /// <summary>
     /// Event raised when the profile section is clicked.
     /// </summary>
@@ -46,7 +44,7 @@ internal sealed class TuiStatusBar : View
 
         Height = 1;
         Width = Dim.Fill();
-        Y = Pos.AnchorEnd(1);
+        Y = Pos.AnchorEnd(1); // Bottom of screen
 
         // Profile button (left portion)
         _profileButton = new Button
@@ -75,25 +73,6 @@ internal sealed class TuiStatusBar : View
         _session.ProfileChanged += OnProfileChanged;
 
         // Initial display
-        UpdateDisplay();
-    }
-
-    /// <summary>
-    /// Sets an optional status message to display after the environment info.
-    /// </summary>
-    /// <param name="message">The status message, or null to clear.</param>
-    public void SetStatusMessage(string? message)
-    {
-        _statusMessage = message;
-        UpdateDisplay();
-    }
-
-    /// <summary>
-    /// Clears the status message.
-    /// </summary>
-    public void ClearStatusMessage()
-    {
-        _statusMessage = null;
         UpdateDisplay();
     }
 
@@ -134,16 +113,9 @@ internal sealed class TuiStatusBar : View
         _profileButton.Text = $" Profile: {profileDisplay} \u25bc";
         _profileButton.ColorScheme = colorScheme;
 
-        // Environment section with optional status message
+        // Environment section
         var envName = _session.CurrentEnvironmentDisplayName ?? "None";
-        var envText = $"Environment: {envName}{labelSuffix}";
-
-        if (!string.IsNullOrEmpty(_statusMessage))
-        {
-            envText = $"{envText} | {_statusMessage}";
-        }
-
-        _environmentButton.Text = $" {envText} \u25bc";
+        _environmentButton.Text = $" Environment: {envName}{labelSuffix} \u25bc";
         _environmentButton.ColorScheme = colorScheme;
     }
 

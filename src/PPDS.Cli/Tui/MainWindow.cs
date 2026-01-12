@@ -21,6 +21,7 @@ internal sealed class MainWindow : Window
     private readonly ITuiThemeService _themeService;
     private readonly ITuiErrorService _errorService;
     private readonly TuiStatusBar _statusBar;
+    private readonly TuiStatusLine _statusLine;
     private readonly IHotkeyRegistry _hotkeyRegistry;
     private readonly List<IDisposable> _hotkeyRegistrations = new();
     private bool _hasError;
@@ -50,12 +51,15 @@ internal sealed class MainWindow : Window
         _statusBar.ProfileClicked += OnStatusBarProfileClicked;
         _statusBar.EnvironmentClicked += OnStatusBarEnvironmentClicked;
 
+        // Status line for contextual messages (below status bar)
+        _statusLine = new TuiStatusLine();
+
         // Subscribe to error events
         _errorService.ErrorOccurred += OnErrorOccurred;
 
         SetupMenu();
         ShowMainMenu();
-        Add(_statusBar);
+        Add(_statusBar, _statusLine);
 
         // Register global hotkeys (work from anywhere, even inside dialogs)
         RegisterGlobalHotkeys();
@@ -482,7 +486,7 @@ internal sealed class MainWindow : Window
         Application.MainLoop?.Invoke(() =>
         {
             _hasError = true;
-            _statusBar.SetStatusMessage($"Error: {error.BriefSummary} (F12 for details)");
+            _statusLine.SetMessage($"Error: {error.BriefSummary} (F12 for details)");
         });
     }
 
@@ -493,6 +497,6 @@ internal sealed class MainWindow : Window
 
         // Clear error state when dialog closes (user has seen the error)
         _hasError = false;
-        _statusBar.ClearStatusMessage();
+        _statusLine.ClearMessage();
     }
 }

@@ -24,7 +24,7 @@ internal sealed class SqlQueryScreen : Window
     private readonly TextView _queryInput;
     private readonly QueryResultsTableView _resultsTable;
     private readonly TuiStatusBar _statusBar;
-    private readonly TuiSpinner _statusSpinner;
+    private readonly TuiStatusLine _statusLine;
     private readonly TextField _filterField;
     private readonly FrameView _filterFrame;
 
@@ -105,23 +105,16 @@ internal sealed class SqlQueryScreen : Window
         };
         _resultsTable.LoadMoreRequested += OnLoadMoreRequested;
 
-        // Status spinner (for animated feedback during operations)
-        _statusSpinner = new TuiSpinner
-        {
-            X = 0,
-            Y = Pos.AnchorEnd(1),
-            Width = Dim.Fill(),
-            Height = 1,
-            Visible = false
-        };
-
         // Interactive status bar with profile/environment info
         _statusBar = new TuiStatusBar(_session);
         _statusBar.ProfileClicked += OnStatusBarProfileClicked;
         _statusBar.EnvironmentClicked += OnStatusBarEnvironmentClicked;
-        _statusBar.SetStatusMessage("Ready. Press Ctrl+Enter to execute query.");
 
-        Add(queryFrame, _filterFrame, _resultsTable, _statusSpinner, _statusBar);
+        // Status line for contextual messages and spinner (below status bar)
+        _statusLine = new TuiStatusLine();
+        _statusLine.SetMessage("Ready. Press Ctrl+Enter to execute query.");
+
+        Add(queryFrame, _filterFrame, _resultsTable, _statusBar, _statusLine);
 
         // Subscribe to environment changes from the session
         _session.EnvironmentChanged += OnEnvironmentChanged;
@@ -135,7 +128,7 @@ internal sealed class SqlQueryScreen : Window
         }
         else
         {
-            _statusBar.SetStatusMessage("Connecting to environment...");
+            _statusLine.SetMessage("Connecting to environment...");
         }
 
         // Set up keyboard shortcuts
@@ -198,7 +191,7 @@ internal sealed class SqlQueryScreen : Window
                 _environmentUrl = url;
                 _resultsTable.SetEnvironmentUrl(_environmentUrl);
                 Title = $"SQL Query - {displayName ?? url}";
-                _statusBar.SetStatusMessage("Ready. Press Ctrl+Enter to execute query.");
+                _statusLine.SetMessage("Ready. Press Ctrl+Enter to execute query.");
 
                 // Clear stale results from previous environment
                 _resultsTable.Clear();
@@ -210,7 +203,7 @@ internal sealed class SqlQueryScreen : Window
             {
                 _environmentUrl = null;
                 Title = "SQL Query";
-                _statusBar.SetStatusMessage("No environment selected. Select an environment first.");
+                _statusLine.SetMessage("No environment selected. Select an environment first.");
             }
         });
     }
@@ -276,13 +269,13 @@ internal sealed class SqlQueryScreen : Window
         var sql = _queryInput.Text.ToString() ?? string.Empty;
         if (string.IsNullOrWhiteSpace(sql))
         {
-            _statusBar.SetStatusMessage("Error: Query cannot be empty.");
+            _statusLine.SetMessage("Error: Query cannot be empty.");
             return;
         }
 
         if (_environmentUrl == null)
         {
-            _statusBar.SetStatusMessage("Error: No environment selected.");
+            _statusLine.SetMessage("Error: No environment selected.");
             return;
         }
 
@@ -343,14 +336,11 @@ internal sealed class SqlQueryScreen : Window
         {
             if (showSpinner)
             {
-                _statusBar.Visible = false;
-                _statusSpinner.Start(message);
+                _statusLine.ShowSpinner(message);
             }
             else
             {
-                _statusSpinner.Stop();
-                _statusBar.SetStatusMessage(message);
-                _statusBar.Visible = true;
+                _statusLine.HideSpinner(message);
             }
         });
     }
@@ -398,18 +388,18 @@ internal sealed class SqlQueryScreen : Window
                 _lastPagingCookie = result.Result.PagingCookie;
                 _lastPageNumber = result.Result.PageNumber;
 
-                _statusBar.SetStatusMessage($"Loaded page {_lastPageNumber}");
+                _statusLine.SetMessage($"Loaded page {_lastPageNumber}");
             });
         }
         catch (InvalidOperationException ex)
         {
             _errorService.ReportError("Failed to load more results", ex, "LoadMoreResults");
-            Application.MainLoop?.Invoke(() => _statusBar.SetStatusMessage($"Error loading more: {ex.Message}"));
+            Application.MainLoop?.Invoke(() => _statusLine.SetMessage($"Error loading more: {ex.Message}"));
         }
         catch (HttpRequestException ex)
         {
             _errorService.ReportError("Network error loading results", ex, "LoadMoreResults");
-            Application.MainLoop?.Invoke(() => _statusBar.SetStatusMessage($"Network error: {ex.Message}"));
+            Application.MainLoop?.Invoke(() => _statusLine.SetMessage($"Network error: {ex.Message}"));
         }
     }
 
@@ -418,7 +408,7 @@ internal sealed class SqlQueryScreen : Window
         _filterFrame.Visible = true;
         _filterField.Text = string.Empty;
         _filterField.SetFocus();
-        _statusBar.SetStatusMessage("Type to filter results. Press Esc to close filter.");
+        _statusLine.SetMessage("Type to filter results. Press Esc to close filter.");
     }
 
     private void HideFilter()
@@ -426,7 +416,7 @@ internal sealed class SqlQueryScreen : Window
         _filterFrame.Visible = false;
         _filterField.Text = string.Empty;
         _resultsTable.ApplyFilter(null);
-        _statusBar.SetStatusMessage("Filter cleared.");
+        _statusLine.SetMessage("Filter cleared.");
     }
 
     private void OnFilterChanged(NStack.ustring obj)
@@ -452,7 +442,7 @@ internal sealed class SqlQueryScreen : Window
 
         if (dialog.ExportCompleted)
         {
-            _statusBar.SetStatusMessage("Export completed");
+            _statusLine.SetMessage("Export completed");
         }
     }
 
@@ -489,7 +479,7 @@ internal sealed class SqlQueryScreen : Window
             if (dialog.SelectedEntry != null)
             {
                 _queryInput.Text = dialog.SelectedEntry.Sql;
-                _statusBar.SetStatusMessage("Query loaded from history. Press Ctrl+Enter to execute.");
+                _statusLine.SetMessage("Query loaded from history. Press Ctrl+Enter to execute.");
             }
         });
     }
