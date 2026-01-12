@@ -1,5 +1,4 @@
 using System.CommandLine;
-using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.Extensions.DependencyInjection;
 using PPDS.Cli.Infrastructure;
@@ -14,12 +13,6 @@ namespace PPDS.Cli.Commands.Plugins;
 /// </summary>
 public static class DownloadCommand
 {
-    private static readonly JsonSerializerOptions JsonOptions = new()
-    {
-        WriteIndented = true,
-        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
-    };
-
     public static Command Create()
     {
         var command = new Command("download", "Download plugin assembly or package binary from Dataverse");
