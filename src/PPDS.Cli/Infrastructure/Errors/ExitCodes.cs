@@ -31,4 +31,16 @@ public static class ExitCodes
 
     /// <summary>Validation error - incomplete mapping file, schema mismatch, etc.</summary>
     public const int ValidationError = 8;
+
+    /// <summary>Forbidden - action not allowed (e.g., deleting managed component).</summary>
+    public const int Forbidden = 9;
+
+    /// <summary>Precondition failed - operation blocked by current state (e.g., has children).</summary>
+    public const int PreconditionFailed = 10;
+
+    /// <summary>General error code for failure.</summary>
+    public const int Error = 1;
+
+    /// <summary>Not found - resource does not exist.</summary>
+    public const int NotFound = 6;
 }
