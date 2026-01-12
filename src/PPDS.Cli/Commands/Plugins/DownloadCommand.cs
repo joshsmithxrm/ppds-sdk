@@ -211,8 +211,7 @@ public static class DownloadCommand
 
             return ExitCodes.Success;
         }
-        catch (PpdsException ex) when (ex.ErrorCode == ErrorCodes.Plugin.NoContent
-                                    || ex.ErrorCode == ErrorCodes.Plugin.ImageNotSupported)
+        catch (PpdsException ex) when (ex.ErrorCode == ErrorCodes.Plugin.NoContent)
         {
             writer.WriteError(new StructuredError(
                 ex.ErrorCode,
@@ -334,8 +333,7 @@ public static class DownloadCommand
 
             return ExitCodes.Success;
         }
-        catch (PpdsException ex) when (ex.ErrorCode == ErrorCodes.Plugin.NoContent
-                                    || ex.ErrorCode == ErrorCodes.Plugin.ImageNotSupported)
+        catch (PpdsException ex) when (ex.ErrorCode == ErrorCodes.Plugin.NoContent)
         {
             writer.WriteError(new StructuredError(
                 ex.ErrorCode,

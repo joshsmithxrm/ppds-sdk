@@ -137,9 +137,9 @@ public static class UnregisterCommand
 
             return ex.ErrorCode switch
             {
-                "NOT_FOUND" => ExitCodes.NotFoundError,
-                "MANAGED" => ExitCodes.Forbidden,
-                "HAS_CHILDREN" => ExitCodes.PreconditionFailed,
+                ErrorCodes.Plugin.NotFound => ExitCodes.NotFoundError,
+                ErrorCodes.Plugin.ManagedComponent => ExitCodes.Forbidden,
+                ErrorCodes.Plugin.HasChildren => ExitCodes.PreconditionFailed,
                 _ => ExitCodes.Failure
             };
         }
