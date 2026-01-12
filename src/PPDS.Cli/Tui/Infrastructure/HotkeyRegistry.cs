@@ -96,7 +96,7 @@ internal sealed class HotkeyRegistry : IHotkeyRegistry
 {
     private readonly List<HotkeyBinding> _bindings = new();
     private readonly object _lock = new();
-    private readonly HashSet<Key> _pendingGlobalHandlers = new();
+    private bool _globalHandlerExecuting;
 
     private object? _activeScreen;
     private object? _activeDialog;
@@ -179,33 +179,39 @@ internal sealed class HotkeyRegistry : IHotkeyRegistry
 
         TuiDebugLog.Log($"Hotkey matched: {FormatKey(keyEvent.Key)} -> {matchedBinding.Description}");
 
-        // For global hotkeys, close dialog first if one is open
-        if (isGlobalWithDialogOpen)
-        {
-            TuiDebugLog.Log("Closing dialog before executing global hotkey");
-            SetActiveDialog(null);  // Clear dialog state immediately to prevent stale state
-            Application.RequestStop();
-        }
-
-        // CRITICAL: Always defer global handler execution to next main loop iteration.
-        // Starting Application.Run() from within a key event handler corrupts
-        // Terminal.Gui's internal state (Border.SetBorderBrush null reference).
-        // Deferring ensures the current key event fully completes first.
+        // CRITICAL: Global hotkeys need special handling to avoid Terminal.Gui state corruption.
+        // - Only one global handler can be pending/executing at a time (any key)
+        // - If dialog is open, just close it - don't execute the new handler
+        // - User must press key again after dialog closes to trigger its action
+        // This prevents overlapping Application.Run() calls that corrupt ConsoleDriver state.
         if (matchedBinding.Scope == HotkeyScope.Global)
         {
-            // Prevent duplicate handlers from stacking up when keys are pressed rapidly.
-            // Each key can only have one pending handler at a time.
             lock (_lock)
             {
-                if (_pendingGlobalHandlers.Contains(keyEvent.Key))
+                if (_globalHandlerExecuting)
                 {
-                    TuiDebugLog.Log($"Ignoring duplicate {FormatKey(keyEvent.Key)} - handler already pending");
-                    return true; // Key was handled (absorbed), just not executed again
+                    TuiDebugLog.Log($"Ignoring {FormatKey(keyEvent.Key)} - global handler already active");
+                    return true; // Absorbed, not executed
                 }
-                _pendingGlobalHandlers.Add(keyEvent.Key);
+                _globalHandlerExecuting = true;
             }
 
-            var key = keyEvent.Key;
+            // If dialog is open, ONLY close it - don't execute the new handler.
+            // This avoids the race condition where RequestStop() hasn't finished
+            // before a new Application.Run() starts.
+            if (isGlobalWithDialogOpen)
+            {
+                TuiDebugLog.Log("Closing dialog (handler will not execute - press again after dialog closes)");
+                SetActiveDialog(null);
+                Application.RequestStop();
+                // Reset gate immediately - dialog will close on its own
+                lock (_lock) { _globalHandlerExecuting = false; }
+                return true;
+            }
+
+            // Defer handler execution to next main loop iteration.
+            // Starting Application.Run() from within a key event handler corrupts
+            // Terminal.Gui's internal state (Border.SetBorderBrush null reference).
             Application.MainLoop?.Invoke(() =>
             {
                 try
@@ -214,10 +220,7 @@ internal sealed class HotkeyRegistry : IHotkeyRegistry
                 }
                 finally
                 {
-                    lock (_lock)
-                    {
-                        _pendingGlobalHandlers.Remove(key);
-                    }
+                    lock (_lock) { _globalHandlerExecuting = false; }
                 }
             });
         }
