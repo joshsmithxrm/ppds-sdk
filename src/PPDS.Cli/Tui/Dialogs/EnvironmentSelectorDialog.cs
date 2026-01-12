@@ -14,6 +14,7 @@ internal sealed class EnvironmentSelectorDialog : Dialog
 {
     private readonly IEnvironmentService _environmentService;
     private readonly Action<DeviceCodeInfo>? _deviceCodeCallback;
+    private readonly InteractiveSession? _session;
     private readonly TextField _filterField;
     private readonly ListView _listView;
     private readonly Label _statusLabel;
@@ -45,12 +46,17 @@ internal sealed class EnvironmentSelectorDialog : Dialog
     /// <summary>
     /// Creates a new environment selector dialog.
     /// </summary>
+    /// <param name="environmentService">The environment service for discovery.</param>
+    /// <param name="deviceCodeCallback">Callback for device code display.</param>
+    /// <param name="session">Optional session for showing environment details.</param>
     public EnvironmentSelectorDialog(
         IEnvironmentService environmentService,
-        Action<DeviceCodeInfo>? deviceCodeCallback = null) : base("Select Environment")
+        Action<DeviceCodeInfo>? deviceCodeCallback = null,
+        InteractiveSession? session = null) : base("Select Environment")
     {
         _environmentService = environmentService ?? throw new ArgumentNullException(nameof(environmentService));
         _deviceCodeCallback = deviceCodeCallback;
+        _session = session;
 
         Width = 70;
         Height = 22;
@@ -144,19 +150,26 @@ internal sealed class EnvironmentSelectorDialog : Dialog
         // Buttons
         _selectButton = new Button("_Select")
         {
-            X = Pos.Center() - 15,
+            X = Pos.Center() - 20,
             Y = Pos.AnchorEnd(1)
         };
         _selectButton.Clicked += OnSelectClicked;
 
+        var detailsButton = new Button("De_tails")
+        {
+            X = Pos.Center() - 5,
+            Y = Pos.AnchorEnd(1)
+        };
+        detailsButton.Clicked += OnDetailsClicked;
+
         var cancelButton = new Button("_Cancel")
         {
-            X = Pos.Center() + 5,
+            X = Pos.Center() + 10,
             Y = Pos.AnchorEnd(1)
         };
         cancelButton.Clicked += () => { Application.RequestStop(); };
 
-        Add(filterLabel, _filterField, listFrame, urlLabel, _urlField, _spinner, _statusLabel, _selectButton, cancelButton);
+        Add(filterLabel, _filterField, listFrame, urlLabel, _urlField, _spinner, _statusLabel, _selectButton, detailsButton, cancelButton);
 
         // Escape closes dialog
         KeyPress += (e) =>
@@ -327,5 +340,37 @@ internal sealed class EnvironmentSelectorDialog : Dialog
         {
             _statusLabel.Text = "Please select an environment or enter a URL";
         }
+    }
+
+    private void OnDetailsClicked()
+    {
+        if (_session == null)
+        {
+            MessageBox.Query("Details", "Environment details require session context.", "OK");
+            return;
+        }
+
+        // Get URL from manual entry or selected environment
+        var url = _urlField.Text?.ToString()?.Trim();
+        string? displayName = null;
+
+        if (string.IsNullOrWhiteSpace(url))
+        {
+            if (_listView.SelectedItem >= 0 && _listView.SelectedItem < _filteredEnvironments.Count)
+            {
+                var env = _filteredEnvironments[_listView.SelectedItem];
+                url = env.Url;
+                displayName = env.DisplayName;
+            }
+        }
+
+        if (string.IsNullOrWhiteSpace(url))
+        {
+            MessageBox.Query("No Environment", "Please select an environment or enter a URL first.", "OK");
+            return;
+        }
+
+        using var dialog = new EnvironmentDetailsDialog(_session, url, displayName);
+        Application.Run(dialog);
     }
 }

@@ -48,7 +48,7 @@ internal sealed class ProfileSelectorDialog : Dialog
         _session = session;
 
         Width = 60;
-        Height = 18;
+        Height = 19;
         ColorScheme = TuiColorPalette.Default;
 
         // Profile list
@@ -100,40 +100,55 @@ internal sealed class ProfileSelectorDialog : Dialog
             Y = Pos.Bottom(_detailLabel),
             Width = Dim.Fill() - 2,
             Height = 1,
-            Text = "F2 rename | Del delete | Ctrl+D details",
+            Text = "F2 rename | Del delete",
             ColorScheme = TuiColorPalette.StatusBar_Default
         };
 
-        // Buttons
+        // Buttons - Row 1 (primary actions)
         var selectButton = new Button("_Select")
         {
-            X = Pos.Center() - 24,
-            Y = Pos.AnchorEnd(1)
+            X = Pos.Center() - 20,
+            Y = Pos.AnchorEnd(2)
         };
         selectButton.Clicked += OnSelectClicked;
 
         var createButton = new Button("Create _New")
         {
-            X = Pos.Center() - 9,
-            Y = Pos.AnchorEnd(1)
+            X = Pos.Center() - 6,
+            Y = Pos.AnchorEnd(2)
         };
         createButton.Clicked += OnCreateClicked;
 
         var deleteButton = new Button("_Delete")
         {
-            X = Pos.Center() + 7,
-            Y = Pos.AnchorEnd(1)
+            X = Pos.Center() + 10,
+            Y = Pos.AnchorEnd(2)
         };
         deleteButton.Clicked += OnDeleteClicked;
 
+        // Buttons - Row 2 (secondary actions)
+        var detailsButton = new Button("De_tails")
+        {
+            X = Pos.Center() - 22,
+            Y = Pos.AnchorEnd(1)
+        };
+        detailsButton.Clicked += OnDetailsClicked;
+
+        var clearAllButton = new Button("Clear _All")
+        {
+            X = Pos.Center() - 7,
+            Y = Pos.AnchorEnd(1)
+        };
+        clearAllButton.Clicked += OnClearAllClicked;
+
         var cancelButton = new Button("_Cancel")
         {
-            X = Pos.Center() + 20,
+            X = Pos.Center() + 8,
             Y = Pos.AnchorEnd(1)
         };
         cancelButton.Clicked += () => { Application.RequestStop(); };
 
-        Add(listFrame, _spinner, _detailLabel, _hintLabel, selectButton, createButton, deleteButton, cancelButton);
+        Add(listFrame, _spinner, _detailLabel, _hintLabel, selectButton, createButton, deleteButton, detailsButton, clearAllButton, cancelButton);
 
         // Start spinner while loading
         _spinner.Start("Loading profiles...");
@@ -447,6 +462,41 @@ internal sealed class ProfileSelectorDialog : Dialog
         {
             ProfileWasDeleted = true;
             await LoadProfilesAsync();
+        }
+    }
+
+    private void OnDetailsClicked()
+    {
+        if (_session == null)
+        {
+            MessageBox.Query("Details", "Profile details require session context.", "OK");
+            return;
+        }
+
+        // Show the profile details dialog for the active profile.
+        // Note: ProfileDetailsDialog currently only shows active profile details
+        // because it needs full AuthProfile data (token expiration, authority, etc.)
+        var dialog = new ProfileDetailsDialog(_session);
+        Application.Run(dialog);
+    }
+
+    private void OnClearAllClicked()
+    {
+        if (_profiles.Count == 0)
+        {
+            MessageBox.Query("No Profiles", "There are no profiles to clear.", "OK");
+            return;
+        }
+
+        var dialog = new ClearAllProfilesDialog(_profileService, _profiles.Count);
+        Application.Run(dialog);
+
+        if (dialog.Cleared)
+        {
+            // All profiles cleared - close this dialog
+            // Caller will handle the state reset
+            ProfileWasDeleted = true;
+            Application.RequestStop();
         }
     }
 }

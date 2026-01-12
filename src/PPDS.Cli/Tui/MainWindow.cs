@@ -3,6 +3,7 @@ using PPDS.Cli.Services.Profile;
 using PPDS.Cli.Tui.Dialogs;
 using PPDS.Cli.Tui.Infrastructure;
 using PPDS.Cli.Tui.Screens;
+using PPDS.Cli.Tui.Views;
 using Terminal.Gui;
 
 namespace PPDS.Cli.Tui;
@@ -19,7 +20,7 @@ internal sealed class MainWindow : Window
     private readonly InteractiveSession _session;
     private readonly ITuiThemeService _themeService;
     private readonly ITuiErrorService _errorService;
-    private readonly Button _statusButton;
+    private readonly TuiStatusBar _statusBar;
     private bool _hasError;
     private DateTime _lastMenuClickTime = DateTime.MinValue;
     private const int MenuClickDebounceMs = 150;
@@ -41,27 +42,37 @@ internal sealed class MainWindow : Window
         // Apply dark theme to the main window
         ColorScheme = TuiColorPalette.Default;
 
-        // Status bar at bottom - clickable button to open environment details
-        // Starts with default/unknown color, updated when environment loads
-        _statusButton = new Button
-        {
-            X = 0,
-            Y = Pos.AnchorEnd(1),
-            Width = Dim.Fill(),
-            Height = 1,
-            ColorScheme = TuiColorPalette.StatusBar_Default
-        };
-        _statusButton.Clicked += OnStatusButtonClicked;
+        // Interactive status bar with profile/environment selectors
+        _statusBar = new TuiStatusBar(_session);
+        _statusBar.ProfileClicked += OnStatusBarProfileClicked;
+        _statusBar.EnvironmentClicked += OnStatusBarEnvironmentClicked;
 
         // Subscribe to error events
         _errorService.ErrorOccurred += OnErrorOccurred;
 
         SetupMenu();
         ShowMainMenu();
-        Add(_statusButton);
+        Add(_statusBar);
 
         // Load initial profile info
         LoadProfileInfoAsync();
+    }
+
+    private void OnStatusBarProfileClicked()
+    {
+        ShowProfileSelector();
+    }
+
+    private void OnStatusBarEnvironmentClicked()
+    {
+        if (_hasError)
+        {
+            ShowErrorDetails();
+        }
+        else
+        {
+            ShowEnvironmentSelector();
+        }
     }
 
     private void SetupMenu()
@@ -71,6 +82,7 @@ internal sealed class MainWindow : Window
         var solutionsItem = new MenuItem("_Solutions (Coming Soon)", "", null);
         var pluginTracesItem = new MenuItem("_Plugin Traces (Coming Soon)", "", null);
 
+        // Note: Profile/Environment switching moved to interactive status bar at bottom
         var menu = new MenuBar(new MenuBarItem[]
         {
             new("_File", new MenuItem[]
@@ -78,17 +90,7 @@ internal sealed class MainWindow : Window
                 new("_SQL Query", "Run SQL queries against Dataverse", () => NavigateToSqlQuery(), shortcut: Key.F2),
                 dataMigrationItem,
                 new("", "", () => {}, null, null, Key.Null), // Separator
-                new("Switch _Profile", "Select a different authentication profile", () => ShowProfileSelector()),
-                new("View Profile _Details", "Show profile details (who am I)", () => ShowProfileDetails(), shortcut: Key.CtrlMask | Key.I),
-                new("Clear All _Profiles", "Delete all profiles and credentials", () => ShowClearAllProfiles()),
-                new("", "", () => {}, null, null, Key.Null), // Separator
                 new("_Quit", "Exit the application", () => RequestStop(), shortcut: Key.CtrlMask | Key.Q)
-            }),
-            new("_Environment", new MenuItem[]
-            {
-                new("_View Details", "Show environment and organization details", () => ShowEnvironmentDetails(), shortcut: Key.CtrlMask | Key.E),
-                new("", "", () => {}, null, null, Key.Null), // Separator
-                new("_Switch Environment", "Select a different environment", () => ShowEnvironmentSelector()),
             }),
             new("_Tools", new MenuItem[]
             {
@@ -178,14 +180,8 @@ internal sealed class MainWindow : Window
                     e.Handled = true;
                     break;
                 // F3 disabled - Data Migration coming soon
-                case Key.CtrlMask | Key.I:
-                    ShowProfileDetails();
-                    e.Handled = true;
-                    break;
-                case Key.CtrlMask | Key.E:
-                    ShowEnvironmentDetails();
-                    e.Handled = true;
-                    break;
+                // Note: Ctrl+I (Profile Details) and Ctrl+E (Environment Details) removed
+                // - Access via status bar clicks -> dialogs -> Details button
                 case Key.F12:
                     ShowErrorDetails();
                     e.Handled = true;
@@ -222,32 +218,9 @@ internal sealed class MainWindow : Window
                 _environmentName = profile.Environment?.DisplayName;
                 _environmentUrl = profile.Environment?.Url;
             }
-            UpdateStatus();
+            // Status bar updates automatically via session events
+            _statusBar.Refresh();
         });
-    }
-
-    private void UpdateStatus(string? error = null)
-    {
-        if (error != null)
-        {
-            _statusButton.Text = $" {error}";
-            _statusButton.ColorScheme = TuiColorPalette.Error;
-            return;
-        }
-
-        // Detect environment type and update color scheme
-        var envType = _themeService.DetectEnvironmentType(_environmentUrl);
-        _statusButton.ColorScheme = _themeService.GetStatusBarScheme(envType);
-
-        // Build status text with environment type label
-        var profilePart = _profileName != null ? $"Profile: {_profileName}" : "No profile";
-        var envPart = _environmentName != null ? $"Environment: {_environmentName}" : "No environment";
-
-        // Add environment type label if detected (e.g., "[PROD]", "[DEV]", "[SANDBOX]")
-        var envLabel = _themeService.GetEnvironmentLabel(envType);
-        var labelPart = !string.IsNullOrEmpty(envLabel) ? $" [{envLabel}]" : "";
-
-        _statusButton.Text = $" {profilePart} | {envPart}{labelPart} (Click for details)";
     }
 
     private void ShowEnvironmentDetails()
@@ -316,7 +289,7 @@ internal sealed class MainWindow : Window
                     _environmentName = null;
                     _environmentUrl = null;
                 }
-                UpdateStatus();
+                _statusBar.Refresh();
             });
         });
 #pragma warning restore PPDS013
@@ -341,7 +314,7 @@ internal sealed class MainWindow : Window
 
         Application.MainLoop?.Invoke(() =>
         {
-            UpdateStatus();
+            _statusBar.Refresh();
         });
     }
 
@@ -363,7 +336,7 @@ internal sealed class MainWindow : Window
 
         Application.MainLoop?.Invoke(() =>
         {
-            UpdateStatus();
+            _statusBar.Refresh();
         });
     }
 
@@ -400,55 +373,6 @@ internal sealed class MainWindow : Window
         Application.Run(dialog);
     }
 
-    private void ShowClearAllProfiles()
-    {
-        // Get profile count first
-#pragma warning disable PPDS013 // Fire-and-forget with explicit error handling via ContinueWith
-        _ = ShowClearAllProfilesAsync().ContinueWith(t =>
-        {
-            if (t.IsFaulted && t.Exception != null)
-            {
-                _errorService.ReportError("Failed to clear profiles", t.Exception, "ClearAllProfiles");
-            }
-        }, TaskScheduler.Default);
-#pragma warning restore PPDS013
-    }
-
-    private async Task ShowClearAllProfilesAsync()
-    {
-        var profileService = _session.GetProfileService();
-        var profiles = await profileService.GetProfilesAsync(CancellationToken.None);
-
-        if (profiles.Count == 0)
-        {
-            Application.MainLoop?.Invoke(() =>
-            {
-                MessageBox.Query("No Profiles", "There are no profiles to clear.", "OK");
-            });
-            return;
-        }
-
-        Application.MainLoop?.Invoke(() =>
-        {
-            var dialog = new ClearAllProfilesDialog(profileService, profiles.Count);
-            Application.Run(dialog);
-
-            if (dialog.Cleared)
-            {
-                // All profiles cleared - reset TUI state
-                _profileName = null;
-                _environmentName = null;
-                _environmentUrl = null;
-                UpdateStatus();
-
-                MessageBox.Query("Profiles Cleared",
-                    "All profiles and credentials have been cleared.\n\n" +
-                    "Use File > Switch Profile to create a new profile.",
-                    "OK");
-            }
-        });
-    }
-
     private void ShowEnvironmentSelector()
     {
         if (_profileName == null)
@@ -458,7 +382,7 @@ internal sealed class MainWindow : Window
         }
 
         var service = _session.GetEnvironmentService();
-        var dialog = new EnvironmentSelectorDialog(service, _deviceCodeCallback);
+        var dialog = new EnvironmentSelectorDialog(service, _deviceCodeCallback, _session);
 
         Application.Run(dialog);
 
@@ -497,7 +421,7 @@ internal sealed class MainWindow : Window
 
         Application.MainLoop?.Invoke(() =>
         {
-            UpdateStatus();
+            _statusBar.Refresh();
         });
     }
 
@@ -520,11 +444,12 @@ internal sealed class MainWindow : Window
             "  F1       - This help\n" +
             "  F2       - SQL Query\n" +
             "  F12      - Error Log\n" +
-            "  Ctrl+I   - Profile Details\n" +
-            "  Ctrl+E   - Environment Details\n" +
             "  Ctrl+Q   - Quit\n\n" +
+            "Status Bar:\n" +
+            "  Click left side  - Switch profile\n" +
+            "  Click right side - Switch environment\n\n" +
             "Menu Navigation:\n" +
-            "  Alt+F/E/T/H  - Open File/Environment/Tools/Help menu\n" +
+            "  Alt+F/T/H    - Open File/Tools/Help menu\n" +
             "  Letter       - Select item (when menu is open)\n" +
             "  Arrows       - Navigate menu items\n" +
             "  Enter        - Activate selected item\n" +
@@ -538,25 +463,12 @@ internal sealed class MainWindow : Window
             "OK");
     }
 
-    private void OnStatusButtonClicked()
-    {
-        if (_hasError)
-        {
-            ShowErrorDetails();
-        }
-        else
-        {
-            ShowEnvironmentDetails();
-        }
-    }
-
     private void OnErrorOccurred(TuiError error)
     {
         Application.MainLoop?.Invoke(() =>
         {
             _hasError = true;
-            _statusButton.Text = $" Error: {error.BriefSummary} (click for details)";
-            _statusButton.ColorScheme = TuiColorPalette.Error;
+            _statusBar.SetStatusMessage($"Error: {error.BriefSummary} (F12 for details)");
         });
     }
 
@@ -567,6 +479,6 @@ internal sealed class MainWindow : Window
 
         // Clear error state when dialog closes (user has seen the error)
         _hasError = false;
-        UpdateStatus();
+        _statusBar.ClearStatusMessage();
     }
 }

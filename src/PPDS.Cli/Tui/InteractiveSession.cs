@@ -52,6 +52,11 @@ internal sealed class InteractiveSession : IAsyncDisposable
     public event Action<string?, string?>? EnvironmentChanged;
 
     /// <summary>
+    /// Event raised when the active profile changes.
+    /// </summary>
+    public event Action<string?>? ProfileChanged;
+
+    /// <summary>
     /// Gets the current environment URL, or null if no connection has been established.
     /// </summary>
     public string? CurrentEnvironmentUrl => _currentEnvironmentUrl;
@@ -60,6 +65,11 @@ internal sealed class InteractiveSession : IAsyncDisposable
     /// Gets the current environment display name, or null if not set.
     /// </summary>
     public string? CurrentEnvironmentDisplayName => _currentEnvironmentDisplayName;
+
+    /// <summary>
+    /// Gets the current profile name, or null if using the active profile.
+    /// </summary>
+    public string? CurrentProfileName => string.IsNullOrEmpty(_profileName) ? null : _profileName;
 
     /// <summary>
     /// Creates a new interactive session for the specified profile.
@@ -361,6 +371,9 @@ internal sealed class InteractiveSession : IAsyncDisposable
 
         // Update the profile name for future service provider creation
         _profileName = profileName;
+
+        // Notify listeners of profile change
+        ProfileChanged?.Invoke(_profileName);
 
         // Invalidate old connection (uses old profile's credentials)
         await InvalidateAsync().ConfigureAwait(false);

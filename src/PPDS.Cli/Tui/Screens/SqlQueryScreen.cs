@@ -21,7 +21,7 @@ internal sealed class SqlQueryScreen : Window
 
     private readonly TextView _queryInput;
     private readonly QueryResultsTableView _resultsTable;
-    private readonly Label _statusLabel;
+    private readonly TuiStatusBar _statusBar;
     private readonly TuiSpinner _statusSpinner;
     private readonly TextField _filterField;
     private readonly FrameView _filterFrame;
@@ -109,17 +109,13 @@ internal sealed class SqlQueryScreen : Window
             Visible = false
         };
 
-        // Status bar
-        _statusLabel = new Label("Ready. Press Ctrl+Enter to execute query.")
-        {
-            X = 0,
-            Y = Pos.AnchorEnd(1),
-            Width = Dim.Fill(),
-            Height = 1,
-            ColorScheme = TuiColorPalette.StatusBar_Default
-        };
+        // Interactive status bar with profile/environment info
+        _statusBar = new TuiStatusBar(_session);
+        _statusBar.ProfileClicked += OnStatusBarProfileClicked;
+        _statusBar.EnvironmentClicked += OnStatusBarEnvironmentClicked;
+        _statusBar.SetStatusMessage("Ready. Press Ctrl+Enter to execute query.");
 
-        Add(queryFrame, _filterFrame, _resultsTable, _statusSpinner, _statusLabel);
+        Add(queryFrame, _filterFrame, _resultsTable, _statusSpinner, _statusBar);
 
         // Subscribe to environment changes from the session
         _session.EnvironmentChanged += OnEnvironmentChanged;
@@ -133,11 +129,58 @@ internal sealed class SqlQueryScreen : Window
         }
         else
         {
-            _statusLabel.Text = "Connecting to environment...";
+            _statusBar.SetStatusMessage("Connecting to environment...");
         }
 
         // Set up keyboard shortcuts
         SetupKeyboardShortcuts();
+    }
+
+    private void OnStatusBarProfileClicked()
+    {
+        var service = _session.GetProfileService();
+        var dialog = new ProfileSelectorDialog(service, _session);
+        Application.Run(dialog);
+
+        if (dialog.SelectedProfile != null)
+        {
+            // Profile switch handled by session - status bar updates automatically
+        }
+        else if (dialog.CreateNewSelected)
+        {
+            // Show profile creation dialog
+            var profileService = _session.GetProfileService();
+            var envService = _session.GetEnvironmentService();
+            var creationDialog = new ProfileCreationDialog(profileService, envService, _deviceCodeCallback);
+            Application.Run(creationDialog);
+        }
+    }
+
+    private void OnStatusBarEnvironmentClicked()
+    {
+        var service = _session.GetEnvironmentService();
+        var dialog = new EnvironmentSelectorDialog(service, _deviceCodeCallback, _session);
+        Application.Run(dialog);
+
+        if (dialog.SelectedEnvironment != null || dialog.UseManualUrl)
+        {
+            var url = dialog.UseManualUrl ? dialog.ManualUrl : dialog.SelectedEnvironment?.Url;
+            var name = dialog.UseManualUrl ? dialog.ManualUrl : dialog.SelectedEnvironment?.DisplayName;
+
+            if (url != null)
+            {
+                // Environment switch handled by SetEnvironmentAsync - triggers OnEnvironmentChanged
+#pragma warning disable PPDS013 // Fire-and-forget with explicit error handling
+                _ = _session.SetEnvironmentAsync(url, name).ContinueWith(t =>
+                {
+                    if (t.IsFaulted)
+                    {
+                        _errorService.ReportError("Failed to set environment", t.Exception, "SetEnvironment");
+                    }
+                }, TaskScheduler.Default);
+#pragma warning restore PPDS013
+            }
+        }
     }
 
     private void OnEnvironmentChanged(string? url, string? displayName)
@@ -149,7 +192,7 @@ internal sealed class SqlQueryScreen : Window
                 _environmentUrl = url;
                 _resultsTable.SetEnvironmentUrl(_environmentUrl);
                 Title = $"SQL Query - {displayName ?? url}";
-                _statusLabel.Text = "Ready. Press Ctrl+Enter to execute query.";
+                _statusBar.SetStatusMessage("Ready. Press Ctrl+Enter to execute query.");
 
                 // Clear stale results from previous environment
                 _resultsTable.Clear();
@@ -161,7 +204,7 @@ internal sealed class SqlQueryScreen : Window
             {
                 _environmentUrl = null;
                 Title = "SQL Query";
-                _statusLabel.Text = "No environment selected. Select an environment first.";
+                _statusBar.SetStatusMessage("No environment selected. Select an environment first.");
             }
         });
     }
@@ -220,13 +263,13 @@ internal sealed class SqlQueryScreen : Window
         var sql = _queryInput.Text.ToString() ?? string.Empty;
         if (string.IsNullOrWhiteSpace(sql))
         {
-            _statusLabel.Text = "Error: Query cannot be empty.";
+            _statusBar.SetStatusMessage("Error: Query cannot be empty.");
             return;
         }
 
         if (_environmentUrl == null)
         {
-            _statusLabel.Text = "Error: No environment selected.";
+            _statusBar.SetStatusMessage("Error: No environment selected.");
             return;
         }
 
@@ -287,14 +330,14 @@ internal sealed class SqlQueryScreen : Window
         {
             if (showSpinner)
             {
-                _statusLabel.Visible = false;
+                _statusBar.Visible = false;
                 _statusSpinner.Start(message);
             }
             else
             {
                 _statusSpinner.Stop();
-                _statusLabel.Text = message;
-                _statusLabel.Visible = true;
+                _statusBar.SetStatusMessage(message);
+                _statusBar.Visible = true;
             }
         });
     }
@@ -310,19 +353,10 @@ internal sealed class SqlQueryScreen : Window
         }
         catch (Exception ex)
         {
-            // History save failure is non-critical - show subtle warning but don't interrupt workflow
-            Application.MainLoop?.Invoke(() =>
-            {
-                // Append warning to existing status if there's a success message
-                var currentStatus = _statusLabel.Text?.ToString() ?? "";
-                if (!currentStatus.Contains("Warning"))
-                {
-                    _statusLabel.Text = $"{currentStatus} (Warning: history not saved)";
-                }
-            });
-
-            // Log to debug output for troubleshooting
+            // History save failure is non-critical - log but don't interrupt workflow
+            // The status bar shows profile/env info so we don't want to pollute it with warnings
             System.Diagnostics.Debug.WriteLine($"[TUI] Failed to save query to history: {ex.Message}");
+            TuiDebugLog.Log($"History save failed: {ex.Message}");
         }
     }
 
@@ -351,18 +385,18 @@ internal sealed class SqlQueryScreen : Window
                 _lastPagingCookie = result.Result.PagingCookie;
                 _lastPageNumber = result.Result.PageNumber;
 
-                _statusLabel.Text = $"Loaded page {_lastPageNumber}";
+                _statusBar.SetStatusMessage($"Loaded page {_lastPageNumber}");
             });
         }
         catch (InvalidOperationException ex)
         {
             _errorService.ReportError("Failed to load more results", ex, "LoadMoreResults");
-            Application.MainLoop?.Invoke(() => _statusLabel.Text = $"Error loading more: {ex.Message}");
+            Application.MainLoop?.Invoke(() => _statusBar.SetStatusMessage($"Error loading more: {ex.Message}"));
         }
         catch (HttpRequestException ex)
         {
             _errorService.ReportError("Network error loading results", ex, "LoadMoreResults");
-            Application.MainLoop?.Invoke(() => _statusLabel.Text = $"Network error: {ex.Message}");
+            Application.MainLoop?.Invoke(() => _statusBar.SetStatusMessage($"Network error: {ex.Message}"));
         }
     }
 
@@ -371,7 +405,7 @@ internal sealed class SqlQueryScreen : Window
         _filterFrame.Visible = true;
         _filterField.Text = string.Empty;
         _filterField.SetFocus();
-        _statusLabel.Text = "Type to filter results. Press Esc to close filter.";
+        _statusBar.SetStatusMessage("Type to filter results. Press Esc to close filter.");
     }
 
     private void HideFilter()
@@ -379,7 +413,7 @@ internal sealed class SqlQueryScreen : Window
         _filterFrame.Visible = false;
         _filterField.Text = string.Empty;
         _resultsTable.ApplyFilter(null);
-        _statusLabel.Text = "Filter cleared.";
+        _statusBar.SetStatusMessage("Filter cleared.");
     }
 
     private void OnFilterChanged(NStack.ustring obj)
@@ -405,7 +439,7 @@ internal sealed class SqlQueryScreen : Window
 
         if (dialog.ExportCompleted)
         {
-            _statusLabel.Text = "Export completed";
+            _statusBar.SetStatusMessage("Export completed");
         }
     }
 
@@ -442,7 +476,7 @@ internal sealed class SqlQueryScreen : Window
             if (dialog.SelectedEntry != null)
             {
                 _queryInput.Text = dialog.SelectedEntry.Sql;
-                _statusLabel.Text = "Query loaded from history. Press Ctrl+Enter to execute.";
+                _statusBar.SetStatusMessage("Query loaded from history. Press Ctrl+Enter to execute.");
             }
         });
     }
