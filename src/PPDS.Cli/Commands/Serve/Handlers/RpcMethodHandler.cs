@@ -9,6 +9,7 @@ using PPDS.Cli.Plugins.Registration;
 using PPDS.Cli.Services.Session;
 using PPDS.Dataverse.Pooling;
 using PPDS.Dataverse.Query;
+using PPDS.Dataverse.Services;
 using PPDS.Dataverse.Sql.Ast;
 using PPDS.Dataverse.Sql.Parsing;
 using PPDS.Dataverse.Sql.Transpilation;
@@ -759,6 +760,139 @@ public class RpcMethodHandler
         {
             ProfileName = profileName,
             Invalidated = true
+        };
+    }
+
+    #endregion
+
+    #region Solutions Methods
+
+    /// <summary>
+    /// Lists solutions in the environment.
+    /// Maps to: ppds solutions list --json
+    /// </summary>
+    /// <param name="filter">Optional filter by solution unique name or friendly name.</param>
+    /// <param name="includeManaged">Include managed solutions in the list (default: false).</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>List of solutions matching the filter criteria.</returns>
+    [JsonRpcMethod("solutions/list")]
+    public async Task<SolutionsListResponse> SolutionsListAsync(
+        string? filter = null,
+        bool includeManaged = false,
+        CancellationToken cancellationToken = default)
+    {
+        using var store = new ProfileStore();
+        var collection = await store.LoadAsync(cancellationToken);
+
+        var profile = collection.ActiveProfile;
+        if (profile == null)
+        {
+            throw new RpcException(ErrorCodes.Auth.NoActiveProfile, "No active profile configured");
+        }
+
+        if (profile.Environment == null)
+        {
+            throw new RpcException(
+                ErrorCodes.Connection.EnvironmentNotFound,
+                "No environment selected. Use env/select first.");
+        }
+
+        await using var serviceProvider = await ProfileServiceFactory.CreateFromProfileAsync(
+            profile.Name,
+            profile.Environment.Url,
+            deviceCodeCallback: DaemonDeviceCodeHandler.CreateCallback(_rpc),
+            cancellationToken: cancellationToken);
+
+        var solutionService = serviceProvider.GetRequiredService<ISolutionService>();
+        var solutions = await solutionService.ListAsync(filter, includeManaged, cancellationToken);
+
+        return new SolutionsListResponse
+        {
+            Solutions = solutions.Select(s => new SolutionInfoDto
+            {
+                Id = s.Id,
+                UniqueName = s.UniqueName,
+                FriendlyName = s.FriendlyName,
+                Version = s.Version,
+                IsManaged = s.IsManaged,
+                PublisherName = s.PublisherName,
+                Description = s.Description,
+                CreatedOn = s.CreatedOn,
+                ModifiedOn = s.ModifiedOn,
+                InstalledOn = s.InstalledOn
+            }).ToList()
+        };
+    }
+
+    /// <summary>
+    /// Gets components for a solution.
+    /// Maps to: ppds solutions components --json
+    /// </summary>
+    /// <param name="uniqueName">The solution unique name.</param>
+    /// <param name="componentType">Optional filter by component type (e.g., 61 for WebResource, 69 for PluginAssembly).</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>Solution components grouped by type.</returns>
+    [JsonRpcMethod("solutions/components")]
+    public async Task<SolutionComponentsResponse> SolutionsComponentsAsync(
+        string uniqueName,
+        int? componentType = null,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(uniqueName))
+        {
+            throw new RpcException(
+                ErrorCodes.Validation.RequiredField,
+                "The 'uniqueName' parameter is required");
+        }
+
+        using var store = new ProfileStore();
+        var collection = await store.LoadAsync(cancellationToken);
+
+        var profile = collection.ActiveProfile;
+        if (profile == null)
+        {
+            throw new RpcException(ErrorCodes.Auth.NoActiveProfile, "No active profile configured");
+        }
+
+        if (profile.Environment == null)
+        {
+            throw new RpcException(
+                ErrorCodes.Connection.EnvironmentNotFound,
+                "No environment selected. Use env/select first.");
+        }
+
+        await using var serviceProvider = await ProfileServiceFactory.CreateFromProfileAsync(
+            profile.Name,
+            profile.Environment.Url,
+            deviceCodeCallback: DaemonDeviceCodeHandler.CreateCallback(_rpc),
+            cancellationToken: cancellationToken);
+
+        var solutionService = serviceProvider.GetRequiredService<ISolutionService>();
+
+        // First get the solution to find its ID
+        var solution = await solutionService.GetAsync(uniqueName, cancellationToken);
+        if (solution == null)
+        {
+            throw new RpcException(
+                ErrorCodes.Solution.NotFound,
+                $"Solution '{uniqueName}' not found");
+        }
+
+        var components = await solutionService.GetComponentsAsync(solution.Id, componentType, cancellationToken);
+
+        return new SolutionComponentsResponse
+        {
+            SolutionId = solution.Id,
+            UniqueName = solution.UniqueName,
+            Components = components.Select(c => new SolutionComponentInfoDto
+            {
+                Id = c.Id,
+                ObjectId = c.ObjectId,
+                ComponentType = c.ComponentType,
+                ComponentTypeName = c.ComponentTypeName,
+                RootComponentBehavior = c.RootComponentBehavior,
+                IsMetadata = c.IsMetadata
+            }).ToList()
         };
     }
 
@@ -1743,6 +1877,156 @@ public class SessionCancelAllResponse
 
     [JsonPropertyName("success")]
     public bool Success { get; set; }
+}
+
+/// <summary>
+/// Response for solutions/list method.
+/// </summary>
+public class SolutionsListResponse
+{
+    /// <summary>
+    /// Gets or sets the list of solutions.
+    /// </summary>
+    [JsonPropertyName("solutions")]
+    public List<SolutionInfoDto> Solutions { get; set; } = [];
+}
+
+/// <summary>
+/// Solution information for RPC responses.
+/// </summary>
+public class SolutionInfoDto
+{
+    /// <summary>
+    /// Gets or sets the solution ID.
+    /// </summary>
+    [JsonPropertyName("id")]
+    public Guid Id { get; set; }
+
+    /// <summary>
+    /// Gets or sets the solution unique name.
+    /// </summary>
+    [JsonPropertyName("uniqueName")]
+    public string UniqueName { get; set; } = "";
+
+    /// <summary>
+    /// Gets or sets the solution friendly name.
+    /// </summary>
+    [JsonPropertyName("friendlyName")]
+    public string FriendlyName { get; set; } = "";
+
+    /// <summary>
+    /// Gets or sets the solution version.
+    /// </summary>
+    [JsonPropertyName("version")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Version { get; set; }
+
+    /// <summary>
+    /// Gets or sets a value indicating whether the solution is managed.
+    /// </summary>
+    [JsonPropertyName("isManaged")]
+    public bool IsManaged { get; set; }
+
+    /// <summary>
+    /// Gets or sets the publisher name.
+    /// </summary>
+    [JsonPropertyName("publisherName")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? PublisherName { get; set; }
+
+    /// <summary>
+    /// Gets or sets the solution description.
+    /// </summary>
+    [JsonPropertyName("description")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Description { get; set; }
+
+    /// <summary>
+    /// Gets or sets the creation date.
+    /// </summary>
+    [JsonPropertyName("createdOn")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public DateTime? CreatedOn { get; set; }
+
+    /// <summary>
+    /// Gets or sets the last modification date.
+    /// </summary>
+    [JsonPropertyName("modifiedOn")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public DateTime? ModifiedOn { get; set; }
+
+    /// <summary>
+    /// Gets or sets the installation date.
+    /// </summary>
+    [JsonPropertyName("installedOn")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public DateTime? InstalledOn { get; set; }
+}
+
+/// <summary>
+/// Response for solutions/components method.
+/// </summary>
+public class SolutionComponentsResponse
+{
+    /// <summary>
+    /// Gets or sets the solution ID.
+    /// </summary>
+    [JsonPropertyName("solutionId")]
+    public Guid SolutionId { get; set; }
+
+    /// <summary>
+    /// Gets or sets the solution unique name.
+    /// </summary>
+    [JsonPropertyName("uniqueName")]
+    public string UniqueName { get; set; } = "";
+
+    /// <summary>
+    /// Gets or sets the list of solution components.
+    /// </summary>
+    [JsonPropertyName("components")]
+    public List<SolutionComponentInfoDto> Components { get; set; } = [];
+}
+
+/// <summary>
+/// Solution component information for RPC responses.
+/// </summary>
+public class SolutionComponentInfoDto
+{
+    /// <summary>
+    /// Gets or sets the component ID.
+    /// </summary>
+    [JsonPropertyName("id")]
+    public Guid Id { get; set; }
+
+    /// <summary>
+    /// Gets or sets the object ID of the component.
+    /// </summary>
+    [JsonPropertyName("objectId")]
+    public Guid ObjectId { get; set; }
+
+    /// <summary>
+    /// Gets or sets the component type code.
+    /// </summary>
+    [JsonPropertyName("componentType")]
+    public int ComponentType { get; set; }
+
+    /// <summary>
+    /// Gets or sets the component type name.
+    /// </summary>
+    [JsonPropertyName("componentTypeName")]
+    public string ComponentTypeName { get; set; } = "";
+
+    /// <summary>
+    /// Gets or sets the root component behavior.
+    /// </summary>
+    [JsonPropertyName("rootComponentBehavior")]
+    public int RootComponentBehavior { get; set; }
+
+    /// <summary>
+    /// Gets or sets a value indicating whether this is a metadata component.
+    /// </summary>
+    [JsonPropertyName("isMetadata")]
+    public bool IsMetadata { get; set; }
 }
 
 #endregion
