@@ -45,14 +45,14 @@ public static class TuiColorPalette
 
     /// <summary>
     /// Color scheme for text input fields (TextField).
-    /// High contrast focus state for clear cursor visibility.
+    /// Uses standard focus colors since block cursor provides visibility.
     /// </summary>
     public static ColorScheme TextInput => new()
     {
         Normal = MakeAttr(Color.White, Color.Black),
-        Focus = MakeAttr(Color.Black, Color.BrightCyan),
+        Focus = MakeAttr(Color.Black, Color.Cyan),
         HotNormal = MakeAttr(Color.Cyan, Color.Black),
-        HotFocus = MakeAttr(Color.Black, Color.BrightCyan),
+        HotFocus = MakeAttr(Color.Black, Color.Cyan),
         Disabled = MakeAttr(Color.DarkGray, Color.Black)
     };
 

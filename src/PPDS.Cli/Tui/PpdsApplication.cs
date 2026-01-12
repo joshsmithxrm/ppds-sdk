@@ -97,6 +97,11 @@ internal sealed class PpdsApplication : IDisposable
         // Enable auth debug logging - redirect to TuiDebugLog for diagnostics
         AuthDebugLog.Writer = msg => TuiDebugLog.Log($"[Auth] {msg}");
 
+        // Set block cursor for better visibility in text fields (DECSCUSR)
+        // \x1b[2 q = steady block cursor
+        Console.Out.Write("\x1b[2 q");
+        Console.Out.Flush();
+
         Application.Init();
 
         try
@@ -108,6 +113,10 @@ internal sealed class PpdsApplication : IDisposable
         }
         finally
         {
+            // Restore default cursor before Terminal.Gui cleanup
+            Console.Out.Write("\x1b[0 q");
+            Console.Out.Flush();
+
             Application.Shutdown();
             AuthDebugLog.Reset();  // Clean up auth debug logging
             TuiDebugLog.Log("TUI shutdown, disposing session...");
