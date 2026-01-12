@@ -30,7 +30,7 @@ exports[`Startup Flow › launches and displays main menu | 1`] = String.raw`
 │││                                                                            │││
 │││                                                                            │││
 ││└────────────────────────────────────────────────────────────────────────────┘││
-││[  Profile: None (josh@powerplatformdevelopersuite.onmicrosoft.com) ▼ ][  Envi││
+││[  Profile: None (josh@powerp… ▼ ]    [  Environment: PPDS Demo - Dev ▼ ]     ││
 │└──────────────────────────────────────────────────────────────────────────────┘│
 ╰────────────────────────────────────────────────────────────────────────────────╯
 `;
