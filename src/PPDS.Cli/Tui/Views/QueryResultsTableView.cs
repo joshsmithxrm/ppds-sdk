@@ -82,7 +82,8 @@ internal sealed class QueryResultsTableView : FrameView
             X = 0,
             Y = Pos.Bottom(_tableView),
             Width = Dim.Fill(),
-            Height = 1
+            Height = 1,
+            TextAlignment = TextAlignment.Centered
         };
 
         Add(_tableView, _statusLabel);
@@ -166,7 +167,7 @@ internal sealed class QueryResultsTableView : FrameView
         MoreRecordsAvailable = false;
         PagingCookie = null;
         CurrentPageNumber = 1;
-        _statusLabel.X = Pos.Center();
+        _statusLabel.TextAlignment = TextAlignment.Centered;
         _statusLabel.Text = "No data";
     }
 
@@ -405,7 +406,7 @@ internal sealed class QueryResultsTableView : FrameView
         var rowCount = _dataTable.Rows.Count;
         var moreText = MoreRecordsAvailable ? " (more available)" : "";
         var guidText = _guidColumnsHidden ? " | GUIDs hidden (Ctrl+H)" : "";
-        _statusLabel.X = 0; // Reset to left-aligned for status text
+        _statusLabel.TextAlignment = TextAlignment.Left; // Left-align for status text
         _statusLabel.Text = $"{rowCount} rows{moreText}{guidText} | Ctrl+C: copy | Ctrl+U: copy URL | Ctrl+O: open";
     }
 

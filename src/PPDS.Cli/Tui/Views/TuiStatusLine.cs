@@ -26,6 +26,7 @@ internal sealed class TuiStatusLine : View
 
     private const int AnimationIntervalMs = 100;
 
+    private readonly Label _label;
     private int _frameIndex;
     private object? _timer;
     private string _message = string.Empty;
@@ -40,6 +41,17 @@ internal sealed class TuiStatusLine : View
         Width = Dim.Fill();
         Y = Pos.AnchorEnd(2); // Above TuiStatusBar
         ColorScheme = TuiColorPalette.Default;
+
+        // Use a Label child view for reliable text rendering
+        _label = new Label
+        {
+            X = 0,
+            Y = 0,
+            Width = Dim.Fill(),
+            Height = 1,
+            Text = string.Empty
+        };
+        Add(_label);
     }
 
     /// <summary>
@@ -144,52 +156,30 @@ internal sealed class TuiStatusLine : View
 
     private void UpdateDisplay()
     {
-        void DoUpdate()
+        string displayText;
+        if (_isSpinning)
         {
-            ClearView();
-
-            string displayText;
-            if (_isSpinning)
-            {
-                var spinnerChar = SpinnerFrames[_frameIndex];
-                displayText = string.IsNullOrEmpty(_message)
-                    ? spinnerChar
-                    : $"{spinnerChar} {_message}";
-            }
-            else
-            {
-                displayText = _message;
-            }
-
-            if (!string.IsNullOrEmpty(displayText))
-            {
-                Move(0, 0);
-                Driver?.AddStr($" {displayText}");
-            }
-
-            SetNeedsDisplay();
-        }
-
-        if (Application.MainLoop != null)
-        {
-            Application.MainLoop.Invoke(DoUpdate);
+            var spinnerChar = SpinnerFrames[_frameIndex];
+            displayText = string.IsNullOrEmpty(_message)
+                ? spinnerChar
+                : $"{spinnerChar} {_message}";
         }
         else
         {
-            // MainLoop not ready (during construction) - update directly
-            // The view will be redrawn when added to the hierarchy
-            DoUpdate();
+            displayText = _message;
         }
-    }
 
-    private void ClearView()
-    {
-        // Fill the line with spaces to clear previous content
-        Move(0, 0);
-        var width = Bounds.Width;
-        if (width > 0)
+        // Add leading space for padding
+        var labelText = string.IsNullOrEmpty(displayText) ? string.Empty : $" {displayText}";
+
+        // Update via MainLoop if available, otherwise directly (during construction)
+        if (Application.MainLoop != null)
         {
-            Driver?.AddStr(new string(' ', width));
+            Application.MainLoop.Invoke(() => _label.Text = labelText);
+        }
+        else
+        {
+            _label.Text = labelText;
         }
     }
 }
