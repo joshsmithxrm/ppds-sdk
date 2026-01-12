@@ -122,11 +122,27 @@ internal sealed class SqlQueryScreen : Window, ITuiStateCapture<SqlQueryScreenSt
 
         Add(_queryFrame, _filterFrame, _resultsTable, _statusBar, _statusLine);
 
-        // Visual focus indicators - highlight active panel
-        _queryFrame.Enter += (_) => _queryFrame.ColorScheme = TuiColorPalette.Focused;
-        _queryFrame.Leave += (_) => _queryFrame.ColorScheme = TuiColorPalette.Default;
-        _resultsTable.Enter += (_) => _resultsTable.ColorScheme = TuiColorPalette.Focused;
-        _resultsTable.Leave += (_) => _resultsTable.ColorScheme = TuiColorPalette.Default;
+        // Visual focus indicators - highlight active panel with color and title prefix
+        _queryFrame.Enter += (_) =>
+        {
+            _queryFrame.ColorScheme = TuiColorPalette.Focused;
+            _queryFrame.Title = "\u25b6 Query (Ctrl+Enter to execute, F6 to toggle focus)";
+        };
+        _queryFrame.Leave += (_) =>
+        {
+            _queryFrame.ColorScheme = TuiColorPalette.Default;
+            _queryFrame.Title = "Query (Ctrl+Enter to execute, F6 to toggle focus)";
+        };
+        _resultsTable.Enter += (_) =>
+        {
+            _resultsTable.ColorScheme = TuiColorPalette.Focused;
+            _resultsTable.Title = "\u25b6 Results";
+        };
+        _resultsTable.Leave += (_) =>
+        {
+            _resultsTable.ColorScheme = TuiColorPalette.Default;
+            _resultsTable.Title = "Results";
+        };
 
         // Subscribe to environment changes from the session
         _session.EnvironmentChanged += OnEnvironmentChanged;

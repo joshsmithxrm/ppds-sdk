@@ -144,7 +144,7 @@ internal sealed class TuiStatusLine : View
 
     private void UpdateDisplay()
     {
-        Application.MainLoop?.Invoke(() =>
+        void DoUpdate()
         {
             ClearView();
 
@@ -168,7 +168,18 @@ internal sealed class TuiStatusLine : View
             }
 
             SetNeedsDisplay();
-        });
+        }
+
+        if (Application.MainLoop != null)
+        {
+            Application.MainLoop.Invoke(DoUpdate);
+        }
+        else
+        {
+            // MainLoop not ready (during construction) - update directly
+            // The view will be redrawn when added to the hierarchy
+            DoUpdate();
+        }
     }
 
     private void ClearView()

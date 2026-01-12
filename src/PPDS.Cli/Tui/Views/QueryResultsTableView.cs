@@ -166,6 +166,7 @@ internal sealed class QueryResultsTableView : FrameView
         MoreRecordsAvailable = false;
         PagingCookie = null;
         CurrentPageNumber = 1;
+        _statusLabel.X = Pos.Center();
         _statusLabel.Text = "No data";
     }
 
@@ -404,6 +405,7 @@ internal sealed class QueryResultsTableView : FrameView
         var rowCount = _dataTable.Rows.Count;
         var moreText = MoreRecordsAvailable ? " (more available)" : "";
         var guidText = _guidColumnsHidden ? " | GUIDs hidden (Ctrl+H)" : "";
+        _statusLabel.X = 0; // Reset to left-aligned for status text
         _statusLabel.Text = $"{rowCount} rows{moreText}{guidText} | Ctrl+C: copy | Ctrl+U: copy URL | Ctrl+O: open";
     }
 

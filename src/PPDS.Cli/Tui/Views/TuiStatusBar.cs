@@ -111,18 +111,31 @@ internal sealed class TuiStatusBar : View, ITuiStateCapture<TuiStatusBarState>
         var labelSuffix = !string.IsNullOrEmpty(envLabel) ? $" [{envLabel}]" : "";
 
         // Profile section - show name and identity (e.g., "Josh (josh@contoso.com)")
+        // Truncate to fit in 40% of terminal width (max ~18 chars for user data)
         var profileName = _session.CurrentProfileName ?? "None";
         var profileIdentity = _session.CurrentProfileIdentity;
         var profileDisplay = !string.IsNullOrEmpty(profileIdentity)
             ? $"{profileName} ({profileIdentity})"
             : profileName;
+        profileDisplay = TruncateWithEllipsis(profileDisplay, 18);
         _profileButton.Text = $" Profile: {profileDisplay} \u25bc";
         _profileButton.ColorScheme = colorScheme;
 
-        // Environment section
+        // Environment section - truncate to fit remaining space (max ~28 chars for env name)
         var envName = _session.CurrentEnvironmentDisplayName ?? "None";
+        envName = TruncateWithEllipsis(envName, 28);
         _environmentButton.Text = $" Environment: {envName}{labelSuffix} \u25bc";
         _environmentButton.ColorScheme = colorScheme;
+    }
+
+    /// <summary>
+    /// Truncates text to max length with ellipsis if needed.
+    /// </summary>
+    private static string TruncateWithEllipsis(string text, int maxLength)
+    {
+        if (string.IsNullOrEmpty(text) || text.Length <= maxLength)
+            return text;
+        return text[..(maxLength - 1)] + "\u2026"; // Unicode ellipsis
     }
 
     /// <inheritdoc />
