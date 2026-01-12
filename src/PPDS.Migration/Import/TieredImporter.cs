@@ -544,7 +544,7 @@ namespace PPDS.Migration.Import
                     _ => await _bulkExecutor.UpsertMultipleAsync(entityName, probeRecord, bulkOptions, null, cancellationToken).ConfigureAwait(false)
                 };
 
-                if (IsBulkNotSupportedFailure(probeResult, 1))
+                if (BulkOperationHelper.IsBulkNotSupportedFailure(probeResult, 1))
                 {
                     // Cache that this entity doesn't support bulk operations
                     _bulkNotSupportedEntities[entityName] = true;
@@ -861,31 +861,5 @@ namespace PPDS.Migration.Import
             };
         }
 
-        /// <summary>
-        /// Determines if a bulk operation failure indicates the entity doesn't support bulk operations.
-        /// </summary>
-        /// <remarks>
-        /// Some entities (like team, queue) don't support CreateMultiple/UpdateMultiple/UpsertMultiple.
-        /// When detected, the importer should fallback to individual operations.
-        /// Error messages vary by entity:
-        /// - "is not enabled on the entity" (team)
-        /// - "does not support entities of type" (queue)
-        /// </remarks>
-        private static bool IsBulkNotSupportedFailure(BulkOperationResult result, int totalRecords)
-        {
-            // Only consider it a "not supported" failure if ALL records failed
-            if (result.FailureCount != totalRecords || result.Errors.Count == 0)
-                return false;
-
-            // Check if first error indicates bulk operation not supported
-            // Different entities return different error messages
-            var firstError = result.Errors[0];
-            var message = firstError.Message;
-            if (string.IsNullOrEmpty(message))
-                return false;
-
-            return message.Contains("is not enabled on the entity", StringComparison.OrdinalIgnoreCase) ||
-                   message.Contains("does not support entities of type", StringComparison.OrdinalIgnoreCase);
-        }
     }
 }

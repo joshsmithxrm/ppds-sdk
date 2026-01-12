@@ -175,7 +175,7 @@ namespace PPDS.Migration.Import
             var probeResult = await _bulkExecutor.UpdateMultipleAsync(entityName, probeRecord, bulkOptions, null, cancellationToken)
                 .ConfigureAwait(false);
 
-            if (IsBulkNotSupportedFailure(probeResult, 1))
+            if (BulkOperationHelper.IsBulkNotSupportedFailure(probeResult, 1))
             {
                 // Cache that this entity doesn't support bulk operations
                 _bulkNotSupportedEntities[entityName] = true;
@@ -277,18 +277,5 @@ namespace PPDS.Migration.Import
             return (successCount, failureCount);
         }
 
-        /// <summary>
-        /// Determines if a bulk operation failure indicates the entity doesn't support bulk operations.
-        /// </summary>
-        private static bool IsBulkNotSupportedFailure(BulkOperationResult result, int totalRecords)
-        {
-            // Only consider it a "not supported" failure if ALL records failed
-            if (result.FailureCount != totalRecords || result.Errors.Count == 0)
-                return false;
-
-            // Check if first error indicates bulk operation not supported
-            var firstError = result.Errors[0];
-            return firstError.Message?.Contains("is not enabled on the entity", StringComparison.OrdinalIgnoreCase) ?? false;
-        }
     }
 }
