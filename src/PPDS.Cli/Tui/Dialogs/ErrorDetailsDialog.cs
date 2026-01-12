@@ -66,7 +66,8 @@ internal sealed class ErrorDetailsDialog : Dialog
             Width = Dim.Fill(),
             Height = Dim.Fill(),
             ReadOnly = true,
-            WordWrap = true
+            WordWrap = true,
+            ColorScheme = TuiColorPalette.ReadOnlyText
         };
         detailsFrame.Add(_detailsTextView);
 

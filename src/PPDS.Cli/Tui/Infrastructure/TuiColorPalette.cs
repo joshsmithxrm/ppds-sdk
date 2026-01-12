@@ -56,6 +56,19 @@ public static class TuiColorPalette
         Disabled = MakeAttr(Color.DarkGray, Color.Black)
     };
 
+    /// <summary>
+    /// Color scheme for read-only text display (TextViews showing non-editable content).
+    /// Maintains black background even when focused for readability.
+    /// </summary>
+    public static ColorScheme ReadOnlyText => new()
+    {
+        Normal = MakeAttr(Color.White, Color.Black),
+        Focus = MakeAttr(Color.White, Color.Black),
+        HotNormal = MakeAttr(Color.Cyan, Color.Black),
+        HotFocus = MakeAttr(Color.White, Color.Black),
+        Disabled = MakeAttr(Color.DarkGray, Color.Black)
+    };
+
     #endregion
 
     #region Status Bar - Environment-Aware

@@ -78,17 +78,17 @@ internal sealed class MainWindow : Window
                 new("_SQL Query", "Run SQL queries against Dataverse", () => NavigateToSqlQuery(), shortcut: Key.F2),
                 dataMigrationItem,
                 new("", "", () => {}, null, null, Key.Null), // Separator
-                new("Switch _Profile...", "Select a different authentication profile", () => ShowProfileSelector()),
-                new("View Profile _Details...", "Show profile details (who am I)", () => ShowProfileDetails(), shortcut: Key.CtrlMask | Key.I),
-                new("Clear All _Profiles...", "Delete all profiles and credentials", () => ShowClearAllProfiles()),
+                new("Switch _Profile", "Select a different authentication profile", () => ShowProfileSelector()),
+                new("View Profile _Details", "Show profile details (who am I)", () => ShowProfileDetails(), shortcut: Key.CtrlMask | Key.I),
+                new("Clear All _Profiles", "Delete all profiles and credentials", () => ShowClearAllProfiles()),
                 new("", "", () => {}, null, null, Key.Null), // Separator
                 new("_Quit", "Exit the application", () => RequestStop(), shortcut: Key.CtrlMask | Key.Q)
             }),
             new("_Environment", new MenuItem[]
             {
-                new("_View Details...", "Show environment and organization details", () => ShowEnvironmentDetails(), shortcut: Key.CtrlMask | Key.E),
+                new("_View Details", "Show environment and organization details", () => ShowEnvironmentDetails(), shortcut: Key.CtrlMask | Key.E),
                 new("", "", () => {}, null, null, Key.Null), // Separator
-                new("_Switch Environment...", "Select a different environment", () => ShowEnvironmentSelector()),
+                new("_Switch Environment", "Select a different environment", () => ShowEnvironmentSelector()),
             }),
             new("_Tools", new MenuItem[]
             {
@@ -100,7 +100,7 @@ internal sealed class MainWindow : Window
                 new("_About", "About PPDS", () => ShowAbout()),
                 new("_Keyboard Shortcuts", "Show keyboard shortcuts", () => ShowKeyboardShortcuts(), shortcut: Key.F1),
                 new("", "", () => {}, null, null, Key.Null), // Separator
-                new("_Error Log...", "View recent errors and debug log", () => ShowErrorDetails(), shortcut: Key.F12),
+                new("_Error Log", "View recent errors and debug log", () => ShowErrorDetails(), shortcut: Key.F12),
             })
         });
 
