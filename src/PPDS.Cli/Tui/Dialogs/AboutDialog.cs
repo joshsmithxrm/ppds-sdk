@@ -1,3 +1,4 @@
+using PPDS.Cli.Commands;
 using PPDS.Cli.Tui.Infrastructure;
 using Terminal.Gui;
 
@@ -19,11 +20,11 @@ internal sealed class AboutDialog : Dialog
     /// </summary>
     public AboutDialog() : base("About PPDS")
     {
-        Width = 78;
-        Height = 18;
+        Width = 70;
+        Height = 20;
         ColorScheme = TuiColorPalette.Default;
 
-        var version = typeof(AboutDialog).Assembly.GetName().Version?.ToString() ?? "Unknown";
+        var version = ErrorOutput.Version;
 
         // Product name (centered header)
         var productLabel = new Label(ProductName)
@@ -47,52 +48,47 @@ internal sealed class AboutDialog : Dialog
         };
 
         // Separator
-        var separator1 = new Label(new string('─', 74))
+        var separator1 = new Label(new string('─', 66))
         {
             X = 1,
             Y = 7
         };
 
-        // Links section
-        const int labelWidth = 15;
-        const int valueX = 17;
-
+        // Links section - labels on one line, URLs on the next
         var docsHeaderLabel = new Label("Documentation:")
         {
             X = 1,
-            Y = 9,
-            Width = labelWidth
+            Y = 9
         };
         var docsUrlLabel = new Label(DocsUrl)
         {
-            X = valueX,
-            Y = 9
+            X = 3,
+            Y = 10
         };
 
         var githubHeaderLabel = new Label("GitHub:")
         {
             X = 1,
-            Y = 10,
-            Width = labelWidth
+            Y = 12
         };
         var githubUrlLabel = new Label(GitHubUrl)
         {
-            X = valueX,
-            Y = 10
+            X = 3,
+            Y = 13
         };
 
         // Separator
-        var separator2 = new Label(new string('─', 74))
+        var separator2 = new Label(new string('─', 66))
         {
             X = 1,
-            Y = 12
+            Y = 15
         };
 
         // Copyright
         var copyrightLabel = new Label(Copyright)
         {
             X = Pos.Center(),
-            Y = 14
+            Y = 17
         };
 
         // Close button
