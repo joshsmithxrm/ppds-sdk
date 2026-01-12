@@ -12,10 +12,6 @@ internal sealed class TuiErrorService : ITuiErrorService
     private readonly object _lock = new();
     private readonly int _maxErrorCount;
 
-    private static readonly string LogPath = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
-        ".ppds", "tui-debug.log");
-
     /// <summary>
     /// Creates a new TuiErrorService with the specified maximum error count.
     /// </summary>
@@ -92,5 +88,5 @@ internal sealed class TuiErrorService : ITuiErrorService
     }
 
     /// <inheritdoc />
-    public string GetLogFilePath() => LogPath;
+    public string GetLogFilePath() => TuiDebugLog.LogPath;
 }

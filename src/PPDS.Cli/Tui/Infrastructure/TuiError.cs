@@ -7,12 +7,14 @@ namespace PPDS.Cli.Tui.Infrastructure;
 /// <param name="Message">User-friendly error message.</param>
 /// <param name="Context">Optional context (e.g., operation name, method).</param>
 /// <param name="ExceptionType">The exception type name, if from an exception.</param>
+/// <param name="ExceptionMessage">The exception message, if from an exception.</param>
 /// <param name="StackTrace">The stack trace, if from an exception.</param>
 public sealed record TuiError(
     DateTimeOffset Timestamp,
     string Message,
     string? Context,
     string? ExceptionType,
+    string? ExceptionMessage,
     string? StackTrace)
 {
     /// <summary>
@@ -32,6 +34,7 @@ public sealed record TuiError(
             message,
             context,
             innerEx.GetType().Name,
+            innerEx.Message,
             innerEx.StackTrace);
     }
 
@@ -47,6 +50,7 @@ public sealed record TuiError(
             DateTimeOffset.UtcNow,
             message,
             context,
+            null,
             null,
             null);
     }
@@ -83,6 +87,9 @@ public sealed record TuiError(
 
         if (!string.IsNullOrEmpty(ExceptionType))
             lines.Add($"Exception Type: {ExceptionType}");
+
+        if (!string.IsNullOrEmpty(ExceptionMessage))
+            lines.Add($"Exception Message: {ExceptionMessage}");
 
         if (!string.IsNullOrEmpty(StackTrace))
         {

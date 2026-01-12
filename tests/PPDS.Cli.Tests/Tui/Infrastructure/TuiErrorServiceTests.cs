@@ -49,6 +49,7 @@ public class TuiErrorServiceTests
         Assert.Equal("User message", error.Message);
         Assert.Equal("TestContext", error.Context);
         Assert.Equal("InvalidOperationException", error.ExceptionType);
+        Assert.Equal("Inner exception message", error.ExceptionMessage);
         Assert.NotNull(error.StackTrace);
     }
 
@@ -274,6 +275,7 @@ public class TuiErrorTests
         Assert.Equal("User message", error.Message);
         Assert.Equal("TestContext", error.Context);
         Assert.Equal("InvalidOperationException", error.ExceptionType);
+        Assert.Equal("Test exception", error.ExceptionMessage);
         Assert.True(error.Timestamp > DateTimeOffset.MinValue);
     }
 
