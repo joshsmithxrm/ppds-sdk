@@ -25,7 +25,7 @@ internal sealed class ProfileCreationDialog : Dialog
     private readonly Action<DeviceCodeInfo>? _deviceCodeCallback;
 
     private readonly TextField _nameField;
-    private readonly ComboBox _authMethodCombo;
+    private readonly RadioGroup _authMethodRadio;
     private readonly TextField _environmentUrlField;
     private readonly Button _discoverButton;
 
@@ -67,7 +67,7 @@ internal sealed class ProfileCreationDialog : Dialog
         _deviceCodeCallback = deviceCodeCallback;
 
         Width = 70;
-        Height = 24;
+        Height = 27;
         ColorScheme = TuiColorPalette.Default;
 
         // Profile name
@@ -85,40 +85,37 @@ internal sealed class ProfileCreationDialog : Dialog
             ColorScheme = TuiColorPalette.TextInput
         };
 
-        // Auth method dropdown
+        // Auth method selection (RadioGroup for reliable rendering)
         var methodLabel = new Label("Auth Method:")
         {
             X = 1,
             Y = 3
         };
 
-        _authMethodCombo = new ComboBox
-        {
-            X = 16,
-            Y = 3,
-            Width = Dim.Fill() - 3,
-            Height = 5
-        };
-        _authMethodCombo.SetSource(new[]
+        _authMethodRadio = new RadioGroup(new NStack.ustring[]
         {
             "Device Code (Interactive)",
             "Browser (Interactive)",
             "Client Secret (Service Principal)",
             "Certificate File (Service Principal)"
-        });
-        _authMethodCombo.SelectedItem = InteractiveBrowserCredentialProvider.IsAvailable() ? 1 : 0;
-        _authMethodCombo.SelectedItemChanged += OnAuthMethodChanged;
+        })
+        {
+            X = 16,
+            Y = 3
+        };
+        _authMethodRadio.SelectedItem = InteractiveBrowserCredentialProvider.IsAvailable() ? 1 : 0;
+        _authMethodRadio.SelectedItemChanged += OnAuthMethodChanged;
 
         // Environment URL (common for all methods)
         var urlLabel = new Label("Environment URL:")
         {
             X = 1,
-            Y = 5
+            Y = 8
         };
         _environmentUrlField = new TextField
         {
             X = 17,
-            Y = 5,
+            Y = 8,
             Width = Dim.Fill() - 24,
             Text = string.Empty,
             ColorScheme = TuiColorPalette.TextInput
@@ -126,7 +123,7 @@ internal sealed class ProfileCreationDialog : Dialog
         _discoverButton = new Button("Discover...")
         {
             X = Pos.Right(_environmentUrlField) + 1,
-            Y = 5
+            Y = 8
         };
         _discoverButton.Clicked += OnDiscoverClicked;
 
@@ -134,7 +131,7 @@ internal sealed class ProfileCreationDialog : Dialog
         _spnFrame = new FrameView("Service Principal Settings")
         {
             X = 1,
-            Y = 7,
+            Y = 10,
             Width = Dim.Fill() - 2,
             Height = 8,
             Visible = false
@@ -251,17 +248,17 @@ internal sealed class ProfileCreationDialog : Dialog
             }
         };
 
-        Add(nameLabel, _nameField, methodLabel, _authMethodCombo,
+        Add(nameLabel, _nameField, methodLabel, _authMethodRadio,
             urlLabel, _environmentUrlField, _discoverButton,
             _spnFrame, _statusLabel, _authenticateButton, cancelButton);
 
         // Update UI based on initial selection
-        OnAuthMethodChanged(new ListViewItemEventArgs(_authMethodCombo.SelectedItem, null));
+        OnAuthMethodChanged(new SelectedItemChangedArgs(_authMethodRadio.SelectedItem, -1));
     }
 
-    private void OnAuthMethodChanged(ListViewItemEventArgs args)
+    private void OnAuthMethodChanged(SelectedItemChangedArgs args)
     {
-        var selectedIndex = _authMethodCombo.SelectedItem;
+        var selectedIndex = _authMethodRadio.SelectedItem;
         var isSpn = selectedIndex >= 2; // ClientSecret or CertificateFile
         var isCert = selectedIndex == 3;
 
@@ -329,7 +326,7 @@ internal sealed class ProfileCreationDialog : Dialog
         }
 
         // Validate inputs
-        var selectedIndex = _authMethodCombo.SelectedItem;
+        var selectedIndex = _authMethodRadio.SelectedItem;
         var isSpn = selectedIndex >= 2;
         var isCert = selectedIndex == 3;
 
@@ -444,7 +441,7 @@ internal sealed class ProfileCreationDialog : Dialog
 
     private ProfileCreateRequest BuildCreateRequest()
     {
-        var selectedIndex = _authMethodCombo.SelectedItem;
+        var selectedIndex = _authMethodRadio.SelectedItem;
         var isCert = selectedIndex == 3;
 
         return new ProfileCreateRequest
