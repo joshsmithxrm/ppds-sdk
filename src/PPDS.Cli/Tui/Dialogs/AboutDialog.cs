@@ -11,7 +11,7 @@ internal sealed class AboutDialog : Dialog
 {
     private const string ProductName = "Power Platform Developer Suite";
     private const string Tagline = "Pro-grade tooling for Power Platform developers";
-    private const string DocsUrl = "https://joshsmithxrm.github.io/ppds-docs/";
+    private const string DocsUrl = "https://joshsmithxrm.github.io/ppds-docs";
     private const string GitHubUrl = "https://github.com/joshsmithxrm/power-platform-developer-suite";
     private const string Copyright = "(c) 2025-2026 joshsmithxrm";
 
