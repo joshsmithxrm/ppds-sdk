@@ -166,10 +166,10 @@ public sealed class AuthProfile
     public bool HasName => !string.IsNullOrWhiteSpace(Name);
 
     /// <summary>
-    /// Gets the display identifier (name if available, otherwise index).
+    /// Gets the display identifier (always includes index, e.g., "[1] MyProfile" or "[1]").
     /// </summary>
     [JsonIgnore]
-    public string DisplayIdentifier => HasName ? Name! : $"[{Index}]";
+    public string DisplayIdentifier => HasName ? $"[{Index}] {Name}" : $"[{Index}]";
 
     /// <summary>
     /// Gets the identity string for display (username or application ID).
