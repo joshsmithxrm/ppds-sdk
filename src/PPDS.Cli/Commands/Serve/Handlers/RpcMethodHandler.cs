@@ -194,7 +194,7 @@ public class RpcMethodHandler
         }
         else
         {
-            profile = collection.GetByName(name!);
+            profile = collection.GetByNameOrIndex(name!);
             if (profile == null)
             {
                 throw new RpcException(

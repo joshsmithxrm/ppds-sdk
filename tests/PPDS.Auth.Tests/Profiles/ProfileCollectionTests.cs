@@ -246,6 +246,46 @@ public class ProfileCollectionTests
     }
 
     [Fact]
+    public void GetByNameOrIndex_WithFullDisplayIdentifier_ReturnsProfile()
+    {
+        // DisplayIdentifier for named profiles is "[N] Name"
+        var collection = new ProfileCollection();
+        var profile = new AuthProfile { Name = "MyProfile", Index = 1 };
+        collection.Profiles.Add(profile);
+
+        var result = collection.GetByNameOrIndex("[1] MyProfile");
+
+        result.Should().Be(profile);
+    }
+
+    [Fact]
+    public void GetByNameOrIndex_WithFullDisplayIdentifier_IgnoresNamePart()
+    {
+        // Should extract index from bracket, ignore name portion
+        var collection = new ProfileCollection();
+        var profile = new AuthProfile { Name = "ActualName", Index = 2 };
+        collection.Profiles.Add(profile);
+
+        // Even with wrong name, should find by index
+        var result = collection.GetByNameOrIndex("[2] WrongName");
+
+        result.Should().Be(profile);
+    }
+
+    [Fact]
+    public void GetByNameOrIndex_WithDisplayIdentifier_MatchesActualDisplayIdentifier()
+    {
+        // Passing profile.DisplayIdentifier should work
+        var collection = new ProfileCollection();
+        var profile = new AuthProfile { Name = "TestProfile", Index = 3 };
+        collection.Profiles.Add(profile);
+
+        var result = collection.GetByNameOrIndex(profile.DisplayIdentifier);
+
+        result.Should().Be(profile);
+    }
+
+    [Fact]
     public void RemoveByIndex_RemovesProfile()
     {
         var collection = new ProfileCollection();

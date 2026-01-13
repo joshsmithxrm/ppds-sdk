@@ -201,7 +201,7 @@ public static class ProfileServiceFactory
         var store = new ProfileStore();
         var collection = await store.LoadAsync(cancellationToken).ConfigureAwait(false);
 
-        var firstProfile = collection.GetByName(names[0])
+        var firstProfile = collection.GetByNameOrIndex(names[0])
             ?? throw new InvalidOperationException($"Profile '{names[0]}' not found.");
 
         var (envUrl, envDisplayName, envId) = await ResolveEnvironmentAsync(
