@@ -1,6 +1,8 @@
 using Microsoft.Crm.Sdk.Messages;
 using Microsoft.Extensions.DependencyInjection;
 using PPDS.Cli.Tui.Infrastructure;
+using PPDS.Cli.Tui.Testing;
+using PPDS.Cli.Tui.Testing.States;
 using PPDS.Dataverse.Pooling;
 using Terminal.Gui;
 
@@ -10,7 +12,7 @@ namespace PPDS.Cli.Tui.Dialogs;
 /// Dialog showing detailed environment and organization information.
 /// Equivalent to 'ppds env who' command.
 /// </summary>
-internal sealed class EnvironmentDetailsDialog : TuiDialog
+internal sealed class EnvironmentDetailsDialog : TuiDialog, ITuiStateCapture<EnvironmentDetailsDialogState>
 {
     private readonly InteractiveSession _session;
     private readonly string _environmentUrl;
@@ -291,5 +293,20 @@ internal sealed class EnvironmentDetailsDialog : TuiDialog
             "trial" => TuiColorPalette.StatusBar_Trial,
             _ => TuiColorPalette.Default
         };
+    }
+
+    /// <inheritdoc />
+    public EnvironmentDetailsDialogState CaptureState()
+    {
+        var envType = _themeService.DetectEnvironmentType(_environmentUrl);
+
+        return new EnvironmentDetailsDialogState(
+            Title: Title?.ToString() ?? string.Empty,
+            DisplayName: _environmentDisplayName ?? "(unknown)",
+            Url: _environmentUrl,
+            EnvironmentType: envType,
+            OrganizationId: _orgIdLabel.Text?.ToString(),
+            Version: _versionLabel.Text?.ToString(),
+            Region: _regionLabel.Text?.ToString());
     }
 }

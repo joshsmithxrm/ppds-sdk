@@ -3,6 +3,8 @@ using PPDS.Cli.Infrastructure;
 using PPDS.Cli.Infrastructure.Errors;
 using PPDS.Cli.Services.Export;
 using PPDS.Cli.Tui.Infrastructure;
+using PPDS.Cli.Tui.Testing;
+using PPDS.Cli.Tui.Testing.States;
 using PPDS.Dataverse.Query;
 using Terminal.Gui;
 
@@ -11,8 +13,9 @@ namespace PPDS.Cli.Tui.Dialogs;
 /// <summary>
 /// Dialog for exporting query results to various formats.
 /// </summary>
-internal sealed class ExportDialog : TuiDialog
+internal sealed class ExportDialog : TuiDialog, ITuiStateCapture<ExportDialogState>
 {
+    private static readonly IReadOnlyList<string> FormatNames = new[] { "CSV", "TSV", "JSON", "Clipboard" };
     private readonly IExportService _exportService;
     private readonly DataTable _dataTable;
     private readonly IReadOnlyDictionary<string, QueryColumnType>? _columnTypes;
@@ -259,4 +262,15 @@ internal sealed class ExportDialog : TuiDialog
             ApplyColorSchemeRecursive(subview, scheme);
         }
     }
+
+    /// <inheritdoc />
+    public ExportDialogState CaptureState() => new(
+        Title: Title?.ToString() ?? string.Empty,
+        AvailableFormats: FormatNames,
+        SelectedFormat: FormatNames[_formatGroup.SelectedItem],
+        FilePath: string.Empty,
+        RowCount: _dataTable.Rows.Count,
+        IncludeHeaders: _includeHeadersCheck.Checked,
+        IsExporting: false,
+        ErrorMessage: null);
 }

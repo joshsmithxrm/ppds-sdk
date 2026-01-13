@@ -2,6 +2,8 @@ using PPDS.Auth.Credentials;
 using PPDS.Cli.Infrastructure.Errors;
 using PPDS.Cli.Services.Environment;
 using PPDS.Cli.Tui.Infrastructure;
+using PPDS.Cli.Tui.Testing;
+using PPDS.Cli.Tui.Testing.States;
 using PPDS.Cli.Tui.Views;
 using Terminal.Gui;
 
@@ -10,7 +12,7 @@ namespace PPDS.Cli.Tui.Dialogs;
 /// <summary>
 /// Dialog for selecting from discovered Dataverse environments.
 /// </summary>
-internal sealed class EnvironmentSelectorDialog : TuiDialog
+internal sealed class EnvironmentSelectorDialog : TuiDialog, ITuiStateCapture<EnvironmentSelectorDialogState>
 {
     private readonly IEnvironmentService _environmentService;
     private readonly Action<DeviceCodeInfo>? _deviceCodeCallback;
@@ -361,5 +363,42 @@ internal sealed class EnvironmentSelectorDialog : TuiDialog
 
         using var dialog = new EnvironmentDetailsDialog(_session, url, displayName);
         Application.Run(dialog);
+    }
+
+    /// <inheritdoc />
+    public EnvironmentSelectorDialogState CaptureState()
+    {
+        var items = _filteredEnvironments.Select(e => new EnvironmentListItem(
+            DisplayName: e.DisplayName ?? "(unknown)",
+            Url: e.Url ?? string.Empty,
+            EnvironmentType: DetectEnvironmentType(e.Type))).ToList();
+
+        var selectedUrl = _listView.SelectedItem >= 0 && _listView.SelectedItem < _filteredEnvironments.Count
+            ? _filteredEnvironments[_listView.SelectedItem].Url
+            : null;
+
+        return new EnvironmentSelectorDialogState(
+            Title: Title?.ToString() ?? string.Empty,
+            Environments: items,
+            SelectedIndex: _listView.SelectedItem,
+            SelectedEnvironmentUrl: selectedUrl,
+            IsLoading: _spinner.Visible,
+            HasDetailsButton: _session != null,
+            ErrorMessage: null);
+    }
+
+    private static EnvironmentType DetectEnvironmentType(string? type)
+    {
+        if (string.IsNullOrEmpty(type))
+            return EnvironmentType.Unknown;
+
+        return type.ToLowerInvariant() switch
+        {
+            "production" => EnvironmentType.Production,
+            "sandbox" => EnvironmentType.Sandbox,
+            "developer" or "development" => EnvironmentType.Development,
+            "trial" => EnvironmentType.Trial,
+            _ => EnvironmentType.Unknown
+        };
     }
 }

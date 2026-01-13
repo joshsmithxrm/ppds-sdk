@@ -1,6 +1,8 @@
 using PPDS.Cli.Infrastructure.Errors;
 using PPDS.Cli.Services.History;
 using PPDS.Cli.Tui.Infrastructure;
+using PPDS.Cli.Tui.Testing;
+using PPDS.Cli.Tui.Testing.States;
 using Terminal.Gui;
 
 namespace PPDS.Cli.Tui.Dialogs;
@@ -8,7 +10,7 @@ namespace PPDS.Cli.Tui.Dialogs;
 /// <summary>
 /// Dialog for browsing and selecting from query history.
 /// </summary>
-internal sealed class QueryHistoryDialog : TuiDialog
+internal sealed class QueryHistoryDialog : TuiDialog, ITuiStateCapture<QueryHistoryDialogState>
 {
     private readonly IQueryHistoryService _historyService;
     private readonly string _environmentUrl;
@@ -309,5 +311,25 @@ internal sealed class QueryHistoryDialog : TuiDialog
     {
         await _historyService.DeleteEntryAsync(_environmentUrl, entryId);
         await LoadHistoryAsync(_searchField.Text?.ToString());
+    }
+
+    /// <inheritdoc />
+    public QueryHistoryDialogState CaptureState()
+    {
+        var items = _entries.Select(e => new QueryHistoryItem(
+            QueryText: e.Sql.Length > 50 ? e.Sql[..47] + "..." : e.Sql,
+            ExecutedAt: e.ExecutedAt,
+            RowCount: e.RowCount)).ToList();
+
+        var selectedQuery = _listView.SelectedItem >= 0 && _listView.SelectedItem < _entries.Count
+            ? _entries[_listView.SelectedItem].Sql
+            : null;
+
+        return new QueryHistoryDialogState(
+            Title: Title?.ToString() ?? string.Empty,
+            HistoryItems: items,
+            SelectedIndex: _listView.SelectedItem,
+            SelectedQueryText: selectedQuery,
+            IsEmpty: _entries.Count == 0);
     }
 }

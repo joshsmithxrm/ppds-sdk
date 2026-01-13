@@ -5,6 +5,8 @@ using PPDS.Cli.Infrastructure.Errors;
 using PPDS.Cli.Services.Environment;
 using PPDS.Cli.Services.Profile;
 using PPDS.Cli.Tui.Infrastructure;
+using PPDS.Cli.Tui.Testing;
+using PPDS.Cli.Tui.Testing.States;
 using Terminal.Gui;
 
 namespace PPDS.Cli.Tui.Dialogs;
@@ -19,8 +21,15 @@ namespace PPDS.Cli.Tui.Dialogs;
 /// - ClientSecret: Form with App ID, Secret, Tenant, URL
 /// - CertificateFile: Form with App ID, Cert Path, Password, Tenant, URL
 /// </remarks>
-internal sealed class ProfileCreationDialog : TuiDialog
+internal sealed class ProfileCreationDialog : TuiDialog, ITuiStateCapture<ProfileCreationDialogState>
 {
+    private static readonly IReadOnlyList<string> AuthMethodNames = new[]
+    {
+        "Device Code (Interactive)",
+        "Browser (Interactive)",
+        "Client Secret (Service Principal)",
+        "Certificate File (Service Principal)"
+    };
     private readonly IProfileService _profileService;
     private readonly IEnvironmentService _environmentService;
     private readonly Action<DeviceCodeInfo>? _deviceCodeCallback;
@@ -477,4 +486,14 @@ internal sealed class ProfileCreationDialog : TuiDialog
             CertificatePassword = isCert ? _certPasswordField.Text?.ToString() : null
         };
     }
+
+    /// <inheritdoc />
+    public ProfileCreationDialogState CaptureState() => new(
+        Title: Title?.ToString() ?? string.Empty,
+        ProfileName: _nameField.Text?.ToString() ?? string.Empty,
+        SelectedAuthMethod: AuthMethodNames[_authMethodRadio.SelectedItem],
+        AvailableAuthMethods: AuthMethodNames,
+        IsCreating: _isAuthenticating,
+        ValidationError: null,
+        CanCreate: _authenticateButton.Enabled);
 }

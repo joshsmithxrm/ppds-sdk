@@ -1,3 +1,5 @@
+using PPDS.Cli.Tui.Testing;
+using PPDS.Cli.Tui.Testing.States;
 using Terminal.Gui;
 
 namespace PPDS.Cli.Tui.Dialogs;
@@ -6,8 +8,22 @@ namespace PPDS.Cli.Tui.Dialogs;
 /// Dialog displaying keyboard shortcuts help.
 /// Uses custom dialog instead of MessageBox to avoid Terminal.Gui rendering bugs.
 /// </summary>
-internal sealed class KeyboardShortcutsDialog : TuiDialog
+internal sealed class KeyboardShortcutsDialog : TuiDialog, ITuiStateCapture<KeyboardShortcutsDialogState>
 {
+    private static readonly IReadOnlyList<ShortcutEntry> Shortcuts = new List<ShortcutEntry>
+    {
+        new("Alt+P", "Switch profile", "Global"),
+        new("Alt+E", "Switch environment", "Global"),
+        new("F1", "Keyboard shortcuts", "Global"),
+        new("F2", "SQL Query", "Global"),
+        new("F12", "Error Log", "Global"),
+        new("Ctrl+Q", "Quit", "Global"),
+        new("Ctrl+Enter", "Execute query", "SQL Query"),
+        new("Ctrl+E", "Export results", "SQL Query"),
+        new("Ctrl+H", "Query history", "SQL Query"),
+        new("/", "Filter results", "SQL Query"),
+        new("Esc", "Close filter or exit", "SQL Query"),
+    };
     /// <summary>
     /// Creates a new keyboard shortcuts dialog.
     /// </summary>
@@ -52,4 +68,10 @@ internal sealed class KeyboardShortcutsDialog : TuiDialog
 
         Add(content, closeButton);
     }
+
+    /// <inheritdoc />
+    public KeyboardShortcutsDialogState CaptureState() => new(
+        Title: Title?.ToString() ?? string.Empty,
+        Shortcuts: Shortcuts,
+        ShortcutCount: Shortcuts.Count);
 }

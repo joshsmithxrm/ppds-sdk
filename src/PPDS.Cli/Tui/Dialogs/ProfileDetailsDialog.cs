@@ -2,6 +2,8 @@ using PPDS.Auth.Cloud;
 using PPDS.Auth.Credentials;
 using PPDS.Auth.Profiles;
 using PPDS.Cli.Tui.Infrastructure;
+using PPDS.Cli.Tui.Testing;
+using PPDS.Cli.Tui.Testing.States;
 using Terminal.Gui;
 
 namespace PPDS.Cli.Tui.Dialogs;
@@ -10,7 +12,7 @@ namespace PPDS.Cli.Tui.Dialogs;
 /// Dialog for displaying detailed profile information.
 /// Equivalent to the 'ppds auth who' CLI command.
 /// </summary>
-internal sealed class ProfileDetailsDialog : TuiDialog
+internal sealed class ProfileDetailsDialog : TuiDialog, ITuiStateCapture<ProfileDetailsDialogState>
 {
     private readonly InteractiveSession _session;
     private readonly ITuiErrorService _errorService;
@@ -399,5 +401,23 @@ internal sealed class ProfileDetailsDialog : TuiDialog
             }
         }, TaskScheduler.Default);
 #pragma warning restore PPDS013
+    }
+
+    /// <inheritdoc />
+    public ProfileDetailsDialogState CaptureState()
+    {
+        var envType = _session.GetThemeService().DetectEnvironmentType(
+            _environmentUrlLabel.Text?.ToString() ?? string.Empty);
+
+        return new ProfileDetailsDialogState(
+            Title: Title?.ToString() ?? string.Empty,
+            ProfileName: _profileNameLabel.Text?.ToString() ?? "(unknown)",
+            AuthMethod: _authMethodLabel.Text?.ToString() ?? "Unknown",
+            Identity: _identityLabel.Text?.ToString(),
+            EnvironmentName: _environmentLabel.Text?.ToString(),
+            EnvironmentUrl: _environmentUrlLabel.Text?.ToString(),
+            EnvironmentType: envType,
+            IsActive: true,
+            CreatedAt: null);
     }
 }

@@ -1,5 +1,7 @@
 using PPDS.Cli.Services.Profile;
 using PPDS.Cli.Tui.Infrastructure;
+using PPDS.Cli.Tui.Testing;
+using PPDS.Cli.Tui.Testing.States;
 using Terminal.Gui;
 
 namespace PPDS.Cli.Tui.Dialogs;
@@ -16,7 +18,7 @@ namespace PPDS.Cli.Tui.Dialogs;
 ///
 /// Requires typing the profile count to confirm (prevents accidental clicks).
 /// </remarks>
-internal sealed class ClearAllProfilesDialog : TuiDialog
+internal sealed class ClearAllProfilesDialog : TuiDialog, ITuiStateCapture<ClearAllProfilesDialogState>
 {
     private readonly IProfileService _profileService;
     private readonly TextField _confirmationField;
@@ -196,4 +198,12 @@ internal sealed class ClearAllProfilesDialog : TuiDialog
             Application.RequestStop();
         });
     }
+
+    /// <inheritdoc />
+    public ClearAllProfilesDialogState CaptureState() => new(
+        Title: Title?.ToString() ?? string.Empty,
+        WarningMessage: "WARNING: This will delete ALL profiles",
+        ProfileCount: _profileCount,
+        ConfirmButtonText: "Clear All",
+        CancelButtonText: "Cancel");
 }

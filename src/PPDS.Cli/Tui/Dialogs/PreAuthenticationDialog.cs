@@ -1,4 +1,6 @@
 using PPDS.Auth.Credentials;
+using PPDS.Cli.Tui.Testing;
+using PPDS.Cli.Tui.Testing.States;
 using Terminal.Gui;
 
 namespace PPDS.Cli.Tui.Dialogs;
@@ -7,9 +9,10 @@ namespace PPDS.Cli.Tui.Dialogs;
 /// Dialog shown before interactive browser authentication.
 /// Gives user control to proceed with browser auth, switch to device code, or cancel.
 /// </summary>
-internal sealed class PreAuthenticationDialog : TuiDialog
+internal sealed class PreAuthenticationDialog : TuiDialog, ITuiStateCapture<PreAuthenticationDialogState>
 {
     private readonly Action<DeviceCodeInfo>? _deviceCodeCallback;
+    private readonly bool _deviceCodeAvailable;
 
     /// <summary>
     /// Gets the user's choice from the dialog.
@@ -25,6 +28,7 @@ internal sealed class PreAuthenticationDialog : TuiDialog
         : base("Authentication Required", session)
     {
         _deviceCodeCallback = deviceCodeCallback;
+        _deviceCodeAvailable = deviceCodeCallback != null;
 
         Width = 60;
         Height = 12;
@@ -107,5 +111,20 @@ internal sealed class PreAuthenticationDialog : TuiDialog
     {
         Result = PreAuthDialogResult.Cancel;
         Application.RequestStop();
+    }
+
+    /// <inheritdoc />
+    public PreAuthenticationDialogState CaptureState()
+    {
+        var options = new List<string> { "Open Browser" };
+        if (_deviceCodeAvailable)
+            options.Add("Use Device Code");
+        options.Add("Cancel");
+
+        return new PreAuthenticationDialogState(
+            Title: Title?.ToString() ?? string.Empty,
+            Message: "A browser window will open for authentication.",
+            SelectedOption: Result.ToString(),
+            AvailableOptions: options);
     }
 }

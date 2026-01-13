@@ -1,4 +1,6 @@
 using PPDS.Cli.Commands;
+using PPDS.Cli.Tui.Testing;
+using PPDS.Cli.Tui.Testing.States;
 using Terminal.Gui;
 
 namespace PPDS.Cli.Tui.Dialogs;
@@ -6,13 +8,15 @@ namespace PPDS.Cli.Tui.Dialogs;
 /// <summary>
 /// Dialog displaying product information, version, and links.
 /// </summary>
-internal sealed class AboutDialog : TuiDialog
+internal sealed class AboutDialog : TuiDialog, ITuiStateCapture<AboutDialogState>
 {
     private const string ProductName = "Power Platform Developer Suite";
     private const string Tagline = "Pro-grade tooling for Power Platform developers";
     private const string DocsUrl = "https://joshsmithxrm.github.io/ppds-docs";
     private const string GitHubUrl = "https://github.com/joshsmithxrm/power-platform-developer-suite";
     private const string Copyright = "(c) 2025-2026 joshsmithxrm";
+
+    private readonly string _version;
 
     /// <summary>
     /// Creates a new About dialog.
@@ -23,7 +27,8 @@ internal sealed class AboutDialog : TuiDialog
         Width = 70;
         Height = 22;
 
-        var version = ErrorOutput.Version;
+        _version = ErrorOutput.Version;
+        var version = _version;
 
         // Product name (centered header)
         var productLabel = new Label(ProductName)
@@ -110,4 +115,13 @@ internal sealed class AboutDialog : TuiDialog
             closeButton
         );
     }
+
+    /// <inheritdoc />
+    public AboutDialogState CaptureState() => new(
+        Title: Title?.ToString() ?? string.Empty,
+        ProductName: ProductName,
+        Version: _version,
+        Description: Tagline,
+        LicenseText: Copyright,
+        GitHubUrl: GitHubUrl);
 }
