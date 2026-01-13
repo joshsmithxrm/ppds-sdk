@@ -10,12 +10,11 @@ exports[`Startup Flow › launches and displays main menu | 1`] = String.raw`
 │││                                                                            │││
 │││  Select an option from the menu or use keyboard shortcuts:                 │││
 │││                                                                            │││
-│││  [ SQL Query (F2) ]                                                        │││
+│││  [ SQL Query ]                                                             │││
 │││                                                                            │││
 │││  [ Data Migration (Coming Soon) ]                                          │││
 │││                                                                            │││
 │││                                                                            │││
-│││  [ Quit (Ctrl+Q) ]                                                         │││
 │││                                                                            │││
 │││                                                                            │││
 │││                                                                            │││
@@ -30,7 +29,8 @@ exports[`Startup Flow › launches and displays main menu | 1`] = String.raw`
 │││                                                                            │││
 │││                                                                            │││
 ││└────────────────────────────────────────────────────────────────────────────┘││
-││[  Profile: None (josh@powerp… ▼ ]    [  Environment: PPDS Demo - Dev ▼ ]     ││
+││                                                                              ││
+││ Profile: [1] (josh@powerplatformdeve…   Environment: PPDS Demo - Dev [PROD] ▼││
 │└──────────────────────────────────────────────────────────────────────────────┘│
 ╰────────────────────────────────────────────────────────────────────────────────╯
 `;

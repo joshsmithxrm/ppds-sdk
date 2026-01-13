@@ -18,9 +18,10 @@ test.describe('Startup Flow', () => {
     await expect(terminal.getByText('PPDS - Power Platform Developer Suite', { full: true })).toBeVisible();
     await expect(terminal.getByText('Welcome to PPDS Interactive Mode', { full: true })).toBeVisible();
 
-    // Verify the main menu items are displayed
+    // Verify the main menu items and menu bar are displayed
     await expect(terminal.getByText('SQL Query', { full: true })).toBeVisible();
-    await expect(terminal.getByText('Quit', { full: true })).toBeVisible();
+    // Menu bar should show File, Tools, Help menus
+    await expect(terminal.getByText('File', { full: true })).toBeVisible();
 
     // Take a snapshot of the initial state
     await expect(terminal).toMatchSnapshot();

@@ -730,7 +730,8 @@ internal sealed class SqlQueryScreen : ITuiScreen, ITuiStateCapture<SqlQueryScre
 
     private async Task ShowFetchXmlDialogAsync(string sql)
     {
-        var provider = await _session.GetServiceProviderAsync(_deviceCodeCallback, CancellationToken.None);
+        // Caller guarantees _environmentUrl is non-null before calling this method
+        var provider = await _session.GetServiceProviderAsync(_environmentUrl!, CancellationToken.None);
         var sqlQueryService = provider.GetRequiredService<ISqlQueryService>();
 
         var fetchXml = sqlQueryService.TranspileSql(sql);
