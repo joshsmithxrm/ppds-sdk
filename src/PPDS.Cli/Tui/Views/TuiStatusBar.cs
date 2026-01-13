@@ -17,13 +17,23 @@ namespace PPDS.Cli.Tui.Views;
 /// Clicking the profile section opens the profile selector dialog.
 /// Clicking the environment section opens the environment selector dialog.
 /// </para>
+/// <para>
+/// This view draws its content directly without child views to ensure reliable
+/// mouse event handling. Terminal.Gui child views consume mouse events before
+/// the parent can handle them, so we bypass that by not using child views.
+/// </para>
 /// </remarks>
 internal sealed class TuiStatusBar : View, ITuiStateCapture<TuiStatusBarState>
 {
-    private readonly Button _profileButton;
-    private readonly Button _environmentButton;
     private readonly InteractiveSession _session;
     private readonly ITuiThemeService _themeService;
+
+    // Text content for rendering
+    private string _profileText = string.Empty;
+    private string _environmentText = string.Empty;
+
+    // Boundary between profile and environment sections (percentage of width)
+    private const int ProfileWidthPercent = 40;
 
     /// <summary>
     /// Event raised when the profile section is clicked.
@@ -48,31 +58,8 @@ internal sealed class TuiStatusBar : View, ITuiStateCapture<TuiStatusBarState>
         Width = Dim.Fill();
         Y = Pos.AnchorEnd(1); // Bottom of screen
 
-        // Profile button (left portion)
-        // CanFocus = false to exclude from Tab order - users click or use hotkeys
-        _profileButton = new Button
-        {
-            X = 0,
-            Y = 0,
-            Height = 1,
-            Width = Dim.Percent(40),
-            CanFocus = false
-        };
-        _profileButton.Clicked += () => ProfileClicked?.Invoke();
-
-        // Environment button (right portion - takes remaining space)
-        // CanFocus = false to exclude from Tab order - users click or use hotkeys
-        _environmentButton = new Button
-        {
-            X = Pos.Right(_profileButton),
-            Y = 0,
-            Height = 1,
-            Width = Dim.Fill(),
-            CanFocus = false
-        };
-        _environmentButton.Clicked += () => EnvironmentClicked?.Invoke();
-
-        Add(_profileButton, _environmentButton);
+        // Enable mouse event reception
+        WantMousePositionReports = true;
 
         // Subscribe to session events
         _session.EnvironmentChanged += OnEnvironmentChanged;
@@ -88,22 +75,20 @@ internal sealed class TuiStatusBar : View, ITuiStateCapture<TuiStatusBarState>
     public void Refresh()
     {
         UpdateDisplay();
+        SetNeedsDisplay();
     }
 
     /// <summary>
     /// Handles mouse events for click detection.
     /// </summary>
-    /// <remarks>
-    /// Terminal.Gui buttons with CanFocus=false don't receive click events,
-    /// so we handle mouse clicks at the View level to maintain clean tab order
-    /// while still supporting mouse interaction.
-    /// </remarks>
     public override bool MouseEvent(MouseEvent mouseEvent)
     {
         if (mouseEvent.Flags.HasFlag(MouseFlags.Button1Clicked))
         {
-            // Determine which button was clicked based on X position
-            if (mouseEvent.X < _profileButton.Frame.Right)
+            // Calculate the boundary between profile and environment sections
+            var profileWidth = Bounds.Width * ProfileWidthPercent / 100;
+
+            if (mouseEvent.X < profileWidth)
             {
                 ProfileClicked?.Invoke();
                 return true;
@@ -118,42 +103,82 @@ internal sealed class TuiStatusBar : View, ITuiStateCapture<TuiStatusBarState>
         return base.MouseEvent(mouseEvent);
     }
 
-    private void OnEnvironmentChanged(string? url, string? displayName)
-    {
-        Application.MainLoop?.Invoke(UpdateDisplay);
-    }
-
-    private void OnProfileChanged(string? profileName)
-    {
-        Application.MainLoop?.Invoke(UpdateDisplay);
-    }
-
-    private void UpdateDisplay()
+    /// <summary>
+    /// Draws the status bar content directly.
+    /// </summary>
+    public override void Redraw(Rect bounds)
     {
         // Get environment-aware color scheme
         var envType = _themeService.DetectEnvironmentType(_session.CurrentEnvironmentUrl);
         var colorScheme = _themeService.GetStatusBarScheme(envType);
 
+        // Apply the color scheme
+        Driver.SetAttribute(colorScheme.Normal);
+
+        // Clear the entire bar
+        for (int x = 0; x < bounds.Width; x++)
+        {
+            Move(x, 0);
+            Driver.AddRune(' ');
+        }
+
+        // Calculate section widths
+        var profileWidth = bounds.Width * ProfileWidthPercent / 100;
+
+        // Draw profile section
+        Move(0, 0);
+        var profileToRender = _profileText.Length > profileWidth
+            ? _profileText[..(profileWidth - 1)] + "\u2026"
+            : _profileText;
+        Driver.AddStr(profileToRender);
+
+        // Draw environment section
+        Move(profileWidth, 0);
+        var envWidth = bounds.Width - profileWidth;
+        var envToRender = _environmentText.Length > envWidth
+            ? _environmentText[..(envWidth - 1)] + "\u2026"
+            : _environmentText;
+        Driver.AddStr(envToRender);
+    }
+
+    private void OnEnvironmentChanged(string? url, string? displayName)
+    {
+        Application.MainLoop?.Invoke(() =>
+        {
+            UpdateDisplay();
+            SetNeedsDisplay();
+        });
+    }
+
+    private void OnProfileChanged(string? profileName)
+    {
+        Application.MainLoop?.Invoke(() =>
+        {
+            UpdateDisplay();
+            SetNeedsDisplay();
+        });
+    }
+
+    private void UpdateDisplay()
+    {
         // Get environment type label
+        var envType = _themeService.DetectEnvironmentType(_session.CurrentEnvironmentUrl);
         var envLabel = _themeService.GetEnvironmentLabel(envType);
         var labelSuffix = !string.IsNullOrEmpty(envLabel) ? $" [{envLabel}]" : "";
 
         // Profile section - show name and identity (e.g., "Josh (josh@contoso.com)")
-        // Truncate to fit in 40% of terminal width (max ~18 chars for user data)
         var profileName = _session.CurrentProfileName ?? "None";
         var profileIdentity = _session.CurrentProfileIdentity;
         var profileDisplay = !string.IsNullOrEmpty(profileIdentity)
             ? $"{profileName} ({profileIdentity})"
             : profileName;
         profileDisplay = TruncateWithEllipsis(profileDisplay, 18);
-        _profileButton.Text = $" Profile: {profileDisplay} \u25bc";
-        _profileButton.ColorScheme = colorScheme;
+        _profileText = $" Profile: {profileDisplay} \u25bc";
 
-        // Environment section - truncate to fit remaining space (max ~28 chars for env name)
+        // Environment section
         var envName = _session.CurrentEnvironmentDisplayName ?? "None";
         envName = TruncateWithEllipsis(envName, 28);
-        _environmentButton.Text = $" Environment: {envName}{labelSuffix} \u25bc";
-        _environmentButton.ColorScheme = colorScheme;
+        _environmentText = $" Environment: {envName}{labelSuffix} \u25bc";
     }
 
     /// <summary>
@@ -171,8 +196,8 @@ internal sealed class TuiStatusBar : View, ITuiStateCapture<TuiStatusBarState>
     {
         var envType = _themeService.DetectEnvironmentType(_session.CurrentEnvironmentUrl);
         return new TuiStatusBarState(
-            ProfileButtonText: _profileButton.Text?.ToString() ?? string.Empty,
-            EnvironmentButtonText: _environmentButton.Text?.ToString() ?? string.Empty,
+            ProfileButtonText: _profileText,
+            EnvironmentButtonText: _environmentText,
             EnvironmentType: envType,
             HasProfile: _session.CurrentProfileName != null,
             HasEnvironment: _session.CurrentEnvironmentUrl != null,
