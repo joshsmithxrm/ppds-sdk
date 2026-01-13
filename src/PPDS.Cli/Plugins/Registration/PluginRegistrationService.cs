@@ -1219,10 +1219,7 @@ public sealed class PluginRegistrationService : IPluginRegistrationService
                 }
             }
 
-            if (impersonatingUserId.HasValue)
-            {
-                entity.ImpersonatingUserId = new EntityReference(SystemUser.EntityLogicalName, impersonatingUserId.Value);
-            }
+            entity.ImpersonatingUserId = new EntityReference(SystemUser.EntityLogicalName, impersonatingUserId.Value);
         }
 
         // Async auto-delete (only applies to async steps)
@@ -2220,6 +2217,7 @@ public sealed class PluginRegistrationService : IPluginRegistrationService
         IOrganizationService client,
         CancellationToken cancellationToken)
     {
+        username = username.Trim();
         var query = new QueryExpression(SystemUser.EntityLogicalName)
         {
             ColumnSet = new ColumnSet(SystemUser.Fields.SystemUserId),
