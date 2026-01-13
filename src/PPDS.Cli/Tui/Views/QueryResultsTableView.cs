@@ -13,6 +13,7 @@ internal sealed class QueryResultsTableView : FrameView
 {
     private readonly TableView _tableView;
     private readonly Label _statusLabel;
+    private readonly Label _emptyStateLabel;
 
     private DataTable _dataTable;
     private DataTable? _unfilteredDataTable; // Original data before filtering
@@ -81,16 +82,25 @@ internal sealed class QueryResultsTableView : FrameView
         _tableView.Style.AlwaysShowHeaders = true;
         _tableView.Style.ExpandLastColumn = true;
 
-        _statusLabel = new Label("No data")
+        _statusLabel = new Label(string.Empty)
         {
             X = 0,
             Y = Pos.Bottom(_tableView),
             Width = Dim.Fill(),
             Height = 1,
-            TextAlignment = TextAlignment.Centered
+            TextAlignment = TextAlignment.Left
         };
 
-        Add(_tableView, _statusLabel);
+        // Centered empty state shown when no data
+        _emptyStateLabel = new Label("No data")
+        {
+            X = Pos.Center(),
+            Y = Pos.Center(),
+            TextAlignment = TextAlignment.Centered,
+            Visible = true
+        };
+
+        Add(_tableView, _statusLabel, _emptyStateLabel);
         SetupKeyboardShortcuts();
     }
 
@@ -132,6 +142,9 @@ internal sealed class QueryResultsTableView : FrameView
         MoreRecordsAvailable = result.MoreRecords;
         PagingCookie = result.PagingCookie;
         CurrentPageNumber = result.PageNumber;
+
+        // Hide empty state when we have data
+        _emptyStateLabel.Visible = false;
 
         UpdateStatus();
     }
@@ -182,8 +195,8 @@ internal sealed class QueryResultsTableView : FrameView
         MoreRecordsAvailable = false;
         PagingCookie = null;
         CurrentPageNumber = 1;
-        _statusLabel.TextAlignment = TextAlignment.Centered;
-        _statusLabel.Text = "No data";
+        _statusLabel.Text = string.Empty;
+        _emptyStateLabel.Visible = true;
     }
 
     /// <summary>
