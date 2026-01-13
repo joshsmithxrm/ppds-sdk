@@ -15,11 +15,15 @@ internal sealed class QueryResultsTableView : FrameView
     private readonly Label _statusLabel;
 
     private DataTable _dataTable;
+    private DataTable? _unfilteredDataTable; // Original data before filtering
     private Dictionary<string, QueryColumnType> _columnTypes = new();
     private QueryResult? _lastResult;
     private string? _environmentUrl;
     private bool _isLoadingMore;
     private bool _guidColumnsHidden;
+    private string? _currentFilter;
+    private object? _statusRestoreToken; // Token to cancel pending status restore
+    private const int StatusRestoreDelayMs = 2500;
 
     /// <summary>
     /// Raised when the user scrolls to the end and more records are available.
@@ -109,6 +113,9 @@ internal sealed class QueryResultsTableView : FrameView
     public void LoadResults(QueryResult result)
     {
         _lastResult = result;
+        _unfilteredDataTable = null; // Clear filter cache
+        _currentFilter = null;
+
         var (table, columnTypes) = QueryResultConverter.ToDataTableWithTypes(result);
         _dataTable = table;
         _columnTypes = columnTypes;
@@ -162,6 +169,8 @@ internal sealed class QueryResultsTableView : FrameView
     public void ClearData()
     {
         _dataTable = new DataTable();
+        _unfilteredDataTable = null; // Clear filter cache
+        _currentFilter = null;
         _tableView.Table = _dataTable;
         _lastResult = null;
         MoreRecordsAvailable = false;
@@ -177,12 +186,27 @@ internal sealed class QueryResultsTableView : FrameView
     /// <param name="filterText">Text to search for in any string column.</param>
     public void ApplyFilter(string? filterText)
     {
-        if (_dataTable.Rows.Count == 0)
+        // Store original data on first filter
+        if (_unfilteredDataTable == null && _dataTable.Rows.Count > 0)
+        {
+            _unfilteredDataTable = _dataTable.Copy();
+        }
+
+        var sourceTable = _unfilteredDataTable ?? _dataTable;
+        if (sourceTable.Rows.Count == 0)
             return;
+
+        _currentFilter = filterText;
 
         if (string.IsNullOrWhiteSpace(filterText))
         {
-            _dataTable.DefaultView.RowFilter = string.Empty;
+            // Clear filter - restore original data
+            if (_unfilteredDataTable != null)
+            {
+                _dataTable = _unfilteredDataTable.Copy();
+                _tableView.Table = _dataTable;
+                ApplyColumnSizing();
+            }
             UpdateStatus();
             return;
         }
@@ -191,7 +215,7 @@ internal sealed class QueryResultsTableView : FrameView
         var conditions = new List<string>();
         var escaped = EscapeFilterValue(filterText);
 
-        foreach (DataColumn column in _dataTable.Columns)
+        foreach (DataColumn column in sourceTable.Columns)
         {
             // Only filter string columns
             if (column.DataType == typeof(string))
@@ -202,10 +226,14 @@ internal sealed class QueryResultsTableView : FrameView
 
         if (conditions.Count > 0)
         {
-            _dataTable.DefaultView.RowFilter = string.Join(" OR ", conditions);
-            var filteredCount = _dataTable.DefaultView.Count;
-            var totalCount = _dataTable.Rows.Count;
-            _statusLabel.Text = $"Showing {filteredCount} of {totalCount} rows (filtered by: {filterText})";
+            // Apply filter to source and create new filtered table
+            sourceTable.DefaultView.RowFilter = string.Join(" OR ", conditions);
+            _dataTable = sourceTable.DefaultView.ToTable();
+            sourceTable.DefaultView.RowFilter = string.Empty; // Reset source filter
+
+            _tableView.Table = _dataTable;
+            ApplyColumnSizing();
+            UpdateStatus();
         }
     }
 
@@ -293,11 +321,11 @@ internal sealed class QueryResultsTableView : FrameView
         }
         catch (InvalidOperationException ex)
         {
-            _statusLabel.Text = $"Error loading: {ex.Message}";
+            ShowTemporaryStatus($"Error loading: {ex.Message}");
         }
         catch (HttpRequestException ex)
         {
-            _statusLabel.Text = $"Network error: {ex.Message}";
+            ShowTemporaryStatus($"Network error: {ex.Message}");
         }
         finally
         {
@@ -309,7 +337,7 @@ internal sealed class QueryResultsTableView : FrameView
     {
         if (_tableView.Table == null || _tableView.SelectedRow < 0)
         {
-            _statusLabel.Text = "No cell selected";
+            ShowTemporaryStatus("No cell selected");
             return;
         }
 
@@ -324,11 +352,11 @@ internal sealed class QueryResultsTableView : FrameView
             if (ClipboardHelper.CopyToClipboard(value))
             {
                 var displayValue = value.Length > 40 ? value[..37] + "..." : value;
-                _statusLabel.Text = $"Copied: {displayValue}";
+                ShowTemporaryStatus($"Copied: {displayValue}");
             }
             else
             {
-                _statusLabel.Text = $"Copy failed. Value: {value}";
+                ShowTemporaryStatus($"Copy failed. Value: {value}");
             }
         }
     }
@@ -340,16 +368,16 @@ internal sealed class QueryResultsTableView : FrameView
         {
             if (ClipboardHelper.CopyToClipboard(url))
             {
-                _statusLabel.Text = "URL copied to clipboard";
+                ShowTemporaryStatus("URL copied to clipboard");
             }
             else
             {
-                _statusLabel.Text = url;
+                ShowTemporaryStatus(url);
             }
         }
         else
         {
-            _statusLabel.Text = "Cannot build URL (no environment or primary key)";
+            ShowTemporaryStatus("Cannot build URL (no environment or primary key)");
         }
     }
 
@@ -360,16 +388,16 @@ internal sealed class QueryResultsTableView : FrameView
         {
             if (BrowserHelper.OpenUrl(url))
             {
-                _statusLabel.Text = "Opened in browser";
+                ShowTemporaryStatus("Opened in browser");
             }
             else
             {
-                _statusLabel.Text = "Failed to open browser";
+                ShowTemporaryStatus("Failed to open browser");
             }
         }
         else
         {
-            _statusLabel.Text = "Cannot build URL (no environment or primary key)";
+            ShowTemporaryStatus("Cannot build URL (no environment or primary key)");
         }
     }
 
@@ -403,11 +431,45 @@ internal sealed class QueryResultsTableView : FrameView
 
     private void UpdateStatus()
     {
-        var rowCount = _dataTable.Rows.Count;
+        // Cancel any pending restore since we're updating status now
+        _statusRestoreToken = null;
+
+        var sourceCount = _unfilteredDataTable?.Rows.Count ?? _dataTable.Rows.Count;
+        var displayCount = _dataTable.Rows.Count;
         var moreText = MoreRecordsAvailable ? " (more available)" : "";
         var guidText = _guidColumnsHidden ? " | GUIDs hidden (Ctrl+H)" : "";
-        _statusLabel.TextAlignment = TextAlignment.Left; // Left-align for status text
-        _statusLabel.Text = $"{rowCount} rows{moreText}{guidText} | Ctrl+C: copy | Ctrl+U: copy URL | Ctrl+O: open";
+        var filterText = !string.IsNullOrEmpty(_currentFilter)
+            ? $" (filtered: {displayCount} of {sourceCount})"
+            : "";
+
+        _statusLabel.TextAlignment = TextAlignment.Left;
+        _statusLabel.Text = $"{displayCount} rows{filterText}{moreText}{guidText} | Ctrl+C: copy | Ctrl+U: copy URL | Ctrl+O: open";
+    }
+
+    /// <summary>
+    /// Shows a temporary status message, then auto-restores the default status after a delay.
+    /// </summary>
+    private void ShowTemporaryStatus(string message)
+    {
+        // Cancel any pending restore
+        var token = new object();
+        _statusRestoreToken = token;
+
+        _statusLabel.TextAlignment = TextAlignment.Left;
+        _statusLabel.Text = message;
+
+        // Schedule restore after delay
+        _ = Task.Delay(StatusRestoreDelayMs).ContinueWith(_ =>
+        {
+            Application.MainLoop?.Invoke(() =>
+            {
+                // Only restore if this token is still active (not superseded by another message)
+                if (_statusRestoreToken == token)
+                {
+                    UpdateStatus();
+                }
+            });
+        }, TaskScheduler.Default);
     }
 
     /// <summary>
