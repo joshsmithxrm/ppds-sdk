@@ -8,7 +8,7 @@ namespace PPDS.Cli.Tui.Dialogs;
 /// <summary>
 /// Dialog for browsing and selecting from query history.
 /// </summary>
-internal sealed class QueryHistoryDialog : Dialog
+internal sealed class QueryHistoryDialog : TuiDialog
 {
     private readonly IQueryHistoryService _historyService;
     private readonly string _environmentUrl;
@@ -28,14 +28,17 @@ internal sealed class QueryHistoryDialog : Dialog
     /// <summary>
     /// Creates a new query history dialog.
     /// </summary>
-    public QueryHistoryDialog(IQueryHistoryService historyService, string environmentUrl) : base("Query History")
+    /// <param name="historyService">The query history service.</param>
+    /// <param name="environmentUrl">The environment URL to load history for.</param>
+    /// <param name="session">Optional session for hotkey registry integration.</param>
+    public QueryHistoryDialog(IQueryHistoryService historyService, string environmentUrl, InteractiveSession? session = null)
+        : base("Query History", session)
     {
         _historyService = historyService ?? throw new ArgumentNullException(nameof(historyService));
         _environmentUrl = environmentUrl ?? throw new ArgumentNullException(nameof(environmentUrl));
 
         Width = 80;
         Height = 22;
-        ColorScheme = TuiColorPalette.Default;
 
         // Search field
         var searchLabel = new Label("Search:")

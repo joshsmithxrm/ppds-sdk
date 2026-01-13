@@ -10,7 +10,7 @@ namespace PPDS.Cli.Tui.Dialogs;
 /// Dialog for displaying detailed profile information.
 /// Equivalent to the 'ppds auth who' CLI command.
 /// </summary>
-internal sealed class ProfileDetailsDialog : Dialog
+internal sealed class ProfileDetailsDialog : TuiDialog
 {
     private readonly InteractiveSession _session;
     private readonly ITuiErrorService _errorService;
@@ -30,14 +30,13 @@ internal sealed class ProfileDetailsDialog : Dialog
     /// Creates a new profile details dialog.
     /// </summary>
     /// <param name="session">The interactive session for accessing profile data.</param>
-    public ProfileDetailsDialog(InteractiveSession session) : base("Profile Details")
+    public ProfileDetailsDialog(InteractiveSession session) : base("Profile Details", session)
     {
         _session = session ?? throw new ArgumentNullException(nameof(session));
         _errorService = session.GetErrorService();
 
         Width = 68;
         Height = 20;
-        ColorScheme = TuiColorPalette.Default;
 
         const int labelWidth = 14;
         const int valueX = 16;
@@ -233,16 +232,6 @@ internal sealed class ProfileDetailsDialog : Dialog
             urlHeaderLabel, _environmentUrlLabel,
             refreshButton, closeButton
         );
-
-        // Handle Escape to close
-        KeyPress += (e) =>
-        {
-            if (e.KeyEvent.Key == Key.Esc)
-            {
-                Application.RequestStop();
-                e.Handled = true;
-            }
-        };
 
         // Load profile data asynchronously
 #pragma warning disable PPDS013 // Fire-and-forget with explicit error handling via ContinueWith

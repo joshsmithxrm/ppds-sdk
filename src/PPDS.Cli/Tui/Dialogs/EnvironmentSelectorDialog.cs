@@ -10,7 +10,7 @@ namespace PPDS.Cli.Tui.Dialogs;
 /// <summary>
 /// Dialog for selecting from discovered Dataverse environments.
 /// </summary>
-internal sealed class EnvironmentSelectorDialog : Dialog
+internal sealed class EnvironmentSelectorDialog : TuiDialog
 {
     private readonly IEnvironmentService _environmentService;
     private readonly Action<DeviceCodeInfo>? _deviceCodeCallback;
@@ -52,7 +52,7 @@ internal sealed class EnvironmentSelectorDialog : Dialog
     public EnvironmentSelectorDialog(
         IEnvironmentService environmentService,
         Action<DeviceCodeInfo>? deviceCodeCallback = null,
-        InteractiveSession? session = null) : base("Select Environment")
+        InteractiveSession? session = null) : base("Select Environment", session)
     {
         _environmentService = environmentService ?? throw new ArgumentNullException(nameof(environmentService));
         _deviceCodeCallback = deviceCodeCallback;
@@ -60,7 +60,6 @@ internal sealed class EnvironmentSelectorDialog : Dialog
 
         Width = 70;
         Height = 22;
-        ColorScheme = TuiColorPalette.Default;
 
         // Filter field
         var filterLabel = new Label("Filter:")
@@ -170,16 +169,6 @@ internal sealed class EnvironmentSelectorDialog : Dialog
         cancelButton.Clicked += () => { Application.RequestStop(); };
 
         Add(filterLabel, _filterField, listFrame, urlLabel, _urlField, _spinner, _statusLabel, _selectButton, detailsButton, cancelButton);
-
-        // Escape closes dialog
-        KeyPress += (e) =>
-        {
-            if (e.KeyEvent.Key == Key.Esc)
-            {
-                Application.RequestStop();
-                e.Handled = true;
-            }
-        };
 
         // Start spinner and discover environments asynchronously
         _spinner.Start("Loading environments...");

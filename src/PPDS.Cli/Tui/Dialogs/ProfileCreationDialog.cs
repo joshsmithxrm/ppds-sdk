@@ -19,7 +19,7 @@ namespace PPDS.Cli.Tui.Dialogs;
 /// - ClientSecret: Form with App ID, Secret, Tenant, URL
 /// - CertificateFile: Form with App ID, Cert Path, Password, Tenant, URL
 /// </remarks>
-internal sealed class ProfileCreationDialog : Dialog
+internal sealed class ProfileCreationDialog : TuiDialog
 {
     private readonly IProfileService _profileService;
     private readonly IEnvironmentService _environmentService;
@@ -68,10 +68,12 @@ internal sealed class ProfileCreationDialog : Dialog
     /// <param name="profileService">The profile service for creating profiles.</param>
     /// <param name="environmentService">The environment service for discovery.</param>
     /// <param name="deviceCodeCallback">Optional callback for device code display (null uses built-in dialog).</param>
+    /// <param name="session">Optional session for hotkey registry integration.</param>
     public ProfileCreationDialog(
         IProfileService profileService,
         IEnvironmentService environmentService,
-        Action<DeviceCodeInfo>? deviceCodeCallback = null) : base("Create Profile")
+        Action<DeviceCodeInfo>? deviceCodeCallback = null,
+        InteractiveSession? session = null) : base("Create Profile", session)
     {
         _profileService = profileService ?? throw new ArgumentNullException(nameof(profileService));
         _environmentService = environmentService ?? throw new ArgumentNullException(nameof(environmentService));
@@ -79,7 +81,6 @@ internal sealed class ProfileCreationDialog : Dialog
 
         Width = 70;
         Height = 27;
-        ColorScheme = TuiColorPalette.Default;
 
         // Profile name
         var nameLabel = new Label("Profile Name:")
@@ -268,21 +269,21 @@ internal sealed class ProfileCreationDialog : Dialog
             urlLabel, _environmentUrlField,
             _spnFrame, _statusLabel, _authenticateButton, cancelButton);
 
-        // Escape closes dialog (if not authenticating)
-        KeyPress += (e) =>
-        {
-            if (e.KeyEvent.Key == Key.Esc && !_isAuthenticating)
-            {
-                Application.RequestStop();
-                e.Handled = true;
-            }
-        };
-
         // Update UI based on initial selection
         OnAuthMethodChanged(new SelectedItemChangedArgs(_authMethodRadio.SelectedItem, -1));
 
         // Defer focus to name field until after layout is complete
         Ready += () => _nameField.SetFocus();
+    }
+
+    /// <inheritdoc />
+    protected override void OnEscapePressed()
+    {
+        // Don't close if authentication is in progress
+        if (!_isAuthenticating)
+        {
+            base.OnEscapePressed();
+        }
     }
 
     private void OnAuthMethodChanged(SelectedItemChangedArgs args)

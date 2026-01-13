@@ -9,7 +9,7 @@ namespace PPDS.Cli.Tui.Dialogs;
 /// <summary>
 /// Dialog for displaying error details and recent error history.
 /// </summary>
-internal sealed class ErrorDetailsDialog : Dialog, ITuiStateCapture<ErrorDetailsDialogState>
+internal sealed class ErrorDetailsDialog : TuiDialog, ITuiStateCapture<ErrorDetailsDialogState>
 {
     private readonly ITuiErrorService _errorService;
     private readonly ListView _errorListView;
@@ -21,13 +21,14 @@ internal sealed class ErrorDetailsDialog : Dialog, ITuiStateCapture<ErrorDetails
     /// Creates a new error details dialog.
     /// </summary>
     /// <param name="errorService">The error service to get errors from.</param>
-    public ErrorDetailsDialog(ITuiErrorService errorService) : base("Error Details")
+    /// <param name="session">Optional session for hotkey registry integration.</param>
+    public ErrorDetailsDialog(ITuiErrorService errorService, InteractiveSession? session = null)
+        : base("Error Details", session)
     {
         _errorService = errorService ?? throw new ArgumentNullException(nameof(errorService));
 
         Width = 80;
         Height = 24;
-        ColorScheme = TuiColorPalette.Default;
 
         // Recent errors list (left side)
         var errorsFrame = new FrameView("Recent Errors")
@@ -114,16 +115,6 @@ internal sealed class ErrorDetailsDialog : Dialog, ITuiStateCapture<ErrorDetails
         closeButton.Clicked += () => Application.RequestStop();
 
         Add(errorsFrame, detailsFrame, _logPathLabel, copyButton, openLogButton, clearButton, closeButton);
-
-        // Handle Escape to close
-        KeyPress += (e) =>
-        {
-            if (e.KeyEvent.Key == Key.Esc)
-            {
-                Application.RequestStop();
-                e.Handled = true;
-            }
-        };
 
         // Load errors
         RefreshErrorList();

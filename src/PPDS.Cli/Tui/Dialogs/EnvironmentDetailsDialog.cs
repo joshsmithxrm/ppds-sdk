@@ -10,7 +10,7 @@ namespace PPDS.Cli.Tui.Dialogs;
 /// Dialog showing detailed environment and organization information.
 /// Equivalent to 'ppds env who' command.
 /// </summary>
-internal sealed class EnvironmentDetailsDialog : Dialog
+internal sealed class EnvironmentDetailsDialog : TuiDialog
 {
     private readonly InteractiveSession _session;
     private readonly string _environmentUrl;
@@ -41,7 +41,7 @@ internal sealed class EnvironmentDetailsDialog : Dialog
     public EnvironmentDetailsDialog(
         InteractiveSession session,
         string environmentUrl,
-        string? environmentDisplayName = null) : base("Environment Details")
+        string? environmentDisplayName = null) : base("Environment Details", session)
     {
         _session = session ?? throw new ArgumentNullException(nameof(session));
         _environmentUrl = environmentUrl ?? throw new ArgumentNullException(nameof(environmentUrl));
@@ -50,7 +50,6 @@ internal sealed class EnvironmentDetailsDialog : Dialog
 
         Width = 65;
         Height = 20;
-        ColorScheme = TuiColorPalette.Default;
 
         // Environment name header with type-specific coloring
         var envType = _themeService.DetectEnvironmentType(_environmentUrl);
@@ -140,7 +139,7 @@ internal sealed class EnvironmentDetailsDialog : Dialog
             _cancellationSource.Cancel();
             _cancellationSource.Dispose();
         }
-        base.Dispose(disposing);
+        base.Dispose(disposing); // Calls TuiDialog.Dispose which clears active dialog
     }
 
     private Label CreateDetailRow(string labelText, ref int row, int labelWidth)

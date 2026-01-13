@@ -1,4 +1,3 @@
-using PPDS.Cli.Tui.Infrastructure;
 using Terminal.Gui;
 
 namespace PPDS.Cli.Tui.Dialogs;
@@ -7,16 +6,16 @@ namespace PPDS.Cli.Tui.Dialogs;
 /// Dialog displaying keyboard shortcuts help.
 /// Uses custom dialog instead of MessageBox to avoid Terminal.Gui rendering bugs.
 /// </summary>
-internal sealed class KeyboardShortcutsDialog : Dialog
+internal sealed class KeyboardShortcutsDialog : TuiDialog
 {
     /// <summary>
     /// Creates a new keyboard shortcuts dialog.
     /// </summary>
-    public KeyboardShortcutsDialog() : base("Keyboard Shortcuts")
+    /// <param name="session">Optional session for hotkey registry integration.</param>
+    public KeyboardShortcutsDialog(InteractiveSession? session = null) : base("Keyboard Shortcuts", session)
     {
         Width = 55;
         Height = 24;
-        ColorScheme = TuiColorPalette.Default;
 
         var content = new Label(
             "Global Shortcuts (work everywhere):\n" +
@@ -52,15 +51,5 @@ internal sealed class KeyboardShortcutsDialog : Dialog
         closeButton.Clicked += () => Application.RequestStop();
 
         Add(content, closeButton);
-
-        // Handle Escape to close
-        KeyPress += (e) =>
-        {
-            if (e.KeyEvent.Key == Key.Esc)
-            {
-                Application.RequestStop();
-                e.Handled = true;
-            }
-        };
     }
 }

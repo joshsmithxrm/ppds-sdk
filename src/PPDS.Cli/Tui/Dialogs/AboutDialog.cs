@@ -1,5 +1,4 @@
 using PPDS.Cli.Commands;
-using PPDS.Cli.Tui.Infrastructure;
 using Terminal.Gui;
 
 namespace PPDS.Cli.Tui.Dialogs;
@@ -7,7 +6,7 @@ namespace PPDS.Cli.Tui.Dialogs;
 /// <summary>
 /// Dialog displaying product information, version, and links.
 /// </summary>
-internal sealed class AboutDialog : Dialog
+internal sealed class AboutDialog : TuiDialog
 {
     private const string ProductName = "Power Platform Developer Suite";
     private const string Tagline = "Pro-grade tooling for Power Platform developers";
@@ -18,11 +17,11 @@ internal sealed class AboutDialog : Dialog
     /// <summary>
     /// Creates a new About dialog.
     /// </summary>
-    public AboutDialog() : base("About PPDS")
+    /// <param name="session">Optional session for hotkey registry integration.</param>
+    public AboutDialog(InteractiveSession? session = null) : base("About PPDS", session)
     {
         Width = 70;
         Height = 22;
-        ColorScheme = TuiColorPalette.Default;
 
         var version = ErrorOutput.Version;
 
@@ -110,15 +109,5 @@ internal sealed class AboutDialog : Dialog
             copyrightLabel,
             closeButton
         );
-
-        // Handle Escape to close
-        KeyPress += (e) =>
-        {
-            if (e.KeyEvent.Key == Key.Esc)
-            {
-                Application.RequestStop();
-                e.Handled = true;
-            }
-        };
     }
 }

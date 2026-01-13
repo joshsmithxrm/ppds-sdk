@@ -11,7 +11,7 @@ namespace PPDS.Cli.Tui.Dialogs;
 /// <summary>
 /// Dialog for exporting query results to various formats.
 /// </summary>
-internal sealed class ExportDialog : Dialog
+internal sealed class ExportDialog : TuiDialog
 {
     private readonly IExportService _exportService;
     private readonly DataTable _dataTable;
@@ -39,18 +39,19 @@ internal sealed class ExportDialog : Dialog
     /// <param name="exportService">The export service.</param>
     /// <param name="dataTable">The data to export.</param>
     /// <param name="columnTypes">Optional column type metadata for JSON type preservation.</param>
+    /// <param name="session">Optional session for hotkey registry integration.</param>
     public ExportDialog(
         IExportService exportService,
         DataTable dataTable,
-        IReadOnlyDictionary<string, QueryColumnType>? columnTypes = null) : base("Export Results")
+        IReadOnlyDictionary<string, QueryColumnType>? columnTypes = null,
+        InteractiveSession? session = null) : base("Export Results", session)
     {
         _exportService = exportService ?? throw new ArgumentNullException(nameof(exportService));
         _dataTable = dataTable ?? throw new ArgumentNullException(nameof(dataTable));
         _columnTypes = columnTypes;
 
         Width = 50;
-        Height = 15; // Increased to fit JSON option
-        ColorScheme = TuiColorPalette.Default;
+        Height = 15;
 
         // Format selection
         var formatLabel = new Label("Format:")
@@ -117,16 +118,6 @@ internal sealed class ExportDialog : Dialog
         cancelButton.Clicked += () => { Application.RequestStop(); };
 
         Add(formatLabel, _formatGroup, _includeHeadersCheck, _statusLabel, exportButton, cancelButton);
-
-        // Escape closes dialog
-        KeyPress += (e) =>
-        {
-            if (e.KeyEvent.Key == Key.Esc)
-            {
-                Application.RequestStop();
-                e.Handled = true;
-            }
-        };
     }
 
     private void OnExportClicked()

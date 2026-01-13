@@ -11,11 +11,10 @@ namespace PPDS.Cli.Tui.Dialogs;
 /// <summary>
 /// Dialog for selecting from available authentication profiles.
 /// </summary>
-internal sealed class ProfileSelectorDialog : Dialog, ITuiStateCapture<ProfileSelectorDialogState>
+internal sealed class ProfileSelectorDialog : TuiDialog, ITuiStateCapture<ProfileSelectorDialogState>
 {
     private readonly IProfileService _profileService;
     private readonly InteractiveSession? _session;
-    private readonly IHotkeyRegistry? _hotkeyRegistry;
     private readonly ListView _listView;
     private readonly Label _detailLabel;
     private readonly TuiSpinner _spinner;
@@ -47,18 +46,14 @@ internal sealed class ProfileSelectorDialog : Dialog, ITuiStateCapture<ProfileSe
     /// </summary>
     /// <param name="profileService">The profile service for profile operations.</param>
     /// <param name="session">Optional session for showing profile details dialog.</param>
-    public ProfileSelectorDialog(IProfileService profileService, InteractiveSession? session = null) : base("Select Profile")
+    public ProfileSelectorDialog(IProfileService profileService, InteractiveSession? session = null)
+        : base("Select Profile", session)
     {
         _profileService = profileService ?? throw new ArgumentNullException(nameof(profileService));
         _session = session;
-        _hotkeyRegistry = session?.GetHotkeyRegistry();
-
-        // Mark this dialog as active so screen-level hotkeys are blocked
-        _hotkeyRegistry?.SetActiveDialog(this);
 
         Width = 60;
         Height = 19;
-        ColorScheme = TuiColorPalette.Default;
 
         // Profile list
         var listFrame = new FrameView("Profiles")
@@ -284,11 +279,7 @@ internal sealed class ProfileSelectorDialog : Dialog, ITuiStateCapture<ProfileSe
             ShowProfileDetailsDialog();
             e.Handled = true;
         }
-        else if (e.KeyEvent.Key == Key.Esc)
-        {
-            Application.RequestStop();
-            e.Handled = true;
-        }
+        // Note: Escape is handled by TuiDialog base class
     }
 
     private void ShowProfileDetailsDialog()
@@ -532,14 +523,5 @@ internal sealed class ProfileSelectorDialog : Dialog, ITuiStateCapture<ProfileSe
             ErrorMessage: _errorMessage);
     }
 
-    protected override void Dispose(bool disposing)
-    {
-        if (disposing)
-        {
-            // Clear active dialog so screen-level hotkeys are re-enabled
-            _hotkeyRegistry?.SetActiveDialog(null);
-        }
-
-        base.Dispose(disposing);
-    }
+    // Note: Dispose is handled by TuiDialog base class which clears active dialog
 }

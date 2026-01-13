@@ -16,7 +16,7 @@ namespace PPDS.Cli.Tui.Dialogs;
 ///
 /// Requires typing the profile count to confirm (prevents accidental clicks).
 /// </remarks>
-internal sealed class ClearAllProfilesDialog : Dialog
+internal sealed class ClearAllProfilesDialog : TuiDialog
 {
     private readonly IProfileService _profileService;
     private readonly TextField _confirmationField;
@@ -33,14 +33,15 @@ internal sealed class ClearAllProfilesDialog : Dialog
     /// </summary>
     /// <param name="profileService">The profile service.</param>
     /// <param name="profileCount">The number of profiles to be deleted.</param>
-    public ClearAllProfilesDialog(IProfileService profileService, int profileCount) : base("Clear All Profiles")
+    /// <param name="session">Optional session for hotkey registry integration.</param>
+    public ClearAllProfilesDialog(IProfileService profileService, int profileCount, InteractiveSession? session = null)
+        : base("Clear All Profiles", session)
     {
         _profileService = profileService ?? throw new ArgumentNullException(nameof(profileService));
         _profileCount = profileCount;
 
         Width = 65;
         Height = 17;
-        ColorScheme = TuiColorPalette.Default;
 
         // Warning header with icon
         var warningLabel = new Label("WARNING: This will delete ALL profiles")
@@ -153,16 +154,6 @@ internal sealed class ClearAllProfilesDialog : Dialog
             _clearButton,
             cancelButton
         );
-
-        // Handle Escape to close
-        KeyPress += (e) =>
-        {
-            if (e.KeyEvent.Key == Key.Esc)
-            {
-                Application.RequestStop();
-                e.Handled = true;
-            }
-        };
 
         // Focus on confirmation field
         _confirmationField.SetFocus();
