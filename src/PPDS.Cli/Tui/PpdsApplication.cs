@@ -113,8 +113,8 @@ internal sealed class PpdsApplication : IDisposable
 
         try
         {
-            var mainWindow = new MainWindow(_profileName, _deviceCodeCallback, _session);
-            Application.Top.Add(mainWindow);
+            var shell = new TuiShell(_profileName, _deviceCodeCallback, _session);
+            Application.Top.Add(shell);
             Application.Run();
             return 0;
         }

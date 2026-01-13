@@ -13,21 +13,20 @@ namespace PPDS.Cli.Tui.Screens;
 
 /// <summary>
 /// SQL Query screen for executing queries against Dataverse and viewing results.
+/// Implements ITuiScreen for hosting in the TuiShell.
 /// </summary>
-internal sealed class SqlQueryScreen : Window, ITuiStateCapture<SqlQueryScreenState>
+internal sealed class SqlQueryScreen : ITuiScreen, ITuiStateCapture<SqlQueryScreenState>
 {
-    private readonly string? _profileName;
     private readonly Action<DeviceCodeInfo>? _deviceCodeCallback;
     private readonly InteractiveSession _session;
     private readonly ITuiErrorService _errorService;
-    private readonly IHotkeyRegistry _hotkeyRegistry;
     private readonly List<IDisposable> _hotkeyRegistrations = new();
+    private IHotkeyRegistry? _hotkeyRegistry;
 
+    private readonly View _content;
     private readonly FrameView _queryFrame;
     private readonly TextView _queryInput;
     private readonly QueryResultsTableView _resultsTable;
-    private readonly TuiStatusBar _statusBar;
-    private readonly TuiStatusLine _statusLine;
     private readonly TextField _filterField;
     private readonly FrameView _filterFrame;
 
@@ -38,26 +37,47 @@ internal sealed class SqlQueryScreen : Window, ITuiStateCapture<SqlQueryScreenSt
     private bool _isExecuting;
     private string _statusText = "Ready";
     private string? _lastErrorMessage;
+    private bool _disposed;
 
-    public SqlQueryScreen(string? profileName, Action<DeviceCodeInfo>? deviceCodeCallback, InteractiveSession session)
+    /// <inheritdoc />
+    public View Content => _content;
+
+    /// <inheritdoc />
+    public string Title => _environmentUrl != null
+        ? $"SQL Query - {_session.CurrentEnvironmentDisplayName ?? _environmentUrl}"
+        : "SQL Query";
+
+    /// <inheritdoc />
+    public MenuBarItem[]? ScreenMenuItems => new[]
     {
-        _profileName = profileName;
+        new MenuBarItem("_Query", new MenuItem[]
+        {
+            new("_Execute", "Ctrl+Enter", () => _ = ExecuteQueryAsync()),
+            new("E_xport Results", "Ctrl+E", ShowExportDialog),
+            new("_History", "Ctrl+Shift+H", ShowHistoryDialog),
+            new("", "", () => {}, null, null, Key.Null), // Separator
+            new("_Filter Results", "/", ShowFilter),
+        })
+    };
+
+    /// <inheritdoc />
+    public event Action? CloseRequested;
+
+    public SqlQueryScreen(Action<DeviceCodeInfo>? deviceCodeCallback, InteractiveSession session)
+    {
         _deviceCodeCallback = deviceCodeCallback;
         _session = session;
         _errorService = session.GetErrorService();
-        _hotkeyRegistry = session.GetHotkeyRegistry();
 
-        // Mark this screen as active for screen-scope hotkeys
-        _hotkeyRegistry.SetActiveScreen(this);
-
-        Title = "SQL Query";
-        X = 0;
-        Y = 0;
-        Width = Dim.Fill();
-        Height = Dim.Fill();
-
-        // Apply dark theme
-        ColorScheme = TuiColorPalette.Default;
+        // Create the container view for the content
+        _content = new View
+        {
+            X = 0,
+            Y = 0,
+            Width = Dim.Fill(),
+            Height = Dim.Fill()
+        };
+        _content.ColorScheme = TuiColorPalette.Default;
 
         // Query input area
         _queryFrame = new FrameView("Query (Ctrl+Enter to execute, F6 to toggle focus)")
@@ -107,22 +127,13 @@ internal sealed class SqlQueryScreen : Window, ITuiStateCapture<SqlQueryScreenSt
             X = 0,
             Y = Pos.Bottom(_queryFrame),
             Width = Dim.Fill(),
-            Height = Dim.Fill() - 2
+            Height = Dim.Fill()
         };
         _resultsTable.LoadMoreRequested += OnLoadMoreRequested;
 
-        // Interactive status bar with profile/environment info
-        _statusBar = new TuiStatusBar(_session);
-        _statusBar.ProfileClicked += OnStatusBarProfileClicked;
-        _statusBar.EnvironmentClicked += OnStatusBarEnvironmentClicked;
+        _content.Add(_queryFrame, _filterFrame, _resultsTable);
 
-        // Status line for contextual messages and spinner (below status bar)
-        _statusLine = new TuiStatusLine();
-        _statusLine.SetMessage("Ready. Press Ctrl+Enter to execute query.");
-
-        Add(_queryFrame, _filterFrame, _resultsTable, _statusBar, _statusLine);
-
-        // Visual focus indicators - highlight active panel with color and title prefix
+        // Visual focus indicators
         _queryFrame.Enter += (_) =>
         {
             _queryFrame.ColorScheme = TuiColorPalette.Focused;
@@ -147,114 +158,38 @@ internal sealed class SqlQueryScreen : Window, ITuiStateCapture<SqlQueryScreenSt
         // Subscribe to environment changes from the session
         _session.EnvironmentChanged += OnEnvironmentChanged;
 
-        // Initialize from session's current environment (may already be set from InitializeAsync)
+        // Initialize from session's current environment
         if (_session.CurrentEnvironmentUrl != null)
         {
             _environmentUrl = _session.CurrentEnvironmentUrl;
             _resultsTable.SetEnvironmentUrl(_environmentUrl);
-            Title = $"SQL Query - {_session.CurrentEnvironmentDisplayName ?? _environmentUrl}";
-        }
-        else
-        {
-            _statusLine.SetMessage("Connecting to environment...");
         }
 
-        // Set up keyboard shortcuts
-        SetupKeyboardShortcuts();
+        // Set up keyboard handling for context-dependent shortcuts
+        SetupKeyboardHandling();
     }
 
-    private void OnStatusBarProfileClicked()
+    /// <inheritdoc />
+    public void OnActivated(IHotkeyRegistry hotkeyRegistry)
     {
-        var service = _session.GetProfileService();
-        var dialog = new ProfileSelectorDialog(service, _session);
-        Application.Run(dialog);
+        _hotkeyRegistry = hotkeyRegistry;
 
-        if (dialog.SelectedProfile != null)
-        {
-            // Profile switch handled by session - status bar updates automatically
-        }
-        else if (dialog.CreateNewSelected)
-        {
-            // Show profile creation dialog
-            var profileService = _session.GetProfileService();
-            var envService = _session.GetEnvironmentService();
-            var creationDialog = new ProfileCreationDialog(profileService, envService, _deviceCodeCallback);
-            Application.Run(creationDialog);
-        }
-    }
-
-    private void OnStatusBarEnvironmentClicked()
-    {
-        var service = _session.GetEnvironmentService();
-        var dialog = new EnvironmentSelectorDialog(service, _deviceCodeCallback, _session);
-        Application.Run(dialog);
-
-        if (dialog.SelectedEnvironment != null || dialog.UseManualUrl)
-        {
-            var url = dialog.UseManualUrl ? dialog.ManualUrl : dialog.SelectedEnvironment?.Url;
-            var name = dialog.UseManualUrl ? dialog.ManualUrl : dialog.SelectedEnvironment?.DisplayName;
-
-            if (url != null)
-            {
-                // Environment switch handled by SetEnvironmentAsync - triggers OnEnvironmentChanged
-#pragma warning disable PPDS013 // Fire-and-forget with explicit error handling
-                _ = _session.SetEnvironmentAsync(url, name).ContinueWith(t =>
-                {
-                    if (t.IsFaulted)
-                    {
-                        _errorService.ReportError("Failed to set environment", t.Exception, "SetEnvironment");
-                    }
-                }, TaskScheduler.Default);
-#pragma warning restore PPDS013
-            }
-        }
-    }
-
-    private void OnEnvironmentChanged(string? url, string? displayName)
-    {
-        Application.MainLoop?.Invoke(() =>
-        {
-            if (url != null)
-            {
-                _environmentUrl = url;
-                _resultsTable.SetEnvironmentUrl(_environmentUrl);
-                Title = $"SQL Query - {displayName ?? url}";
-                _statusLine.SetMessage("Ready. Press Ctrl+Enter to execute query.");
-
-                // Clear stale results from previous environment
-                _resultsTable.ClearData();
-                _lastSql = null;
-                _lastPagingCookie = null;
-                _lastPageNumber = 1;
-            }
-            else
-            {
-                _environmentUrl = null;
-                Title = "SQL Query";
-                _statusLine.SetMessage("No environment selected. Select an environment first.");
-            }
-        });
-    }
-
-    private void SetupKeyboardShortcuts()
-    {
-        // Register screen-scope hotkeys via registry
-        // These only work on this screen when no dialog is open
-        _hotkeyRegistrations.Add(_hotkeyRegistry.Register(
+        // Register screen-scope hotkeys
+        _hotkeyRegistrations.Add(hotkeyRegistry.Register(
             Key.CtrlMask | Key.E,
             HotkeyScope.Screen,
             "Export results",
             ShowExportDialog,
             owner: this));
 
-        _hotkeyRegistrations.Add(_hotkeyRegistry.Register(
+        _hotkeyRegistrations.Add(hotkeyRegistry.Register(
             Key.CtrlMask | Key.ShiftMask | Key.H,
             HotkeyScope.Screen,
             "Query history",
             ShowHistoryDialog,
             owner: this));
 
-        _hotkeyRegistrations.Add(_hotkeyRegistry.Register(
+        _hotkeyRegistrations.Add(hotkeyRegistry.Register(
             Key.F6,
             HotkeyScope.Screen,
             "Toggle query/results focus",
@@ -267,15 +202,29 @@ internal sealed class SqlQueryScreen : Window, ITuiStateCapture<SqlQueryScreenSt
             },
             owner: this));
 
-        _hotkeyRegistrations.Add(_hotkeyRegistry.Register(
+        _hotkeyRegistrations.Add(hotkeyRegistry.Register(
             Key.CtrlMask | Key.Enter,
             HotkeyScope.Screen,
             "Execute query",
             () => _ = ExecuteQueryAsync(),
             owner: this));
+    }
 
+    /// <inheritdoc />
+    public void OnDeactivating()
+    {
+        foreach (var registration in _hotkeyRegistrations)
+        {
+            registration.Dispose();
+        }
+        _hotkeyRegistrations.Clear();
+        _hotkeyRegistry = null;
+    }
+
+    private void SetupKeyboardHandling()
+    {
         // Context-dependent shortcuts that need local state checks
-        KeyPress += (e) =>
+        _content.KeyPress += (e) =>
         {
             switch (e.KeyEvent.Key)
             {
@@ -291,8 +240,8 @@ internal sealed class SqlQueryScreen : Window, ITuiStateCapture<SqlQueryScreenSt
                     }
                     else
                     {
-                        // Only close when already in query
-                        RequestStop();
+                        // Request close when already in query
+                        CloseRequested?.Invoke();
                     }
                     e.Handled = true;
                     break;
@@ -308,45 +257,58 @@ internal sealed class SqlQueryScreen : Window, ITuiStateCapture<SqlQueryScreenSt
         };
     }
 
+    private void OnEnvironmentChanged(string? url, string? displayName)
+    {
+        Application.MainLoop?.Invoke(() =>
+        {
+            if (url != null)
+            {
+                _environmentUrl = url;
+                _resultsTable.SetEnvironmentUrl(_environmentUrl);
+
+                // Clear stale results from previous environment
+                _resultsTable.ClearData();
+                _lastSql = null;
+                _lastPagingCookie = null;
+                _lastPageNumber = 1;
+            }
+            else
+            {
+                _environmentUrl = null;
+            }
+        });
+    }
+
     private async Task ExecuteQueryAsync()
     {
         var sql = _queryInput.Text.ToString() ?? string.Empty;
         if (string.IsNullOrWhiteSpace(sql))
         {
             _statusText = "Error: Query cannot be empty.";
-            _statusLine.SetMessage(_statusText);
             return;
         }
 
         if (_environmentUrl == null)
         {
             _statusText = "Error: No environment selected.";
-            _statusLine.SetMessage(_statusText);
             return;
         }
 
         TuiDebugLog.Log($"Starting query execution for: {_environmentUrl}");
-        TuiDebugLog.Log($"Session.CurrentEnvironmentUrl: {_session.CurrentEnvironmentUrl}");
 
         _isExecuting = true;
         _lastErrorMessage = null;
 
         try
         {
-            // Status: Connecting (with animated spinner)
-            UpdateStatus("Connecting to Dataverse...", showSpinner: true);
             TuiDebugLog.Log($"Getting SQL query service for URL: {_environmentUrl}");
 
             var service = await _session.GetSqlQueryServiceAsync(_environmentUrl, CancellationToken.None);
             TuiDebugLog.Log("Got service, executing query...");
 
-            // Status: Executing (with animated spinner)
-            UpdateStatus("Executing query...", showSpinner: true);
-
             var request = new SqlQueryRequest
             {
                 Sql = sql,
-                // Don't set PageNumber for initial query - Dataverse rejects TOP with paging
                 PageNumber = null,
                 PagingCookie = null
             };
@@ -354,7 +316,6 @@ internal sealed class SqlQueryScreen : Window, ITuiStateCapture<SqlQueryScreenSt
             var result = await service.ExecuteAsync(request, CancellationToken.None);
             TuiDebugLog.Log($"Query complete: {result.Result.Count} rows in {result.Result.ExecutionTimeMs}ms");
 
-            // Update UI on main thread
             Application.MainLoop?.Invoke(() =>
             {
                 _resultsTable.LoadResults(result.Result);
@@ -363,7 +324,7 @@ internal sealed class SqlQueryScreen : Window, ITuiStateCapture<SqlQueryScreenSt
                 _lastPageNumber = result.Result.PageNumber;
 
                 var moreText = result.Result.MoreRecords ? " (more available)" : "";
-                UpdateStatus($"Returned {result.Result.Count} rows in {result.Result.ExecutionTimeMs}ms{moreText}", showSpinner: false);
+                _statusText = $"Returned {result.Result.Count} rows in {result.Result.ExecutionTimeMs}ms{moreText}";
                 _isExecuting = false;
             });
 
@@ -376,26 +337,9 @@ internal sealed class SqlQueryScreen : Window, ITuiStateCapture<SqlQueryScreenSt
         {
             _errorService.ReportError("Query execution failed", ex, "ExecuteQuery");
             _lastErrorMessage = ex.Message;
-            UpdateStatus($"Error: {ex.Message}", showSpinner: false);
+            _statusText = $"Error: {ex.Message}";
             _isExecuting = false;
         }
-    }
-
-    private void UpdateStatus(string message, bool showSpinner = false)
-    {
-        _statusText = message;
-        TuiDebugLog.Log($"Status: {message}");
-        Application.MainLoop?.Invoke(() =>
-        {
-            if (showSpinner)
-            {
-                _statusLine.ShowSpinner(message);
-            }
-            else
-            {
-                _statusLine.HideSpinner(message);
-            }
-        });
     }
 
     private async Task SaveToHistoryAsync(string sql, int rowCount, long executionTimeMs)
@@ -409,8 +353,6 @@ internal sealed class SqlQueryScreen : Window, ITuiStateCapture<SqlQueryScreenSt
         }
         catch (Exception ex)
         {
-            // History save failure is non-critical - log but don't interrupt workflow
-            // The status bar shows profile/env info so we don't want to pollute it with warnings
             System.Diagnostics.Debug.WriteLine($"[TUI] Failed to save query to history: {ex.Message}");
             TuiDebugLog.Log($"History save failed: {ex.Message}");
         }
@@ -434,44 +376,37 @@ internal sealed class SqlQueryScreen : Window, ITuiStateCapture<SqlQueryScreenSt
 
             var result = await service.ExecuteAsync(request, CancellationToken.None);
 
-            // Update UI on main thread
             Application.MainLoop?.Invoke(() =>
             {
                 _resultsTable.AddPage(result.Result);
                 _lastPagingCookie = result.Result.PagingCookie;
                 _lastPageNumber = result.Result.PageNumber;
-
-                _statusLine.SetMessage($"Loaded page {_lastPageNumber}");
             });
         }
         catch (InvalidOperationException ex)
         {
             _errorService.ReportError("Failed to load more results", ex, "LoadMoreResults");
-            Application.MainLoop?.Invoke(() => _statusLine.SetMessage($"Error loading more: {ex.Message}"));
         }
         catch (HttpRequestException ex)
         {
             _errorService.ReportError("Network error loading results", ex, "LoadMoreResults");
-            Application.MainLoop?.Invoke(() => _statusLine.SetMessage($"Network error: {ex.Message}"));
         }
     }
 
     private void ShowFilter()
     {
         _filterFrame.Visible = true;
-        _resultsTable.Y = Pos.Bottom(_filterFrame);  // Position below filter
+        _resultsTable.Y = Pos.Bottom(_filterFrame);
         _filterField.Text = string.Empty;
         _filterField.SetFocus();
-        _statusLine.SetMessage("Type to filter results. Press Esc to close filter.");
     }
 
     private void HideFilter()
     {
         _filterFrame.Visible = false;
-        _resultsTable.Y = Pos.Bottom(_queryFrame);  // Reset to below query frame
+        _resultsTable.Y = Pos.Bottom(_queryFrame);
         _filterField.Text = string.Empty;
         _resultsTable.ApplyFilter(null);
-        _statusLine.SetMessage("Filter cleared.");
     }
 
     private void OnFilterChanged(NStack.ustring obj)
@@ -489,16 +424,10 @@ internal sealed class SqlQueryScreen : Window, ITuiStateCapture<SqlQueryScreenSt
             return;
         }
 
-        // Create export service directly (doesn't need environment connection)
         var exportService = new ExportService(Microsoft.Extensions.Logging.Abstractions.NullLogger<ExportService>.Instance);
         var dialog = new ExportDialog(exportService, dataTable);
 
         Application.Run(dialog);
-
-        if (dialog.ExportCompleted)
-        {
-            _statusLine.SetMessage("Export completed");
-        }
     }
 
     private void ShowHistoryDialog()
@@ -534,7 +463,6 @@ internal sealed class SqlQueryScreen : Window, ITuiStateCapture<SqlQueryScreenSt
             if (dialog.SelectedEntry != null)
             {
                 _queryInput.Text = dialog.SelectedEntry.Sql;
-                _statusLine.SetMessage("Query loaded from history. Press Ctrl+Enter to execute.");
             }
         });
     }
@@ -575,24 +503,17 @@ internal sealed class SqlQueryScreen : Window, ITuiStateCapture<SqlQueryScreenSt
             ErrorMessage: _lastErrorMessage);
     }
 
-    protected override void Dispose(bool disposing)
+    public void Dispose()
     {
-        if (disposing)
-        {
-            // Unregister screen hotkeys
-            foreach (var registration in _hotkeyRegistrations)
-            {
-                registration.Dispose();
-            }
-            _hotkeyRegistrations.Clear();
+        if (_disposed) return;
+        _disposed = true;
 
-            // Clear active screen (MainWindow will set itself when it regains focus)
-            _hotkeyRegistry.SetActiveScreen(null);
+        // Ensure hotkeys are unregistered
+        OnDeactivating();
 
-            // Unsubscribe from session events
-            _session.EnvironmentChanged -= OnEnvironmentChanged;
-        }
+        // Unsubscribe from session events
+        _session.EnvironmentChanged -= OnEnvironmentChanged;
 
-        base.Dispose(disposing);
+        _content.Dispose();
     }
 }
