@@ -229,8 +229,8 @@ public sealed class ProfileConnectionSource : IDisposable
     }
 
     /// <summary>
-    /// Updates the profile's HomeAccountId if it changed after authentication.
-    /// This enables MSAL token cache reuse across sessions.
+    /// Updates the profile's HomeAccountId if it changed and notifies that the profile was used.
+    /// Called after successful connection to enable token cache reuse and track usage.
     /// </summary>
     private void TryUpdateHomeAccountId()
     {
@@ -238,14 +238,15 @@ public sealed class ProfileConnectionSource : IDisposable
             return;
 
         var newHomeAccountId = _provider.HomeAccountId;
-        if (string.IsNullOrEmpty(newHomeAccountId))
-            return;
 
-        // Only update if it's different (avoids unnecessary file writes)
-        if (string.Equals(_profile.HomeAccountId, newHomeAccountId, StringComparison.Ordinal))
-            return;
+        // Update HomeAccountId if it changed (and is not empty)
+        if (!string.IsNullOrEmpty(newHomeAccountId) &&
+            !string.Equals(_profile.HomeAccountId, newHomeAccountId, StringComparison.Ordinal))
+        {
+            _profile.HomeAccountId = newHomeAccountId;
+        }
 
-        _profile.HomeAccountId = newHomeAccountId;
+        // Always notify that profile was used (for LastUsedAt tracking)
         _onProfileUpdated(_profile);
     }
 
