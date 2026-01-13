@@ -101,6 +101,27 @@ internal sealed class SqlQueryScreen : ITuiScreen, ITuiStateCapture<SqlQueryScre
             Height = Dim.Fill(),
             Text = "SELECT TOP 100 accountid, name, createdon FROM account"
         };
+
+        // Handle Ctrl+A directly on TextView before Terminal.Gui's default handling
+        _queryInput.KeyPress += (e) =>
+        {
+            if (e.KeyEvent.Key == (Key.CtrlMask | Key.A))
+            {
+                var text = _queryInput.Text?.ToString() ?? string.Empty;
+                if (text.Length > 0)
+                {
+                    _queryInput.SelectionStartColumn = 0;
+                    _queryInput.SelectionStartRow = 0;
+                    var lines = text.Split('\n');
+                    var lastRow = lines.Length - 1;
+                    var lastCol = lines[lastRow].TrimEnd('\r').Length;
+                    _queryInput.CursorPosition = new Point(lastCol, lastRow);
+                    _queryInput.SetNeedsDisplay();
+                }
+                e.Handled = true;
+            }
+        };
+
         _queryFrame.Add(_queryInput);
 
         // Filter field (hidden by default)
@@ -269,30 +290,6 @@ internal sealed class SqlQueryScreen : ITuiScreen, ITuiStateCapture<SqlQueryScre
                     if (!_queryInput.HasFocus)
                     {
                         ShowFilter();
-                        e.Handled = true;
-                    }
-                    break;
-
-                case Key.CtrlMask | Key.A:
-                    // Ctrl+A selects all text in query input
-                    if (_queryInput.HasFocus)
-                    {
-                        var text = _queryInput.Text?.ToString() ?? string.Empty;
-                        if (text.Length > 0)
-                        {
-                            // Set selection start to document beginning
-                            _queryInput.SelectionStartColumn = 0;
-                            _queryInput.SelectionStartRow = 0;
-
-                            // Calculate end position (last line, last column)
-                            var lines = text.Split('\n');
-                            var lastRow = lines.Length - 1;
-                            var lastCol = lines[lastRow].TrimEnd('\r').Length;
-
-                            // Move cursor to end to complete selection
-                            _queryInput.CursorPosition = new Point(lastCol, lastRow);
-                            _queryInput.SetNeedsDisplay();
-                        }
                         e.Handled = true;
                     }
                     break;
