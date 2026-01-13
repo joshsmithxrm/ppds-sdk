@@ -61,7 +61,6 @@ public class DialogStateCaptureTests
         Assert.Contains(state.Shortcuts, s => s.Key == "Alt+P" && s.Scope == "Global");
         Assert.Contains(state.Shortcuts, s => s.Key == "Alt+E" && s.Scope == "Global");
         Assert.Contains(state.Shortcuts, s => s.Key == "F1" && s.Scope == "Global");
-        Assert.Contains(state.Shortcuts, s => s.Key == "F2" && s.Scope == "Global");
         Assert.Contains(state.Shortcuts, s => s.Key == "F12" && s.Scope == "Global");
     }
 

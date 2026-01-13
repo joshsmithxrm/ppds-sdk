@@ -1,3 +1,4 @@
+using System.Reflection;
 using PPDS.Auth.Credentials;
 using PPDS.Cli.Services.Profile;
 using PPDS.Cli.Tui.Dialogs;
@@ -236,7 +237,12 @@ internal sealed class TuiShell : Window, ITuiStateCapture<TuiShellState>
             new("SQL Query", "Run SQL queries against Dataverse", () => NavigateToSqlQuery()),
             dataMigrationItem,
             new("", "", () => {}, null, null, Key.Null), // Separator
-            new("Quit", "Exit the application", () => RequestStop())
+            new("Exit", "Exit the application", () =>
+            {
+                // Close menu before stopping to prevent Terminal.Gui state corruption
+                CloseMenuBar();
+                RequestStop();
+            })
         }));
 
         // Screen-specific menus (inserted between File and Help)
@@ -281,6 +287,27 @@ internal sealed class TuiShell : Window, ITuiStateCapture<TuiShellState>
         };
 
         Add(_menuBar);
+    }
+
+    /// <summary>
+    /// Closes the menu bar dropdown using reflection to call Terminal.Gui's internal CloseAllMenus().
+    /// This prevents state corruption when quitting while menu is open.
+    /// </summary>
+    private void CloseMenuBar()
+    {
+        if (_menuBar == null) return;
+
+        try
+        {
+            var closeMethod = typeof(MenuBar).GetMethod(
+                "CloseAllMenus",
+                BindingFlags.NonPublic | BindingFlags.Instance);
+            closeMethod?.Invoke(_menuBar, null);
+        }
+        catch (Exception ex)
+        {
+            TuiDebugLog.Log($"Failed to close menu: {ex.Message}");
+        }
     }
 
     private void RegisterGlobalHotkeys()
