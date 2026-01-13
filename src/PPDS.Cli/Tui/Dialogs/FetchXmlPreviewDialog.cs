@@ -1,4 +1,5 @@
 using PPDS.Cli.Infrastructure;
+using PPDS.Cli.Tui.Infrastructure;
 using PPDS.Cli.Tui.Testing;
 using PPDS.Cli.Tui.Testing.States;
 using Terminal.Gui;
@@ -44,7 +45,8 @@ internal sealed class FetchXmlPreviewDialog : TuiDialog, ITuiStateCapture<FetchX
             Height = Dim.Fill(),
             ReadOnly = true,
             WordWrap = false,
-            Text = fetchXml ?? "(No FetchXML available)"
+            Text = fetchXml ?? "(No FetchXML available)",
+            ColorScheme = TuiColorPalette.ReadOnlyText
         };
 
         frameView.Add(_fetchXmlView);

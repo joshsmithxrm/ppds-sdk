@@ -7,11 +7,18 @@ namespace PPDS.Cli.Tui.Infrastructure;
 /// Provides a modern dark theme with environment-aware status bar colors.
 /// </summary>
 /// <remarks>
+/// <para>
 /// Design direction:
 /// - Base: Dark background (Black) - easier on eyes, modern dev aesthetic
 /// - Accents: Cyan as primary accent (stands out on dark, not harsh)
 /// - Text: White/Gray on dark backgrounds for readability
 /// - Status bar: Context-colored based on environment risk level
+/// </para>
+/// <para>
+/// DESIGN RULE - BLUE BACKGROUNDS: When background is Cyan, BrightCyan, Blue, or BrightBlue,
+/// foreground MUST be Black. No exceptions. White/grey text is unreadable on blue backgrounds.
+/// Use <see cref="ValidateBlueBackgroundRule"/> in unit tests to enforce this rule.
+/// </para>
 /// </remarks>
 public static class TuiColorPalette
 {
@@ -71,15 +78,16 @@ public static class TuiColorPalette
 
     /// <summary>
     /// Color scheme for file dialogs (SaveDialog, OpenDialog).
-    /// Uses white text on cyan for Focus to ensure readability in ComboBox dropdowns.
+    /// Uses black text on cyan for Focus per blue background rule.
+    /// Disabled uses Black because Terminal.Gui may not respect the background color.
     /// </summary>
     public static ColorScheme FileDialog => new()
     {
         Normal = MakeAttr(Color.White, Color.Black),
-        Focus = MakeAttr(Color.White, Color.Cyan),
+        Focus = MakeAttr(Color.Black, Color.Cyan),
         HotNormal = MakeAttr(Color.Cyan, Color.Black),
-        HotFocus = MakeAttr(Color.White, Color.Cyan),
-        Disabled = MakeAttr(Color.DarkGray, Color.Black)
+        HotFocus = MakeAttr(Color.Black, Color.Cyan),
+        Disabled = MakeAttr(Color.Black, Color.Cyan)
     };
 
     #endregion
@@ -127,15 +135,15 @@ public static class TuiColorPalette
 
     /// <summary>
     /// Status bar for TRIAL environments.
-    /// Info theme - white on cyan.
+    /// Info theme - black on cyan per blue background rule.
     /// </summary>
     public static ColorScheme StatusBar_Trial => new()
     {
-        Normal = MakeAttr(Color.White, Color.Cyan),
-        Focus = MakeAttr(Color.White, Color.BrightCyan),
+        Normal = MakeAttr(Color.Black, Color.Cyan),
+        Focus = MakeAttr(Color.Black, Color.BrightCyan),
         HotNormal = MakeAttr(Color.Black, Color.Cyan),
         HotFocus = MakeAttr(Color.Black, Color.BrightCyan),
-        Disabled = MakeAttr(Color.DarkGray, Color.Cyan)
+        Disabled = MakeAttr(Color.Black, Color.Cyan)
     };
 
     /// <summary>
@@ -187,15 +195,15 @@ public static class TuiColorPalette
 
     /// <summary>
     /// Color scheme for selected/highlighted items.
-    /// Black text on cyan background.
+    /// Black text on cyan background per blue background rule.
     /// </summary>
     public static ColorScheme Selected => new()
     {
         Normal = MakeAttr(Color.Black, Color.Cyan),
         Focus = MakeAttr(Color.Black, Color.BrightCyan),
-        HotNormal = MakeAttr(Color.White, Color.Cyan),
-        HotFocus = MakeAttr(Color.White, Color.BrightCyan),
-        Disabled = MakeAttr(Color.DarkGray, Color.Cyan)
+        HotNormal = MakeAttr(Color.Black, Color.Cyan),
+        HotFocus = MakeAttr(Color.Black, Color.BrightCyan),
+        Disabled = MakeAttr(Color.Black, Color.Cyan)
     };
 
     /// <summary>
@@ -252,6 +260,73 @@ public static class TuiColorPalette
             return new Terminal.Gui.Attribute(foreground, background);
         }
         return Application.Driver.MakeAttribute(foreground, background);
+    }
+
+    /// <summary>
+    /// Blue background colors that require black foreground.
+    /// </summary>
+    private static readonly Color[] BlueBackgrounds = { Color.Cyan, Color.BrightCyan, Color.Blue, Color.BrightBlue };
+
+    /// <summary>
+    /// Validates all color schemes follow the blue background rule.
+    /// Returns a list of violations (scheme name, attribute name, foreground, background).
+    /// Used in unit tests to prevent regressions.
+    /// </summary>
+    /// <remarks>
+    /// DESIGN RULE: When background is Cyan, BrightCyan, Blue, or BrightBlue,
+    /// foreground MUST be Black. No exceptions.
+    /// </remarks>
+    public static IEnumerable<(string Scheme, string Attribute, Color Foreground, Color Background)> ValidateBlueBackgroundRule()
+    {
+        var schemes = new (string Name, ColorScheme Scheme)[]
+        {
+            (nameof(Default), Default),
+            (nameof(Focused), Focused),
+            (nameof(TextInput), TextInput),
+            (nameof(ReadOnlyText), ReadOnlyText),
+            (nameof(FileDialog), FileDialog),
+            (nameof(StatusBar_Production), StatusBar_Production),
+            (nameof(StatusBar_Sandbox), StatusBar_Sandbox),
+            (nameof(StatusBar_Development), StatusBar_Development),
+            (nameof(StatusBar_Trial), StatusBar_Trial),
+            (nameof(StatusBar_Default), StatusBar_Default),
+            (nameof(MenuBar), MenuBar),
+            (nameof(TableHeader), TableHeader),
+            (nameof(Selected), Selected),
+            (nameof(Error), Error),
+            (nameof(Success), Success)
+        };
+
+        foreach (var (name, scheme) in schemes)
+        {
+            foreach (var violation in CheckScheme(name, scheme))
+            {
+                yield return violation;
+            }
+        }
+    }
+
+    private static IEnumerable<(string, string, Color, Color)> CheckScheme(string schemeName, ColorScheme scheme)
+    {
+        var attributes = new (string Name, Terminal.Gui.Attribute Attr)[]
+        {
+            ("Normal", scheme.Normal),
+            ("Focus", scheme.Focus),
+            ("HotNormal", scheme.HotNormal),
+            ("HotFocus", scheme.HotFocus),
+            ("Disabled", scheme.Disabled)
+        };
+
+        foreach (var (attrName, attr) in attributes)
+        {
+            var bg = (Color)attr.Background;
+            var fg = (Color)attr.Foreground;
+
+            if (BlueBackgrounds.Contains(bg) && fg != Color.Black)
+            {
+                yield return (schemeName, attrName, fg, bg);
+            }
+        }
     }
 
     #endregion

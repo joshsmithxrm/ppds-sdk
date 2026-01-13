@@ -35,6 +35,7 @@ SDK, CLI, TUI, VS Code Extension, and MCP server for Power Platform development.
 | Start implementation without plan citations | Cite `docs/patterns/` or ADRs in plan's "Patterns I'll Follow" section |
 | Omit "What I'm NOT Doing" from plans | Explicit boundaries prevent scope creep; required for approval |
 | Implement in design sessions | Design sessions produce plans and issues; workers implement |
+| Use non-black text on blue/cyan TUI backgrounds | Black is the only readable color; see `TuiColorPalette.ValidateBlueBackgroundRule()` |
 
 ## ALWAYS
 
