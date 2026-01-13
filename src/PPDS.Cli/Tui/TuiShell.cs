@@ -230,18 +230,20 @@ internal sealed class TuiShell : Window, ITuiStateCapture<TuiShellState>
 
         var menuItems = new List<MenuBarItem>();
 
-        // Disabled menu items
-        var dataMigrationItem = new MenuItem("_Data Migration (Coming Soon)", "", null, shortcut: Key.Null);
-        var solutionsItem = new MenuItem("_Solutions (Coming Soon)", "", null);
-        var pluginTracesItem = new MenuItem("Plu_gin Traces (Coming Soon)", "", null);
+        // Disabled menu items (no underscore hotkeys - they work globally in Terminal.Gui)
+        var dataMigrationItem = new MenuItem("Data Migration (Coming Soon)", "", null, shortcut: Key.Null);
+        var solutionsItem = new MenuItem("Solutions (Coming Soon)", "", null);
+        var pluginTracesItem = new MenuItem("Plugin Traces (Coming Soon)", "", null);
 
         // File menu (always present)
+        // Note: Keep underscore on MenuBarItem (_File) for Alt+F to open menu.
+        // Remove underscores from MenuItems - they create global Alt+letter hotkeys in Terminal.Gui.
         menuItems.Add(new MenuBarItem("_File", new MenuItem[]
         {
-            new("_SQL Query", "Run SQL queries against Dataverse (F2)", () => NavigateToSqlQuery()),
+            new("SQL Query", "Run SQL queries against Dataverse (F2)", () => NavigateToSqlQuery()),
             dataMigrationItem,
             new("", "", () => {}, null, null, Key.Null), // Separator
-            new("_Quit", "Exit the application", () => RequestStop())
+            new("Quit", "Exit the application", () => RequestStop())
         }));
 
         // Screen-specific menus (inserted between File and Help)
@@ -260,10 +262,10 @@ internal sealed class TuiShell : Window, ITuiStateCapture<TuiShellState>
         // Help menu (always present)
         menuItems.Add(new MenuBarItem("_Help", new MenuItem[]
         {
-            new("_About", "About PPDS", () => ShowAbout()),
-            new("_Keyboard Shortcuts", "Show keyboard shortcuts (F1)", () => ShowKeyboardShortcuts()),
+            new("About", "About PPDS", () => ShowAbout()),
+            new("Keyboard Shortcuts", "Show keyboard shortcuts (F1)", () => ShowKeyboardShortcuts()),
             new("", "", () => {}, null, null, Key.Null), // Separator
-            new("Error _Log", "View recent errors and debug log (F12)", () => ShowErrorDetails()),
+            new("Error Log", "View recent errors and debug log (F12)", () => ShowErrorDetails()),
         }));
 
         _menuBar = new MenuBar(menuItems.ToArray());

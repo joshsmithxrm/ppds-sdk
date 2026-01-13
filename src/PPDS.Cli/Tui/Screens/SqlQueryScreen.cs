@@ -47,16 +47,18 @@ internal sealed class SqlQueryScreen : ITuiScreen, ITuiStateCapture<SqlQueryScre
         ? $"SQL Query - {_session.CurrentEnvironmentDisplayName ?? _environmentUrl}"
         : "SQL Query";
 
+    // Note: Keep underscore on MenuBarItem (_Query) for Alt+Q to open menu.
+    // Remove underscores from MenuItems - they create global Alt+letter hotkeys in Terminal.Gui.
     /// <inheritdoc />
     public MenuBarItem[]? ScreenMenuItems => new[]
     {
         new MenuBarItem("_Query", new MenuItem[]
         {
-            new("_Execute", "Ctrl+Enter", () => _ = ExecuteQueryAsync()),
-            new("E_xport Results", "Ctrl+E", ShowExportDialog),
-            new("_History", "Ctrl+Shift+H", ShowHistoryDialog),
+            new("Execute", "Ctrl+Enter", () => _ = ExecuteQueryAsync()),
+            new("Export Results", "Ctrl+E", ShowExportDialog),
+            new("History", "Ctrl+Shift+H", ShowHistoryDialog),
             new("", "", () => {}, null, null, Key.Null), // Separator
-            new("_Filter Results", "/", ShowFilter),
+            new("Filter Results", "/", ShowFilter),
         })
     };
 
