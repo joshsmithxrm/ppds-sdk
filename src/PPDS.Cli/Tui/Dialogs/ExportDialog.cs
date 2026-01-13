@@ -160,7 +160,7 @@ internal sealed class ExportDialog : Dialog
         using (var saveDialog = new SaveDialog("Export to File", filter))
         {
             saveDialog.AllowedFileTypes = new[] { $".{extension}" };
-            saveDialog.ColorScheme = TuiColorPalette.Default;
+            ApplyColorSchemeRecursive(saveDialog, TuiColorPalette.Default);
             Application.Run(saveDialog);
 
             if (saveDialog.Canceled || saveDialog.FilePath == null)
@@ -217,6 +217,18 @@ internal sealed class ExportDialog : Dialog
         else
         {
             await _exportService.ExportTsvAsync(_dataTable, stream, options);
+        }
+    }
+
+    /// <summary>
+    /// Recursively applies a color scheme to a view and all its subviews.
+    /// </summary>
+    private static void ApplyColorSchemeRecursive(View view, ColorScheme scheme)
+    {
+        view.ColorScheme = scheme;
+        foreach (var subview in view.Subviews)
+        {
+            ApplyColorSchemeRecursive(subview, scheme);
         }
     }
 }
