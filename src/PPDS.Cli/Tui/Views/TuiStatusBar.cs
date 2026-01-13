@@ -90,6 +90,34 @@ internal sealed class TuiStatusBar : View, ITuiStateCapture<TuiStatusBarState>
         UpdateDisplay();
     }
 
+    /// <summary>
+    /// Handles mouse events for click detection.
+    /// </summary>
+    /// <remarks>
+    /// Terminal.Gui buttons with CanFocus=false don't receive click events,
+    /// so we handle mouse clicks at the View level to maintain clean tab order
+    /// while still supporting mouse interaction.
+    /// </remarks>
+    public override bool MouseEvent(MouseEvent mouseEvent)
+    {
+        if (mouseEvent.Flags.HasFlag(MouseFlags.Button1Clicked))
+        {
+            // Determine which button was clicked based on X position
+            if (mouseEvent.X < _profileButton.Frame.Right)
+            {
+                ProfileClicked?.Invoke();
+                return true;
+            }
+            else
+            {
+                EnvironmentClicked?.Invoke();
+                return true;
+            }
+        }
+
+        return base.MouseEvent(mouseEvent);
+    }
+
     private void OnEnvironmentChanged(string? url, string? displayName)
     {
         Application.MainLoop?.Invoke(UpdateDisplay);
