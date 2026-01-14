@@ -161,7 +161,6 @@ internal static class SqlQueryResultExpander
         IReadOnlyDictionary<string, VirtualColumnInfo> virtualColumns)
     {
         var expanded = new List<QueryColumn>();
-        var addedVirtualColumns = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         foreach (var column in originalColumns)
         {
@@ -185,7 +184,6 @@ internal static class SqlQueryResultExpander
                         LinkedEntityAlias = column.LinkedEntityAlias,
                         LinkedEntityName = column.LinkedEntityName
                     });
-                    addedVirtualColumns.Add(virtualNameColumn);
                 }
                 else
                 {
@@ -198,7 +196,6 @@ internal static class SqlQueryResultExpander
                         LinkedEntityAlias = column.LinkedEntityAlias,
                         LinkedEntityName = column.LinkedEntityName
                     });
-                    addedVirtualColumns.Add(virtualNameColumn);
                 }
             }
             else

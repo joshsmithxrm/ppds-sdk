@@ -51,6 +51,7 @@ internal sealed class ProfileCreationDialog : TuiDialog, ITuiStateCapture<Profil
 
     private readonly Label _statusLabel;
     private readonly Button _authenticateButton;
+    private readonly CancellationTokenSource _cts = new();
 
     private ProfileSummary? _createdProfile;
     private bool _isAuthenticating;
@@ -413,7 +414,7 @@ internal sealed class ProfileCreationDialog : TuiDialog, ITuiStateCapture<Profil
     {
         try
         {
-            var profile = await _profileService.CreateProfileAsync(request, deviceCodeCallback);
+            var profile = await _profileService.CreateProfileAsync(request, deviceCodeCallback, _cts.Token);
             Application.MainLoop?.Invoke(() =>
             {
                 _createdProfile = profile;
@@ -496,4 +497,15 @@ internal sealed class ProfileCreationDialog : TuiDialog, ITuiStateCapture<Profil
         IsCreating: _isAuthenticating,
         ValidationError: null,
         CanCreate: _authenticateButton.Enabled);
+
+    /// <inheritdoc />
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing)
+        {
+            _cts.Cancel();
+            _cts.Dispose();
+        }
+        base.Dispose(disposing);
+    }
 }

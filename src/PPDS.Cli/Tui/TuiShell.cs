@@ -681,7 +681,14 @@ internal sealed class TuiShell : Window, ITuiStateCapture<TuiShellState>
             while (_screenStack.Count > 0)
             {
                 var screen = _screenStack.Pop();
-                screen.Dispose();
+                try
+                {
+                    screen.Dispose();
+                }
+                catch
+                {
+                    // Continue disposing remaining screens even if one fails
+                }
             }
 
             _errorService.ErrorOccurred -= OnErrorOccurred;

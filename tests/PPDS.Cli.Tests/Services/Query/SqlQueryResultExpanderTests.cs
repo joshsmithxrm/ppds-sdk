@@ -529,8 +529,8 @@ public class SqlQueryResultExpanderTests
         // Record should only have the *name value
         var record = expanded.Records[0];
         Assert.False(record.ContainsKey("ownerid"));
-        Assert.True(record.ContainsKey("owneridname"));
-        Assert.Equal("Josh Smith", record["owneridname"].Value);
+        Assert.True(record.TryGetValue("owneridname", out var ownerNameValue));
+        Assert.Equal("Josh Smith", ownerNameValue.Value);
     }
 
     [Fact]

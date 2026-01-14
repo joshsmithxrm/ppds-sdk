@@ -320,8 +320,8 @@ public static class TuiColorPalette
 
         foreach (var (attrName, attr) in attributes)
         {
-            var bg = (Color)attr.Background;
-            var fg = (Color)attr.Foreground;
+            var bg = attr.Background;
+            var fg = attr.Foreground;
 
             if (BlueBackgrounds.Contains(bg) && fg != Color.Black)
             {
