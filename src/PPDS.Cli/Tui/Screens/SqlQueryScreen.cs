@@ -468,20 +468,32 @@ internal sealed class SqlQueryScreen : ITuiScreen, ITuiStateCapture<SqlQueryScre
 
             Application.MainLoop?.Invoke(() =>
             {
-                _resultsTable.LoadResults(result.Result);
-                MenuStateChanged?.Invoke(); // Notify shell to enable File > Export menu
-                _lastSql = sql;
-                _lastPagingCookie = result.Result.PagingCookie;
-                _lastPageNumber = result.Result.PageNumber;
+                try
+                {
+                    _resultsTable.LoadResults(result.Result);
+                    MenuStateChanged?.Invoke(); // Notify shell to enable File > Export menu
+                    _lastSql = sql;
+                    _lastPagingCookie = result.Result.PagingCookie;
+                    _lastPageNumber = result.Result.PageNumber;
 
-                var moreText = result.Result.MoreRecords ? " (more available)" : "";
-                _statusText = $"Returned {result.Result.Count} rows in {result.Result.ExecutionTimeMs}ms{moreText}";
-
-                // Stop spinner, show status label
-                _statusSpinner.Stop();
-                _statusLabel.Text = _statusText;
-                _statusLabel.Visible = true;
-                _isExecuting = false;
+                    var moreText = result.Result.MoreRecords ? " (more available)" : "";
+                    _statusText = $"Returned {result.Result.Count} rows in {result.Result.ExecutionTimeMs}ms{moreText}";
+                }
+                catch (Exception ex)
+                {
+                    _errorService.ReportError("Failed to display query results", ex, "ExecuteQuery.LoadResults");
+                    _lastErrorMessage = ex.Message;
+                    _statusText = $"Error displaying results: {ex.Message}";
+                    TuiDebugLog.Log($"Error in ExecuteQuery callback: {ex}");
+                }
+                finally
+                {
+                    // Always cleanup: stop spinner, show status, reset executing flag
+                    _statusSpinner.Stop();
+                    _statusLabel.Text = _statusText;
+                    _statusLabel.Visible = true;
+                    _isExecuting = false;
+                }
             });
 
             // Save to history (fire-and-forget)
@@ -586,9 +598,17 @@ internal sealed class SqlQueryScreen : ITuiScreen, ITuiStateCapture<SqlQueryScre
 
             Application.MainLoop?.Invoke(() =>
             {
-                _resultsTable.AddPage(result.Result);
-                _lastPagingCookie = result.Result.PagingCookie;
-                _lastPageNumber = result.Result.PageNumber;
+                try
+                {
+                    _resultsTable.AddPage(result.Result);
+                    _lastPagingCookie = result.Result.PagingCookie;
+                    _lastPageNumber = result.Result.PageNumber;
+                }
+                catch (Exception ex)
+                {
+                    _errorService.ReportError("Failed to load additional results", ex, "LoadMore.AddPage");
+                    TuiDebugLog.Log($"Error in LoadMore callback: {ex}");
+                }
             });
         }
         catch (DataverseAuthenticationException authEx) when (authEx.RequiresReauthentication)

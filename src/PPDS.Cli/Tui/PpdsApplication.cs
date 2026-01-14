@@ -122,7 +122,16 @@ internal sealed class PpdsApplication : IDisposable
         {
             var shell = new TuiShell(_profileName, _deviceCodeCallback, _session);
             Application.Top.Add(shell);
-            Application.Run();
+
+            // Global exception handler - catches exceptions from MainLoop.Invoke callbacks
+            // that would otherwise crash the TUI. Reports to error service and continues.
+            var errorService = _session.GetErrorService();
+            Application.Run(errorHandler: ex =>
+            {
+                errorService.ReportError("Unexpected error", ex, "Application");
+                TuiDebugLog.Log($"Global exception caught: {ex}");
+                return true;  // true = handled, continue running
+            });
             return 0;
         }
         finally
