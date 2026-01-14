@@ -187,7 +187,6 @@ MinVer tags: `{Package}-v{version}` (e.g., `Cli-v1.0.0-beta.11`)
 
 | Command | Purpose |
 |---------|---------|
-| `/backlog` | View bugs, ready work, and start planning sessions |
 | `/design` | Design conversation for new feature |
 | `/design-ui` | Reference-driven UI design with wireframes |
 | `/start-work` | Begin work session from issues |

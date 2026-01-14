@@ -4,7 +4,6 @@ using PPDS.Auth.Credentials;
 using PPDS.Auth.Profiles;
 using PPDS.Cli.Infrastructure;
 using PPDS.Cli.Plugins.Registration;
-using PPDS.Cli.Services.Backlog;
 using PPDS.Cli.Services.Environment;
 using PPDS.Cli.Services.Export;
 using PPDS.Cli.Services.History;
@@ -54,9 +53,6 @@ public static class ServiceRegistration
 
         // TUI theming
         services.AddSingleton<ITuiThemeService, TuiThemeService>();
-
-        // Backlog service
-        services.AddTransient<IBacklogService, BacklogService>();
 
         // Connection service - requires profile-based token provider and environment ID
         // Registered as factory because it needs runtime values from ResolvedConnectionInfo
