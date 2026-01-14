@@ -1,6 +1,8 @@
 using PPDS.Cli.Infrastructure.Errors;
 using PPDS.Cli.Services.History;
 using PPDS.Cli.Tui.Infrastructure;
+using PPDS.Cli.Tui.Testing;
+using PPDS.Cli.Tui.Testing.States;
 using Terminal.Gui;
 
 namespace PPDS.Cli.Tui.Dialogs;
@@ -8,7 +10,7 @@ namespace PPDS.Cli.Tui.Dialogs;
 /// <summary>
 /// Dialog for browsing and selecting from query history.
 /// </summary>
-internal sealed class QueryHistoryDialog : Dialog
+internal sealed class QueryHistoryDialog : TuiDialog, ITuiStateCapture<QueryHistoryDialogState>
 {
     private readonly IQueryHistoryService _historyService;
     private readonly string _environmentUrl;
@@ -28,14 +30,17 @@ internal sealed class QueryHistoryDialog : Dialog
     /// <summary>
     /// Creates a new query history dialog.
     /// </summary>
-    public QueryHistoryDialog(IQueryHistoryService historyService, string environmentUrl) : base("Query History")
+    /// <param name="historyService">The query history service.</param>
+    /// <param name="environmentUrl">The environment URL to load history for.</param>
+    /// <param name="session">Optional session for hotkey registry integration.</param>
+    public QueryHistoryDialog(IQueryHistoryService historyService, string environmentUrl, InteractiveSession? session = null)
+        : base("Query History", session)
     {
         _historyService = historyService ?? throw new ArgumentNullException(nameof(historyService));
         _environmentUrl = environmentUrl ?? throw new ArgumentNullException(nameof(environmentUrl));
 
         Width = 80;
         Height = 22;
-        ColorScheme = TuiColorPalette.Default;
 
         // Search field
         var searchLabel = new Label("Search:")
@@ -48,7 +53,8 @@ internal sealed class QueryHistoryDialog : Dialog
         {
             X = Pos.Right(searchLabel) + 1,
             Y = 1,
-            Width = Dim.Fill() - 2
+            Width = Dim.Fill() - 2,
+            ColorScheme = TuiColorPalette.TextInput
         };
         _searchField.TextChanged += OnSearchChanged;
 
@@ -68,7 +74,8 @@ internal sealed class QueryHistoryDialog : Dialog
             Width = Dim.Fill(),
             Height = Dim.Fill(),
             AllowsMarking = false,
-            AllowsMultipleSelection = false
+            AllowsMultipleSelection = false,
+            ColorScheme = TuiColorPalette.Default
         };
         _listView.SelectedItemChanged += OnSelectedItemChanged;
         _listView.OpenSelectedItem += OnItemActivated;
@@ -90,7 +97,8 @@ internal sealed class QueryHistoryDialog : Dialog
             Width = Dim.Fill(),
             Height = Dim.Fill(),
             ReadOnly = true,
-            WordWrap = true
+            WordWrap = true,
+            ColorScheme = TuiColorPalette.ReadOnlyText
         };
         previewFrame.Add(_previewText);
 
@@ -105,7 +113,7 @@ internal sealed class QueryHistoryDialog : Dialog
         };
 
         // Buttons
-        var executeButton = new Button("_Execute")
+        var executeButton = new Button("_Run")
         {
             X = Pos.Center() - 20,
             Y = Pos.AnchorEnd(1)
@@ -303,5 +311,25 @@ internal sealed class QueryHistoryDialog : Dialog
     {
         await _historyService.DeleteEntryAsync(_environmentUrl, entryId);
         await LoadHistoryAsync(_searchField.Text?.ToString());
+    }
+
+    /// <inheritdoc />
+    public QueryHistoryDialogState CaptureState()
+    {
+        var items = _entries.Select(e => new QueryHistoryItem(
+            QueryText: e.Sql.Length > 50 ? e.Sql[..47] + "..." : e.Sql,
+            ExecutedAt: e.ExecutedAt,
+            RowCount: e.RowCount)).ToList();
+
+        var selectedQuery = _listView.SelectedItem >= 0 && _listView.SelectedItem < _entries.Count
+            ? _entries[_listView.SelectedItem].Sql
+            : null;
+
+        return new QueryHistoryDialogState(
+            Title: Title?.ToString() ?? string.Empty,
+            HistoryItems: items,
+            SelectedIndex: _listView.SelectedItem,
+            SelectedQueryText: selectedQuery,
+            IsEmpty: _entries.Count == 0);
     }
 }

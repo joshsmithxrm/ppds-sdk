@@ -1,9 +1,12 @@
 using PPDS.Auth.Credentials;
 using PPDS.Auth.Profiles;
+using PPDS.Cli.Infrastructure;
 using PPDS.Cli.Infrastructure.Errors;
 using PPDS.Cli.Services.Environment;
 using PPDS.Cli.Services.Profile;
 using PPDS.Cli.Tui.Infrastructure;
+using PPDS.Cli.Tui.Testing;
+using PPDS.Cli.Tui.Testing.States;
 using Terminal.Gui;
 
 namespace PPDS.Cli.Tui.Dialogs;
@@ -18,16 +21,22 @@ namespace PPDS.Cli.Tui.Dialogs;
 /// - ClientSecret: Form with App ID, Secret, Tenant, URL
 /// - CertificateFile: Form with App ID, Cert Path, Password, Tenant, URL
 /// </remarks>
-internal sealed class ProfileCreationDialog : Dialog
+internal sealed class ProfileCreationDialog : TuiDialog, ITuiStateCapture<ProfileCreationDialogState>
 {
+    private static readonly IReadOnlyList<string> AuthMethodNames = new[]
+    {
+        "Device Code (Interactive)",
+        "Browser (Interactive)",
+        "Client Secret (Service Principal)",
+        "Certificate File (Service Principal)"
+    };
     private readonly IProfileService _profileService;
     private readonly IEnvironmentService _environmentService;
     private readonly Action<DeviceCodeInfo>? _deviceCodeCallback;
 
     private readonly TextField _nameField;
-    private readonly ComboBox _authMethodCombo;
+    private readonly RadioGroup _authMethodRadio;
     private readonly TextField _environmentUrlField;
-    private readonly Button _discoverButton;
 
     // SPN fields (Client Secret / Certificate)
     private readonly FrameView _spnFrame;
@@ -42,6 +51,7 @@ internal sealed class ProfileCreationDialog : Dialog
 
     private readonly Label _statusLabel;
     private readonly Button _authenticateButton;
+    private readonly CancellationTokenSource _cts = new();
 
     private ProfileSummary? _createdProfile;
     private bool _isAuthenticating;
@@ -52,23 +62,35 @@ internal sealed class ProfileCreationDialog : Dialog
     public ProfileSummary? CreatedProfile => _createdProfile;
 
     /// <summary>
+    /// Gets the environment URL selected after authentication.
+    /// This may differ from the profile's stored environment if selected post-auth.
+    /// </summary>
+    public string? SelectedEnvironmentUrl { get; private set; }
+
+    /// <summary>
+    /// Gets the environment display name selected after authentication.
+    /// </summary>
+    public string? SelectedEnvironmentName { get; private set; }
+
+    /// <summary>
     /// Creates a new profile creation dialog.
     /// </summary>
     /// <param name="profileService">The profile service for creating profiles.</param>
     /// <param name="environmentService">The environment service for discovery.</param>
     /// <param name="deviceCodeCallback">Optional callback for device code display (null uses built-in dialog).</param>
+    /// <param name="session">Optional session for hotkey registry integration.</param>
     public ProfileCreationDialog(
         IProfileService profileService,
         IEnvironmentService environmentService,
-        Action<DeviceCodeInfo>? deviceCodeCallback = null) : base("Create Profile")
+        Action<DeviceCodeInfo>? deviceCodeCallback = null,
+        InteractiveSession? session = null) : base("Create Profile", session)
     {
         _profileService = profileService ?? throw new ArgumentNullException(nameof(profileService));
         _environmentService = environmentService ?? throw new ArgumentNullException(nameof(environmentService));
         _deviceCodeCallback = deviceCodeCallback;
 
         Width = 70;
-        Height = 24;
-        ColorScheme = TuiColorPalette.Default;
+        Height = 27;
 
         // Profile name
         var nameLabel = new Label("Profile Name:")
@@ -81,58 +103,62 @@ internal sealed class ProfileCreationDialog : Dialog
             X = 16,
             Y = 1,
             Width = Dim.Fill() - 3,
-            Text = string.Empty
+            Text = string.Empty,
+            ColorScheme = TuiColorPalette.TextInput
         };
 
-        // Auth method dropdown
+        // Auth method selection (RadioGroup for reliable rendering)
         var methodLabel = new Label("Auth Method:")
         {
             X = 1,
             Y = 3
         };
 
-        _authMethodCombo = new ComboBox
-        {
-            X = 16,
-            Y = 3,
-            Width = Dim.Fill() - 3,
-            Height = 5
-        };
-        _authMethodCombo.SetSource(new[]
+        _authMethodRadio = new RadioGroup(new NStack.ustring[]
         {
             "Device Code (Interactive)",
             "Browser (Interactive)",
             "Client Secret (Service Principal)",
             "Certificate File (Service Principal)"
-        });
-        _authMethodCombo.SelectedItem = InteractiveBrowserCredentialProvider.IsAvailable() ? 1 : 0;
-        _authMethodCombo.SelectedItemChanged += OnAuthMethodChanged;
+        })
+        {
+            X = 16,
+            Y = 3
+        };
+        _authMethodRadio.SelectedItem = InteractiveBrowserCredentialProvider.IsAvailable() ? 1 : 0;
+        _authMethodRadio.SelectedItemChanged += OnAuthMethodChanged;
+
+        // Enter on RadioGroup selects the item (Terminal.Gui only binds Space by default)
+        _authMethodRadio.KeyPress += (args) =>
+        {
+            if (args.KeyEvent.Key == Key.Enter)
+            {
+                // Simulate Space key to trigger selection
+                _authMethodRadio.ProcessKey(new KeyEvent(Key.Space, new KeyModifiers()));
+                args.Handled = true;
+            }
+        };
 
         // Environment URL (common for all methods)
         var urlLabel = new Label("Environment URL:")
         {
             X = 1,
-            Y = 5
+            Y = 8
         };
         _environmentUrlField = new TextField
         {
             X = 17,
-            Y = 5,
-            Width = Dim.Fill() - 24,
-            Text = string.Empty
+            Y = 8,
+            Width = Dim.Fill() - 3,
+            Text = string.Empty,
+            ColorScheme = TuiColorPalette.TextInput
         };
-        _discoverButton = new Button("Discover...")
-        {
-            X = Pos.Right(_environmentUrlField) + 1,
-            Y = 5
-        };
-        _discoverButton.Clicked += OnDiscoverClicked;
 
         // SPN frame (for ClientSecret and CertificateFile)
         _spnFrame = new FrameView("Service Principal Settings")
         {
             X = 1,
-            Y = 7,
+            Y = 10,
             Width = Dim.Fill() - 2,
             Height = 8,
             Visible = false
@@ -148,7 +174,8 @@ internal sealed class ProfileCreationDialog : Dialog
             X = 15,
             Y = 0,
             Width = Dim.Fill() - 2,
-            Text = string.Empty
+            Text = string.Empty,
+            ColorScheme = TuiColorPalette.TextInput
         };
 
         var tenantLabel = new Label("Tenant ID:")
@@ -161,7 +188,8 @@ internal sealed class ProfileCreationDialog : Dialog
             X = 15,
             Y = 2,
             Width = Dim.Fill() - 2,
-            Text = string.Empty
+            Text = string.Empty,
+            ColorScheme = TuiColorPalette.TextInput
         };
 
         _secretLabel = new Label("Client Secret:")
@@ -175,7 +203,8 @@ internal sealed class ProfileCreationDialog : Dialog
             Y = 4,
             Width = Dim.Fill() - 2,
             Secret = true,
-            Text = string.Empty
+            Text = string.Empty,
+            ColorScheme = TuiColorPalette.TextInput
         };
 
         _certPathLabel = new Label("Cert Path:")
@@ -190,7 +219,8 @@ internal sealed class ProfileCreationDialog : Dialog
             Y = 4,
             Width = Dim.Fill() - 2,
             Text = string.Empty,
-            Visible = false
+            Visible = false,
+            ColorScheme = TuiColorPalette.TextInput
         };
 
         _certPwdLabel = new Label("Cert Password:")
@@ -206,7 +236,8 @@ internal sealed class ProfileCreationDialog : Dialog
             Width = Dim.Fill() - 2,
             Secret = true,
             Text = string.Empty,
-            Visible = false
+            Visible = false,
+            ColorScheme = TuiColorPalette.TextInput
         };
 
         _spnFrame.Add(appIdLabel, _appIdField, tenantLabel, _tenantIdField,
@@ -244,17 +275,30 @@ internal sealed class ProfileCreationDialog : Dialog
             }
         };
 
-        Add(nameLabel, _nameField, methodLabel, _authMethodCombo,
-            urlLabel, _environmentUrlField, _discoverButton,
+        Add(nameLabel, _nameField, methodLabel, _authMethodRadio,
+            urlLabel, _environmentUrlField,
             _spnFrame, _statusLabel, _authenticateButton, cancelButton);
 
         // Update UI based on initial selection
-        OnAuthMethodChanged(new ListViewItemEventArgs(_authMethodCombo.SelectedItem, null));
+        OnAuthMethodChanged(new SelectedItemChangedArgs(_authMethodRadio.SelectedItem, -1));
+
+        // Defer focus to name field until after layout is complete
+        Ready += () => _nameField.SetFocus();
     }
 
-    private void OnAuthMethodChanged(ListViewItemEventArgs args)
+    /// <inheritdoc />
+    protected override void OnEscapePressed()
     {
-        var selectedIndex = _authMethodCombo.SelectedItem;
+        // Don't close if authentication is in progress
+        if (!_isAuthenticating)
+        {
+            base.OnEscapePressed();
+        }
+    }
+
+    private void OnAuthMethodChanged(SelectedItemChangedArgs args)
+    {
+        var selectedIndex = _authMethodRadio.SelectedItem;
         var isSpn = selectedIndex >= 2; // ClientSecret or CertificateFile
         var isCert = selectedIndex == 3;
 
@@ -270,47 +314,15 @@ internal sealed class ProfileCreationDialog : Dialog
         _certPwdLabel.Visible = isSpn && isCert;
         _certPasswordField.Visible = isSpn && isCert;
 
-        // Discover button only for interactive methods
-        _discoverButton.Enabled = selectedIndex < 2;
-
         // Update status text
         _statusLabel.Text = selectedIndex switch
         {
-            0 => "Device code authentication - a code will be shown to enter at microsoft.com/devicelogin",
-            1 => "Browser authentication - your default browser will open for sign-in",
-            2 => "Service principal - requires App ID, Tenant ID, Client Secret, and Environment URL",
-            3 => "Certificate auth - requires App ID, Tenant ID, Certificate, and Environment URL",
+            0 => "A code will be shown to enter at microsoft.com/devicelogin",
+            1 => "Your default browser will open for sign-in",
+            2 => "Requires App ID, Tenant ID, Client Secret, and Environment URL",
+            3 => "Requires App ID, Tenant ID, Certificate, and Environment URL",
             _ => "Select an authentication method"
         };
-    }
-
-    private void OnDiscoverClicked()
-    {
-        if (_isAuthenticating) return;
-
-        // Show environment selector dialog using provided callback or built-in dialog
-        var envDeviceCallback = _deviceCodeCallback ?? ShowDeviceCodeDialog;
-        var dialog = new EnvironmentSelectorDialog(_environmentService, envDeviceCallback);
-        Application.Run(dialog);
-
-        if (dialog.SelectedEnvironment != null)
-        {
-            _environmentUrlField.Text = dialog.SelectedEnvironment.Url;
-        }
-        else if (dialog.UseManualUrl && !string.IsNullOrWhiteSpace(dialog.ManualUrl))
-        {
-            _environmentUrlField.Text = dialog.ManualUrl;
-        }
-    }
-
-    private void ShowDeviceCodeDialog(DeviceCodeInfo info)
-    {
-        // Use the built-in device code dialog
-        Application.MainLoop?.Invoke(() =>
-        {
-            var dialog = new DeviceCodeAuthDialog(info);
-            Application.Run(dialog);
-        });
     }
 
     private void OnAuthenticateClicked()
@@ -322,7 +334,7 @@ internal sealed class ProfileCreationDialog : Dialog
         }
 
         // Validate inputs
-        var selectedIndex = _authMethodCombo.SelectedItem;
+        var selectedIndex = _authMethodRadio.SelectedItem;
         var isSpn = selectedIndex >= 2;
         var isCert = selectedIndex == 3;
 
@@ -368,7 +380,7 @@ internal sealed class ProfileCreationDialog : Dialog
         // Build request
         var request = BuildCreateRequest();
 
-        // Use provided callback if available; otherwise fall back to built-in dialog
+        // Use provided callback if available; otherwise fall back to MessageBox
         Action<DeviceCodeInfo>? deviceCallback = null;
         if (selectedIndex == 0) // Device Code
         {
@@ -376,8 +388,16 @@ internal sealed class ProfileCreationDialog : Dialog
             {
                 Application.MainLoop?.Invoke(() =>
                 {
-                    var dialog = new DeviceCodeAuthDialog(info);
-                    Application.Run(dialog);
+                    // Auto-copy code to clipboard for convenience
+                    var copied = ClipboardHelper.CopyToClipboard(info.UserCode) ? " (copied!)" : "";
+
+                    // MessageBox is safe from MainLoop.Invoke - doesn't start nested event loop
+                    MessageBox.Query(
+                        "Authentication Required",
+                        $"Visit: {info.VerificationUrl}\n\n" +
+                        $"Enter code: {info.UserCode}{copied}\n\n" +
+                        "Complete authentication in browser, then press OK.",
+                        "OK");
                 });
             });
         }
@@ -394,13 +414,27 @@ internal sealed class ProfileCreationDialog : Dialog
     {
         try
         {
-            var profile = await _profileService.CreateProfileAsync(request, deviceCodeCallback);
+            var profile = await _profileService.CreateProfileAsync(request, deviceCodeCallback, _cts.Token);
             Application.MainLoop?.Invoke(() =>
             {
                 _createdProfile = profile;
-                _statusLabel.Text = $"Profile created: {_createdProfile.DisplayIdentifier}";
-                _statusLabel.ColorScheme = TuiColorPalette.Success;
-                MessageBox.Query("Success", $"Profile '{_createdProfile.DisplayIdentifier}' created successfully!", "OK");
+
+                // Immediately show environment selector after successful auth (no success message)
+                var envDialog = new EnvironmentSelectorDialog(_environmentService, _deviceCodeCallback);
+                Application.Run(envDialog);
+
+                // Store selected environment
+                if (envDialog.SelectedEnvironment != null)
+                {
+                    SelectedEnvironmentUrl = envDialog.SelectedEnvironment.Url;
+                    SelectedEnvironmentName = envDialog.SelectedEnvironment.DisplayName;
+                }
+                else if (envDialog.UseManualUrl && !string.IsNullOrWhiteSpace(envDialog.ManualUrl))
+                {
+                    SelectedEnvironmentUrl = envDialog.ManualUrl;
+                    SelectedEnvironmentName = envDialog.ManualUrl;
+                }
+
                 Application.RequestStop();
             });
         }
@@ -437,7 +471,7 @@ internal sealed class ProfileCreationDialog : Dialog
 
     private ProfileCreateRequest BuildCreateRequest()
     {
-        var selectedIndex = _authMethodCombo.SelectedItem;
+        var selectedIndex = _authMethodRadio.SelectedItem;
         var isCert = selectedIndex == 3;
 
         return new ProfileCreateRequest
@@ -452,5 +486,26 @@ internal sealed class ProfileCreationDialog : Dialog
             CertificatePath = isCert ? _certPathField.Text?.ToString()?.Trim() : null,
             CertificatePassword = isCert ? _certPasswordField.Text?.ToString() : null
         };
+    }
+
+    /// <inheritdoc />
+    public ProfileCreationDialogState CaptureState() => new(
+        Title: Title?.ToString() ?? string.Empty,
+        ProfileName: _nameField.Text?.ToString() ?? string.Empty,
+        SelectedAuthMethod: AuthMethodNames[_authMethodRadio.SelectedItem],
+        AvailableAuthMethods: AuthMethodNames,
+        IsCreating: _isAuthenticating,
+        ValidationError: null,
+        CanCreate: _authenticateButton.Enabled);
+
+    /// <inheritdoc />
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing)
+        {
+            _cts.Cancel();
+            _cts.Dispose();
+        }
+        base.Dispose(disposing);
     }
 }

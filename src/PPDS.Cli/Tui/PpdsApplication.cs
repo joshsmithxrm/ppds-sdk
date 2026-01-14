@@ -64,6 +64,11 @@ internal sealed class PpdsApplication : IDisposable
             {
                 try
                 {
+                    // Force full screen redraw before showing dialog.
+                    // Without this, Terminal.Gui's ConsoleDriver state may be unstable
+                    // when Application.Run() is called from an async callback, causing
+                    // the dialog border to not render properly.
+                    Application.Refresh();
                     var dialog = new Dialogs.PreAuthenticationDialog(deviceCodeCallback);
                     Application.Run(dialog);
                     result = dialog.Result;
@@ -97,17 +102,46 @@ internal sealed class PpdsApplication : IDisposable
         // Enable auth debug logging - redirect to TuiDebugLog for diagnostics
         AuthDebugLog.Writer = msg => TuiDebugLog.Log($"[Auth] {msg}");
 
+        // Set block cursor for better visibility in text fields (DECSCUSR)
+        // \x1b[2 q = steady block cursor
+        // \x1b]12;black\x07 = set cursor color to black (OSC 12)
+        // Note: OSC 12 is terminal-dependent; unsupported terminals ignore it
+        Console.Out.Write("\x1b[2 q\x1b]12;black\x07");
+        Console.Out.Flush();
+
         Application.Init();
+
+        // Wire up global key interception via HotkeyRegistry
+        // This intercepts ALL keys before any view processes them
+        Application.RootKeyEvent += (keyEvent) =>
+        {
+            return _session?.GetHotkeyRegistry().TryHandle(keyEvent) == true;
+        };
 
         try
         {
-            var mainWindow = new MainWindow(_profileName, _deviceCodeCallback, _session);
-            Application.Top.Add(mainWindow);
-            Application.Run();
+            var shell = new TuiShell(_profileName, _deviceCodeCallback, _session);
+            Application.Top.Add(shell);
+
+            // Global exception handler - catches exceptions from MainLoop.Invoke callbacks
+            // that would otherwise crash the TUI. Reports to error service and continues.
+            var errorService = _session.GetErrorService();
+            Application.Run(errorHandler: ex =>
+            {
+                errorService.ReportError("Unexpected error", ex, "Application");
+                TuiDebugLog.Log($"Global exception caught: {ex}");
+                return true;  // true = handled, continue running
+            });
             return 0;
         }
         finally
         {
+            // Restore default cursor and color before Terminal.Gui cleanup
+            // \x1b[0 q = restore default cursor shape
+            // \x1b]112\x07 = restore default cursor color (OSC 112)
+            Console.Out.Write("\x1b[0 q\x1b]112\x07");
+            Console.Out.Flush();
+
             Application.Shutdown();
             AuthDebugLog.Reset();  // Clean up auth debug logging
             TuiDebugLog.Log("TUI shutdown, disposing session...");

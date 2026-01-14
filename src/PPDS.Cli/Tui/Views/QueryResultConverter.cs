@@ -25,22 +25,35 @@ internal static class QueryResultConverter
         var table = new DataTable();
         var columnTypes = new Dictionary<string, QueryColumnType>();
 
-        // Add columns and track their types
+        // Add columns and track their types.
+        // Handle duplicate column names (e.g., SELECT accountid, accountid FROM account)
+        // by appending _1, _2, etc. to subsequent duplicates.
+        var usedNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var column in result.Columns)
         {
-            table.Columns.Add(column.LogicalName, typeof(string));
-            columnTypes[column.LogicalName] = column.DataType;
+            var name = column.LogicalName;
+            var uniqueName = name;
+            var counter = 1;
+            while (!usedNames.Add(uniqueName))
+            {
+                uniqueName = $"{name}_{counter++}";
+            }
+            table.Columns.Add(uniqueName, typeof(string));
+            columnTypes[uniqueName] = column.DataType;
         }
 
-        // Add rows
+        // Add rows using column index to handle duplicate column names correctly.
+        // Each column in result.Columns maps to the corresponding DataTable column by index.
         foreach (var record in result.Records)
         {
             var row = table.NewRow();
-            foreach (var column in result.Columns)
+            for (int i = 0; i < result.Columns.Count; i++)
             {
+                var column = result.Columns[i];
                 if (record.TryGetValue(column.LogicalName, out var value))
                 {
-                    row[column.LogicalName] = FormatValue(value);
+                    // Use index to set value in the correct DataTable column
+                    row[i] = FormatValue(value);
                 }
             }
             table.Rows.Add(row);

@@ -2,6 +2,8 @@ using PPDS.Auth.Credentials;
 using PPDS.Cli.Infrastructure.Errors;
 using PPDS.Cli.Services.Environment;
 using PPDS.Cli.Tui.Infrastructure;
+using PPDS.Cli.Tui.Testing;
+using PPDS.Cli.Tui.Testing.States;
 using PPDS.Cli.Tui.Views;
 using Terminal.Gui;
 
@@ -10,10 +12,11 @@ namespace PPDS.Cli.Tui.Dialogs;
 /// <summary>
 /// Dialog for selecting from discovered Dataverse environments.
 /// </summary>
-internal sealed class EnvironmentSelectorDialog : Dialog
+internal sealed class EnvironmentSelectorDialog : TuiDialog, ITuiStateCapture<EnvironmentSelectorDialogState>
 {
     private readonly IEnvironmentService _environmentService;
     private readonly Action<DeviceCodeInfo>? _deviceCodeCallback;
+    private readonly InteractiveSession? _session;
     private readonly TextField _filterField;
     private readonly ListView _listView;
     private readonly Label _statusLabel;
@@ -45,16 +48,20 @@ internal sealed class EnvironmentSelectorDialog : Dialog
     /// <summary>
     /// Creates a new environment selector dialog.
     /// </summary>
+    /// <param name="environmentService">The environment service for discovery.</param>
+    /// <param name="deviceCodeCallback">Callback for device code display.</param>
+    /// <param name="session">Optional session for showing environment details.</param>
     public EnvironmentSelectorDialog(
         IEnvironmentService environmentService,
-        Action<DeviceCodeInfo>? deviceCodeCallback = null) : base("Select Environment")
+        Action<DeviceCodeInfo>? deviceCodeCallback = null,
+        InteractiveSession? session = null) : base("Select Environment", session)
     {
         _environmentService = environmentService ?? throw new ArgumentNullException(nameof(environmentService));
         _deviceCodeCallback = deviceCodeCallback;
+        _session = session;
 
         Width = 70;
         Height = 22;
-        ColorScheme = TuiColorPalette.Default;
 
         // Filter field
         var filterLabel = new Label("Filter:")
@@ -67,7 +74,8 @@ internal sealed class EnvironmentSelectorDialog : Dialog
         {
             X = Pos.Right(filterLabel) + 1,
             Y = 1,
-            Width = Dim.Fill() - 2
+            Width = Dim.Fill() - 2,
+            ColorScheme = TuiColorPalette.TextInput
         };
         _filterField.TextChanged += OnFilterChanged;
 
@@ -106,9 +114,20 @@ internal sealed class EnvironmentSelectorDialog : Dialog
             X = Pos.Right(urlLabel) + 1,
             Y = Pos.Bottom(listFrame) + 1,
             Width = Dim.Fill() - 3,
-            Text = string.Empty
+            Text = string.Empty,
+            ColorScheme = TuiColorPalette.TextInput
         };
         _urlField.TextChanged += OnUrlChanged;
+
+        // Enter on URL field triggers select
+        _urlField.KeyPress += (args) =>
+        {
+            if (args.KeyEvent.Key == Key.Enter)
+            {
+                OnSelectClicked();
+                args.Handled = true;
+            }
+        };
 
         // Spinner for loading animation
         _spinner = new TuiSpinner
@@ -132,38 +151,48 @@ internal sealed class EnvironmentSelectorDialog : Dialog
         // Buttons
         _selectButton = new Button("_Select")
         {
-            X = Pos.Center() - 15,
+            X = Pos.Center() - 20,
             Y = Pos.AnchorEnd(1)
         };
         _selectButton.Clicked += OnSelectClicked;
 
+        var detailsButton = new Button("De_tails")
+        {
+            X = Pos.Center() - 5,
+            Y = Pos.AnchorEnd(1)
+        };
+        detailsButton.Clicked += OnDetailsClicked;
+
         var cancelButton = new Button("_Cancel")
         {
-            X = Pos.Center() + 5,
+            X = Pos.Center() + 10,
             Y = Pos.AnchorEnd(1)
         };
         cancelButton.Clicked += () => { Application.RequestStop(); };
 
-        Add(filterLabel, _filterField, listFrame, urlLabel, _urlField, _spinner, _statusLabel, _selectButton, cancelButton);
+        Add(filterLabel, _filterField, listFrame, urlLabel, _urlField, _spinner, _statusLabel, _selectButton, detailsButton, cancelButton);
 
-        // Start spinner and discover environments asynchronously
-        _spinner.Start("Loading environments...");
-
-        // Discover environments asynchronously (fire-and-forget with error handling)
-#pragma warning disable PPDS013 // Fire-and-forget with explicit error handling via ContinueWith
-        _ = DiscoverEnvironmentsAsync().ContinueWith(t =>
+        // Defer loading until dialog is visible to ensure spinner renders
+        Loaded += () =>
         {
-            if (t.IsFaulted && t.Exception != null)
+            _spinner.Start("Loading environments...");
+
+            // Discover environments asynchronously (fire-and-forget with error handling)
+#pragma warning disable PPDS013 // Fire-and-forget with explicit error handling via ContinueWith
+            _ = DiscoverEnvironmentsAsync().ContinueWith(t =>
             {
-                Application.MainLoop?.Invoke(() =>
+                if (t.IsFaulted && t.Exception != null)
                 {
-                    _spinner.Stop();
-                    _statusLabel.Text = $"Error: {t.Exception.InnerException?.Message ?? t.Exception.Message}";
-                    _statusLabel.Visible = true;
-                });
-            }
-        }, TaskScheduler.Default);
+                    Application.MainLoop?.Invoke(() =>
+                    {
+                        _spinner.Stop();
+                        _statusLabel.Text = $"Error: {t.Exception.InnerException?.Message ?? t.Exception.Message}";
+                        _statusLabel.Visible = true;
+                    });
+                }
+            }, TaskScheduler.Default);
 #pragma warning restore PPDS013
+        };
     }
 
     private async Task DiscoverEnvironmentsAsync()
@@ -305,5 +334,74 @@ internal sealed class EnvironmentSelectorDialog : Dialog
         {
             _statusLabel.Text = "Please select an environment or enter a URL";
         }
+    }
+
+    private void OnDetailsClicked()
+    {
+        if (_session == null)
+        {
+            MessageBox.Query("Details", "Environment details require session context.", "OK");
+            return;
+        }
+
+        // Get URL from manual entry or selected environment
+        var url = _urlField.Text?.ToString()?.Trim();
+        string? displayName = null;
+
+        if (string.IsNullOrWhiteSpace(url))
+        {
+            if (_listView.SelectedItem >= 0 && _listView.SelectedItem < _filteredEnvironments.Count)
+            {
+                var env = _filteredEnvironments[_listView.SelectedItem];
+                url = env.Url;
+                displayName = env.DisplayName;
+            }
+        }
+
+        if (string.IsNullOrWhiteSpace(url))
+        {
+            MessageBox.Query("No Environment", "Please select an environment or enter a URL first.", "OK");
+            return;
+        }
+
+        using var dialog = new EnvironmentDetailsDialog(_session, url, displayName);
+        Application.Run(dialog);
+    }
+
+    /// <inheritdoc />
+    public EnvironmentSelectorDialogState CaptureState()
+    {
+        var items = _filteredEnvironments.Select(e => new EnvironmentListItem(
+            DisplayName: e.DisplayName ?? "(unknown)",
+            Url: e.Url ?? string.Empty,
+            EnvironmentType: DetectEnvironmentType(e.Type))).ToList();
+
+        var selectedUrl = _listView.SelectedItem >= 0 && _listView.SelectedItem < _filteredEnvironments.Count
+            ? _filteredEnvironments[_listView.SelectedItem].Url
+            : null;
+
+        return new EnvironmentSelectorDialogState(
+            Title: Title?.ToString() ?? string.Empty,
+            Environments: items,
+            SelectedIndex: _listView.SelectedItem,
+            SelectedEnvironmentUrl: selectedUrl,
+            IsLoading: _spinner.Visible,
+            HasDetailsButton: _session != null,
+            ErrorMessage: null);
+    }
+
+    private static EnvironmentType DetectEnvironmentType(string? type)
+    {
+        if (string.IsNullOrEmpty(type))
+            return EnvironmentType.Unknown;
+
+        return type.ToLowerInvariant() switch
+        {
+            "production" => EnvironmentType.Production,
+            "sandbox" => EnvironmentType.Sandbox,
+            "developer" or "development" => EnvironmentType.Development,
+            "trial" => EnvironmentType.Trial,
+            _ => EnvironmentType.Unknown
+        };
     }
 }

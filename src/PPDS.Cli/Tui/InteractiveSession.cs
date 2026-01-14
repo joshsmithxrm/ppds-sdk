@@ -45,11 +45,17 @@ internal sealed class InteractiveSession : IAsyncDisposable
     private string? _currentEnvironmentDisplayName;
     private bool _disposed;
     private ITuiErrorService? _errorService;
+    private IHotkeyRegistry? _hotkeyRegistry;
 
     /// <summary>
     /// Event raised when the environment changes (either via initialization or explicit switch).
     /// </summary>
     public event Action<string?, string?>? EnvironmentChanged;
+
+    /// <summary>
+    /// Event raised when the active profile changes.
+    /// </summary>
+    public event Action<string?>? ProfileChanged;
 
     /// <summary>
     /// Gets the current environment URL, or null if no connection has been established.
@@ -60,6 +66,16 @@ internal sealed class InteractiveSession : IAsyncDisposable
     /// Gets the current environment display name, or null if not set.
     /// </summary>
     public string? CurrentEnvironmentDisplayName => _currentEnvironmentDisplayName;
+
+    /// <summary>
+    /// Gets the current profile name, or null if using the active profile.
+    /// </summary>
+    public string? CurrentProfileName => string.IsNullOrEmpty(_profileName) ? null : _profileName;
+
+    /// <summary>
+    /// Gets the identity for the current profile (username or app ID), or null if unavailable.
+    /// </summary>
+    public string? CurrentProfileIdentity { get; private set; }
 
     /// <summary>
     /// Creates a new interactive session for the specified profile.
@@ -96,56 +112,35 @@ internal sealed class InteractiveSession : IAsyncDisposable
         var collection = await _profileStore.LoadAsync(cancellationToken).ConfigureAwait(false);
         var profile = string.IsNullOrEmpty(_profileName)
             ? collection.ActiveProfile
-            : collection.GetByName(_profileName);
+            : collection.GetByNameOrIndex(_profileName);
 
         TuiDebugLog.Log($"Loaded profile: {profile?.DisplayIdentifier ?? "(none)"}, AuthMethod: {profile?.AuthMethod}");
 
+        // Set the identity for status bar display
+        CurrentProfileIdentity = profile?.IdentityDisplay;
+
+        // If using active profile (no explicit name specified), update _profileName
+        // so CurrentProfileName returns the actual profile name instead of null
+        if (string.IsNullOrEmpty(_profileName) && profile != null)
+        {
+            _profileName = profile.Name ?? collection.ActiveProfileName ?? $"[{profile.Index}]";
+            TuiDebugLog.Log($"Using active profile: {_profileName}");
+        }
+
         if (profile?.Environment?.Url != null)
         {
+            _currentEnvironmentUrl = profile.Environment.Url;
             _currentEnvironmentDisplayName = profile.Environment.DisplayName;
-            TuiDebugLog.Log($"Warming connection to {profile.Environment.DisplayName} ({profile.Environment.Url})");
+            TuiDebugLog.Log($"Environment configured: {profile.Environment.DisplayName} ({profile.Environment.Url}) - will connect on first query");
 
-            // Fire-and-forget warming - don't block TUI startup
-            // Errors are logged but don't prevent TUI from starting
-#pragma warning disable PPDS013 // Fire-and-forget with explicit error handling
-            _ = WarmPoolAsync(profile.Environment.Url, cancellationToken)
-                .ContinueWith(t =>
-                {
-                    if (t.IsFaulted)
-                    {
-                        TuiDebugLog.Log($"Warm failed: {t.Exception?.InnerException?.Message}");
-                    }
-                    else
-                    {
-                        TuiDebugLog.Log("Connection pool warmed successfully");
-                        EnvironmentChanged?.Invoke(profile.Environment.Url, profile.Environment.DisplayName);
-                    }
-                }, TaskScheduler.Default);
-#pragma warning restore PPDS013
+            // Notify listeners of initial environment (but don't connect yet - lazy loading)
+            // Connection/auth will happen when user runs their first query
+            EnvironmentChanged?.Invoke(profile.Environment.Url, profile.Environment.DisplayName);
         }
         else
         {
-            TuiDebugLog.Log("No environment configured - skipping connection warming");
+            TuiDebugLog.Log("No environment configured - user will select environment manually");
         }
-    }
-
-    /// <summary>
-    /// Actually warms the connection pool by initializing all seed connections.
-    /// This triggers authentication (if needed) during TUI startup rather than first query.
-    /// </summary>
-    /// <param name="environmentUrl">The environment URL to warm.</param>
-    /// <param name="cancellationToken">Cancellation token.</param>
-    private async Task WarmPoolAsync(string environmentUrl, CancellationToken cancellationToken)
-    {
-        TuiDebugLog.Log($"Warming pool (triggering auth if needed) for {environmentUrl}");
-
-        var provider = await GetServiceProviderAsync(environmentUrl, cancellationToken)
-            .ConfigureAwait(false);
-
-        var pool = provider.GetRequiredService<IDataverseConnectionPool>();
-        await pool.EnsureInitializedAsync(cancellationToken).ConfigureAwait(false);
-
-        TuiDebugLog.Log("Pool warmed - seeds initialized");
     }
 
     /// <summary>
@@ -173,6 +168,7 @@ internal sealed class InteractiveSession : IAsyncDisposable
         await InvalidateAsync().ConfigureAwait(false);
 
         // Update local state
+        _currentEnvironmentUrl = environmentUrl;
         _currentEnvironmentDisplayName = displayName;
 
         // Warm new connection (fire-and-forget)
@@ -343,6 +339,44 @@ internal sealed class InteractiveSession : IAsyncDisposable
     }
 
     /// <summary>
+    /// Invalidates the current session and re-authenticates, creating a fresh connection.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Use this method when the current authentication token has expired (401 errors).
+    /// This will:
+    /// </para>
+    /// <list type="number">
+    /// <item>Dispose the current service provider (invalidating the connection pool)</item>
+    /// <item>Create a new service provider with fresh authentication</item>
+    /// </list>
+    /// <para>
+    /// The authentication flow (browser, device code) will be triggered as needed.
+    /// </para>
+    /// </remarks>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <exception cref="InvalidOperationException">Thrown if no environment is currently configured.</exception>
+    public async Task InvalidateAndReauthenticateAsync(CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrEmpty(_currentEnvironmentUrl))
+        {
+            throw new InvalidOperationException("Cannot re-authenticate: no environment is currently configured.");
+        }
+
+        var environmentUrl = _currentEnvironmentUrl;
+
+        TuiDebugLog.Log($"Re-authenticating session for {environmentUrl}...");
+
+        // Invalidate the current session
+        await InvalidateAsync().ConfigureAwait(false);
+
+        // Create a new service provider - this will trigger authentication
+        await GetServiceProviderAsync(environmentUrl, cancellationToken).ConfigureAwait(false);
+
+        TuiDebugLog.Log("Re-authentication complete");
+    }
+
+    /// <summary>
     /// Switches to a different profile, invalidating the connection pool and optionally re-warming.
     /// </summary>
     /// <param name="profileName">The new profile name.</param>
@@ -362,6 +396,22 @@ internal sealed class InteractiveSession : IAsyncDisposable
         // Update the profile name for future service provider creation
         _profileName = profileName;
 
+        // Load profile to get identity for status bar display
+        var collection = await _profileStore.LoadAsync(cancellationToken).ConfigureAwait(false);
+        var profile = collection.GetByNameOrIndex(profileName);
+        CurrentProfileIdentity = profile?.IdentityDisplay;
+
+        // Persist environment selection to profile if provided
+        if (!string.IsNullOrWhiteSpace(environmentUrl))
+        {
+            var profileService = GetProfileService();
+            await profileService.SetEnvironmentAsync(profileName, environmentUrl, environmentDisplayName, cancellationToken)
+                .ConfigureAwait(false);
+        }
+
+        // Notify listeners of profile change
+        ProfileChanged?.Invoke(_profileName);
+
         // Invalidate old connection (uses old profile's credentials)
         await InvalidateAsync().ConfigureAwait(false);
 
@@ -374,8 +424,15 @@ internal sealed class InteractiveSession : IAsyncDisposable
         // Re-warm with new profile credentials if environment is known
         if (!string.IsNullOrWhiteSpace(environmentUrl))
         {
+            // Set URL immediately so it's available to consumers
+            _currentEnvironmentUrl = environmentUrl;
+
             TuiDebugLog.Log($"Re-warming connection for {environmentDisplayName ?? environmentUrl}");
 
+            // Notify listeners synchronously (like SetEnvironmentAsync does)
+            EnvironmentChanged?.Invoke(environmentUrl, environmentDisplayName);
+
+            // Then warm pool asynchronously
 #pragma warning disable PPDS013 // Fire-and-forget with explicit error handling
             _ = GetServiceProviderAsync(environmentUrl, cancellationToken)
                 .ContinueWith(t =>
@@ -387,7 +444,6 @@ internal sealed class InteractiveSession : IAsyncDisposable
                     else
                     {
                         TuiDebugLog.Log("New profile connection warmed successfully");
-                        EnvironmentChanged?.Invoke(environmentUrl, environmentDisplayName);
                     }
                 }, TaskScheduler.Default);
 #pragma warning restore PPDS013
@@ -443,6 +499,26 @@ internal sealed class InteractiveSession : IAsyncDisposable
     public ITuiErrorService GetErrorService()
     {
         return _errorService ??= new TuiErrorService();
+    }
+
+    /// <summary>
+    /// Gets the hotkey registry for centralized keyboard shortcut management.
+    /// The registry is lazily created and shared across the session lifetime.
+    /// </summary>
+    /// <returns>The hotkey registry.</returns>
+    public IHotkeyRegistry GetHotkeyRegistry()
+    {
+        return _hotkeyRegistry ??= new HotkeyRegistry();
+    }
+
+    /// <summary>
+    /// Gets the query history service for local history operations.
+    /// This service uses local file storage and does not require a Dataverse connection.
+    /// </summary>
+    /// <returns>The query history service.</returns>
+    public IQueryHistoryService GetQueryHistoryService()
+    {
+        return new QueryHistoryService(NullLogger<QueryHistoryService>.Instance);
     }
 
     #endregion

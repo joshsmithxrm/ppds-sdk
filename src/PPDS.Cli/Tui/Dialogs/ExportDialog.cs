@@ -3,6 +3,9 @@ using PPDS.Cli.Infrastructure;
 using PPDS.Cli.Infrastructure.Errors;
 using PPDS.Cli.Services.Export;
 using PPDS.Cli.Tui.Infrastructure;
+using PPDS.Cli.Tui.Testing;
+using PPDS.Cli.Tui.Testing.States;
+using PPDS.Dataverse.Query;
 using Terminal.Gui;
 
 namespace PPDS.Cli.Tui.Dialogs;
@@ -10,15 +13,23 @@ namespace PPDS.Cli.Tui.Dialogs;
 /// <summary>
 /// Dialog for exporting query results to various formats.
 /// </summary>
-internal sealed class ExportDialog : Dialog
+internal sealed class ExportDialog : TuiDialog, ITuiStateCapture<ExportDialogState>
 {
+    private static readonly IReadOnlyList<string> FormatNames = new[] { "CSV", "TSV", "JSON", "Clipboard" };
     private readonly IExportService _exportService;
     private readonly DataTable _dataTable;
+    private readonly IReadOnlyDictionary<string, QueryColumnType>? _columnTypes;
     private readonly RadioGroup _formatGroup;
     private readonly CheckBox _includeHeadersCheck;
     private readonly Label _statusLabel;
 
     private bool _exportCompleted;
+
+    // Format indices
+    private const int FormatCsv = 0;
+    private const int FormatTsv = 1;
+    private const int FormatJson = 2;
+    private const int FormatClipboard = 3;
 
     /// <summary>
     /// Gets whether export was completed successfully.
@@ -28,14 +39,22 @@ internal sealed class ExportDialog : Dialog
     /// <summary>
     /// Creates a new export dialog.
     /// </summary>
-    public ExportDialog(IExportService exportService, DataTable dataTable) : base("Export Results")
+    /// <param name="exportService">The export service.</param>
+    /// <param name="dataTable">The data to export.</param>
+    /// <param name="columnTypes">Optional column type metadata for JSON type preservation.</param>
+    /// <param name="session">Optional session for hotkey registry integration.</param>
+    public ExportDialog(
+        IExportService exportService,
+        DataTable dataTable,
+        IReadOnlyDictionary<string, QueryColumnType>? columnTypes = null,
+        InteractiveSession? session = null) : base("Export Results", session)
     {
         _exportService = exportService ?? throw new ArgumentNullException(nameof(exportService));
         _dataTable = dataTable ?? throw new ArgumentNullException(nameof(dataTable));
+        _columnTypes = columnTypes;
 
         Width = 50;
-        Height = 14;
-        ColorScheme = TuiColorPalette.Default;
+        Height = 15;
 
         // Format selection
         var formatLabel = new Label("Format:")
@@ -44,18 +63,35 @@ internal sealed class ExportDialog : Dialog
             Y = 1
         };
 
-        _formatGroup = new RadioGroup(new NStack.ustring[] { "CSV (Comma-separated)", "TSV (Tab-separated)", "Clipboard" })
+        _formatGroup = new RadioGroup(new NStack.ustring[]
+        {
+            "CSV (Comma-separated)",
+            "TSV (Tab-separated)",
+            "JSON (with types)",
+            "Clipboard"
+        })
         {
             X = 1,
             Y = 2
         };
         _formatGroup.SelectedItem = 0;
 
+        // Enter on RadioGroup selects the item (Terminal.Gui only binds Space by default)
+        _formatGroup.KeyPress += (args) =>
+        {
+            if (args.KeyEvent.Key == Key.Enter)
+            {
+                // Simulate Space key to trigger selection
+                _formatGroup.ProcessKey(new KeyEvent(Key.Space, new KeyModifiers()));
+                args.Handled = true;
+            }
+        };
+
         // Options
         _includeHeadersCheck = new CheckBox("Include column headers")
         {
             X = 1,
-            Y = 6,
+            Y = 7, // Moved down for extra format option
             Checked = true
         };
 
@@ -63,14 +99,14 @@ internal sealed class ExportDialog : Dialog
         _statusLabel = new Label
         {
             X = 1,
-            Y = 8,
+            Y = 9, // Moved down for extra format option
             Width = Dim.Fill() - 2,
             Height = 1,
             Text = $"{_dataTable.Rows.Count} rows to export"
         };
 
         // Buttons
-        var exportButton = new Button("_Export")
+        var exportButton = new Button("E_xport")
         {
             X = Pos.Center() - 12,
             Y = Pos.AnchorEnd(1)
@@ -92,7 +128,7 @@ internal sealed class ExportDialog : Dialog
         var format = _formatGroup.SelectedItem;
         var includeHeaders = _includeHeadersCheck.Checked;
 
-        if (format == 2) // Clipboard
+        if (format == FormatClipboard)
         {
             ExportToClipboard(includeHeaders);
         }
@@ -132,14 +168,44 @@ internal sealed class ExportDialog : Dialog
 
     private void ExportToFile(int format, bool includeHeaders)
     {
-        var extension = format == 0 ? "csv" : "tsv";
-        var filter = format == 0 ? "CSV files (*.csv)" : "TSV files (*.tsv)";
+        var (extension, filter) = format switch
+        {
+            FormatCsv => ("csv", "CSV files (*.csv)"),
+            FormatTsv => ("tsv", "TSV files (*.tsv)"),
+            FormatJson => ("json", "JSON files (*.json)"),
+            _ => ("csv", "CSV files (*.csv)")
+        };
 
         string filePath;
         using (var saveDialog = new SaveDialog("Export to File", filter))
         {
             saveDialog.AllowedFileTypes = new[] { $".{extension}" };
-            Application.Run(saveDialog);
+
+            // Apply colors to dialog views
+            ApplyColorSchemeRecursive(saveDialog, TuiColorPalette.FileDialog);
+
+            // ComboBox dropdowns are separate popup windows that use Colors.Menu globally.
+            // Save and restore to avoid affecting other parts of the app.
+            var originalMenu = Colors.Menu;
+            Colors.Menu = TuiColorPalette.FileDialog;
+
+            saveDialog.Loaded += () =>
+            {
+                ApplyColorSchemeRecursive(saveDialog, TuiColorPalette.FileDialog);
+
+                // Focus the filename field for immediate typing
+                var textField = FindFirstTextField(saveDialog);
+                textField?.SetFocus();
+            };
+
+            try
+            {
+                Application.Run(saveDialog);
+            }
+            finally
+            {
+                Colors.Menu = originalMenu;
+            }
 
             if (saveDialog.Canceled || saveDialog.FilePath == null)
             {
@@ -188,13 +254,58 @@ internal sealed class ExportDialog : Dialog
 
         await using var stream = File.Create(filePath);
 
-        if (format == 0)
+        switch (format)
         {
-            await _exportService.ExportCsvAsync(_dataTable, stream, options);
-        }
-        else
-        {
-            await _exportService.ExportTsvAsync(_dataTable, stream, options);
+            case FormatCsv:
+                await _exportService.ExportCsvAsync(_dataTable, stream, options);
+                break;
+            case FormatTsv:
+                await _exportService.ExportTsvAsync(_dataTable, stream, options);
+                break;
+            case FormatJson:
+                await _exportService.ExportJsonAsync(_dataTable, stream, _columnTypes, options);
+                break;
         }
     }
+
+    /// <summary>
+    /// Recursively applies a color scheme to a view and all its subviews.
+    /// </summary>
+    private static void ApplyColorSchemeRecursive(View view, ColorScheme scheme)
+    {
+        view.ColorScheme = scheme;
+        foreach (var subview in view.Subviews)
+        {
+            ApplyColorSchemeRecursive(subview, scheme);
+        }
+    }
+
+    /// <summary>
+    /// Finds the first TextField in a view hierarchy (for focusing the filename field).
+    /// </summary>
+    private static TextField? FindFirstTextField(View view)
+    {
+        if (view is TextField textField)
+            return textField;
+
+        foreach (var subview in view.Subviews)
+        {
+            var found = FindFirstTextField(subview);
+            if (found != null)
+                return found;
+        }
+
+        return null;
+    }
+
+    /// <inheritdoc />
+    public ExportDialogState CaptureState() => new(
+        Title: Title?.ToString() ?? string.Empty,
+        AvailableFormats: FormatNames,
+        SelectedFormat: FormatNames[_formatGroup.SelectedItem],
+        FilePath: string.Empty,
+        RowCount: _dataTable.Rows.Count,
+        IncludeHeaders: _includeHeadersCheck.Checked,
+        IsExporting: false,
+        ErrorMessage: null);
 }

@@ -80,7 +80,7 @@ public static class ProfileServiceFactory
         }
         else
         {
-            profile = collection.GetByName(profileName)
+            profile = collection.GetByNameOrIndex(profileName)
                 ?? throw new InvalidOperationException($"Profile '{profileName}' not found.");
         }
 
@@ -91,8 +91,8 @@ public static class ProfileServiceFactory
         // Create credential store for secure secret lookups (registered in DI for disposal)
         var credentialStore = new NativeCredentialStore();
 
-        // Callback to persist HomeAccountId after authentication
-        // This enables token cache reuse across sessions (ADR-0027)
+        // Callback to persist HomeAccountId and LastUsedAt after authentication
+        // This enables token cache reuse across sessions (ADR-0027) and tracks usage
         Action<AuthProfile> onProfileUpdated = p =>
         {
             // Fire-and-forget with error swallowing - don't fail connection if persist fails
@@ -103,6 +103,7 @@ public static class ProfileServiceFactory
                     await store.UpdateProfileAsync(p.DisplayIdentifier, profile =>
                     {
                         profile.HomeAccountId = p.HomeAccountId;
+                        profile.LastUsedAt = DateTimeOffset.UtcNow;
                     }).ConfigureAwait(false);
                 }
                 catch (Exception ex)
@@ -200,7 +201,7 @@ public static class ProfileServiceFactory
         var store = new ProfileStore();
         var collection = await store.LoadAsync(cancellationToken).ConfigureAwait(false);
 
-        var firstProfile = collection.GetByName(names[0])
+        var firstProfile = collection.GetByNameOrIndex(names[0])
             ?? throw new InvalidOperationException($"Profile '{names[0]}' not found.");
 
         var (envUrl, envDisplayName, envId) = await ResolveEnvironmentAsync(

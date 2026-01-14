@@ -209,6 +209,83 @@ public class ProfileCollectionTests
     }
 
     [Fact]
+    public void GetByNameOrIndex_WithBracketNotation_ReturnsProfile()
+    {
+        var collection = new ProfileCollection();
+        var profile = new AuthProfile { Name = null, Index = 1 }; // Unnamed profile
+        collection.Profiles.Add(profile);
+
+        var result = collection.GetByNameOrIndex("[1]");
+
+        result.Should().Be(profile);
+    }
+
+    [Fact]
+    public void GetByNameOrIndex_WithBracketNotation_WorksForNamedProfilesToo()
+    {
+        var collection = new ProfileCollection();
+        var profile = new AuthProfile { Name = "named", Index = 3 };
+        collection.Add(profile);
+
+        var result = collection.GetByNameOrIndex("[3]");
+
+        result.Should().Be(profile);
+    }
+
+    [Fact]
+    public void GetByNameOrIndex_WithInvalidBracketNotation_ReturnsNull()
+    {
+        var collection = new ProfileCollection();
+        collection.Add(new AuthProfile { Name = "test" });
+
+        // Invalid bracket content
+        collection.GetByNameOrIndex("[abc]").Should().BeNull();
+        collection.GetByNameOrIndex("[]").Should().BeNull();
+        collection.GetByNameOrIndex("[").Should().BeNull();
+        collection.GetByNameOrIndex("]").Should().BeNull();
+    }
+
+    [Fact]
+    public void GetByNameOrIndex_WithFullDisplayIdentifier_ReturnsProfile()
+    {
+        // DisplayIdentifier for named profiles is "[N] Name"
+        var collection = new ProfileCollection();
+        var profile = new AuthProfile { Name = "MyProfile", Index = 1 };
+        collection.Profiles.Add(profile);
+
+        var result = collection.GetByNameOrIndex("[1] MyProfile");
+
+        result.Should().Be(profile);
+    }
+
+    [Fact]
+    public void GetByNameOrIndex_WithFullDisplayIdentifier_IgnoresNamePart()
+    {
+        // Should extract index from bracket, ignore name portion
+        var collection = new ProfileCollection();
+        var profile = new AuthProfile { Name = "ActualName", Index = 2 };
+        collection.Profiles.Add(profile);
+
+        // Even with wrong name, should find by index
+        var result = collection.GetByNameOrIndex("[2] WrongName");
+
+        result.Should().Be(profile);
+    }
+
+    [Fact]
+    public void GetByNameOrIndex_WithDisplayIdentifier_MatchesActualDisplayIdentifier()
+    {
+        // Passing profile.DisplayIdentifier should work
+        var collection = new ProfileCollection();
+        var profile = new AuthProfile { Name = "TestProfile", Index = 3 };
+        collection.Profiles.Add(profile);
+
+        var result = collection.GetByNameOrIndex(profile.DisplayIdentifier);
+
+        result.Should().Be(profile);
+    }
+
+    [Fact]
     public void RemoveByIndex_RemovesProfile()
     {
         var collection = new ProfileCollection();

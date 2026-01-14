@@ -2,6 +2,8 @@ using PPDS.Auth.Cloud;
 using PPDS.Auth.Credentials;
 using PPDS.Auth.Profiles;
 using PPDS.Cli.Tui.Infrastructure;
+using PPDS.Cli.Tui.Testing;
+using PPDS.Cli.Tui.Testing.States;
 using Terminal.Gui;
 
 namespace PPDS.Cli.Tui.Dialogs;
@@ -10,15 +12,18 @@ namespace PPDS.Cli.Tui.Dialogs;
 /// Dialog for displaying detailed profile information.
 /// Equivalent to the 'ppds auth who' CLI command.
 /// </summary>
-internal sealed class ProfileDetailsDialog : Dialog
+internal sealed class ProfileDetailsDialog : TuiDialog, ITuiStateCapture<ProfileDetailsDialogState>
 {
     private readonly InteractiveSession _session;
     private readonly ITuiErrorService _errorService;
     private readonly Label _profileNameLabel;
     private readonly Label _identityLabel;
     private readonly Label _authMethodLabel;
+    private readonly Label _cacheTypeLabel;
     private readonly Label _cloudLabel;
     private readonly Label _tenantLabel;
+    private readonly Label _objectIdLabel;
+    private readonly Label _puidLabel;
     private readonly Label _authorityLabel;
     private readonly Label _tokenStatusLabel;
     private readonly Label _createdLabel;
@@ -30,14 +35,13 @@ internal sealed class ProfileDetailsDialog : Dialog
     /// Creates a new profile details dialog.
     /// </summary>
     /// <param name="session">The interactive session for accessing profile data.</param>
-    public ProfileDetailsDialog(InteractiveSession session) : base("Profile Details")
+    public ProfileDetailsDialog(InteractiveSession session) : base("Profile Details", session)
     {
         _session = session ?? throw new ArgumentNullException(nameof(session));
         _errorService = session.GetErrorService();
 
         Width = 68;
-        Height = 20;
-        ColorScheme = TuiColorPalette.Default;
+        Height = 23; // Increased for ObjectId, PUID, and Cache Type fields
 
         const int labelWidth = 14;
         const int valueX = 16;
@@ -91,17 +95,31 @@ internal sealed class ProfileDetailsDialog : Dialog
             Width = Dim.Fill() - 2
         };
 
-        // Cloud
-        var cloudHeaderLabel = new Label("Cloud:")
+        // Cache Type (token storage type)
+        var cacheTypeHeaderLabel = new Label("Cache Type:")
         {
             X = 1,
             Y = 5,
             Width = labelWidth
         };
-        _cloudLabel = new Label(string.Empty)
+        _cacheTypeLabel = new Label(string.Empty)
         {
             X = valueX,
             Y = 5,
+            Width = Dim.Fill() - 2
+        };
+
+        // Cloud
+        var cloudHeaderLabel = new Label("Cloud:")
+        {
+            X = 1,
+            Y = 6,
+            Width = labelWidth
+        };
+        _cloudLabel = new Label(string.Empty)
+        {
+            X = valueX,
+            Y = 6,
             Width = Dim.Fill() - 2
         };
 
@@ -109,13 +127,41 @@ internal sealed class ProfileDetailsDialog : Dialog
         var tenantHeaderLabel = new Label("Tenant:")
         {
             X = 1,
-            Y = 6,
+            Y = 7,
             Width = labelWidth
         };
         _tenantLabel = new Label(string.Empty)
         {
             X = valueX,
-            Y = 6,
+            Y = 7,
+            Width = Dim.Fill() - 2
+        };
+
+        // Object ID (Entra ID Object Id)
+        var objectIdHeaderLabel = new Label("Object Id:")
+        {
+            X = 1,
+            Y = 8,
+            Width = labelWidth
+        };
+        _objectIdLabel = new Label(string.Empty)
+        {
+            X = valueX,
+            Y = 8,
+            Width = Dim.Fill() - 2
+        };
+
+        // PUID
+        var puidHeaderLabel = new Label("PUID:")
+        {
+            X = 1,
+            Y = 9,
+            Width = labelWidth
+        };
+        _puidLabel = new Label(string.Empty)
+        {
+            X = valueX,
+            Y = 9,
             Width = Dim.Fill() - 2
         };
 
@@ -123,13 +169,13 @@ internal sealed class ProfileDetailsDialog : Dialog
         var authorityHeaderLabel = new Label("Authority:")
         {
             X = 1,
-            Y = 7,
+            Y = 10,
             Width = labelWidth
         };
         _authorityLabel = new Label(string.Empty)
         {
             X = valueX,
-            Y = 7,
+            Y = 10,
             Width = Dim.Fill() - 2
         };
 
@@ -137,13 +183,13 @@ internal sealed class ProfileDetailsDialog : Dialog
         var tokenHeaderLabel = new Label("Token Status:")
         {
             X = 1,
-            Y = 9,
+            Y = 12,
             Width = labelWidth
         };
         _tokenStatusLabel = new Label(string.Empty)
         {
             X = valueX,
-            Y = 9,
+            Y = 12,
             Width = Dim.Fill() - 2
         };
 
@@ -151,13 +197,13 @@ internal sealed class ProfileDetailsDialog : Dialog
         var createdHeaderLabel = new Label("Created:")
         {
             X = 1,
-            Y = 10,
+            Y = 13,
             Width = labelWidth
         };
         _createdLabel = new Label(string.Empty)
         {
             X = valueX,
-            Y = 10,
+            Y = 13,
             Width = Dim.Fill() - 2
         };
 
@@ -165,13 +211,13 @@ internal sealed class ProfileDetailsDialog : Dialog
         var lastUsedHeaderLabel = new Label("Last Used:")
         {
             X = 1,
-            Y = 11,
+            Y = 14,
             Width = labelWidth
         };
         _lastUsedLabel = new Label(string.Empty)
         {
             X = valueX,
-            Y = 11,
+            Y = 14,
             Width = Dim.Fill() - 2
         };
 
@@ -179,13 +225,13 @@ internal sealed class ProfileDetailsDialog : Dialog
         var envHeaderLabel = new Label("Environment:")
         {
             X = 1,
-            Y = 13,
+            Y = 16,
             Width = labelWidth
         };
         _environmentLabel = new Label(string.Empty)
         {
             X = valueX,
-            Y = 13,
+            Y = 16,
             Width = Dim.Fill() - 2
         };
 
@@ -193,13 +239,13 @@ internal sealed class ProfileDetailsDialog : Dialog
         var urlHeaderLabel = new Label("URL:")
         {
             X = 1,
-            Y = 14,
+            Y = 17,
             Width = labelWidth
         };
         _environmentUrlLabel = new Label(string.Empty)
         {
             X = valueX,
-            Y = 14,
+            Y = 17,
             Width = Dim.Fill() - 2
         };
 
@@ -223,8 +269,11 @@ internal sealed class ProfileDetailsDialog : Dialog
             separator,
             identityHeaderLabel, _identityLabel,
             authMethodHeaderLabel, _authMethodLabel,
+            cacheTypeHeaderLabel, _cacheTypeLabel,
             cloudHeaderLabel, _cloudLabel,
             tenantHeaderLabel, _tenantLabel,
+            objectIdHeaderLabel, _objectIdLabel,
+            puidHeaderLabel, _puidLabel,
             authorityHeaderLabel, _authorityLabel,
             tokenHeaderLabel, _tokenStatusLabel,
             createdHeaderLabel, _createdLabel,
@@ -233,16 +282,6 @@ internal sealed class ProfileDetailsDialog : Dialog
             urlHeaderLabel, _environmentUrlLabel,
             refreshButton, closeButton
         );
-
-        // Handle Escape to close
-        KeyPress += (e) =>
-        {
-            if (e.KeyEvent.Key == Key.Esc)
-            {
-                Application.RequestStop();
-                e.Handled = true;
-            }
-        };
 
         // Load profile data asynchronously
 #pragma warning disable PPDS013 // Fire-and-forget with explicit error handling via ContinueWith
@@ -288,6 +327,7 @@ internal sealed class ProfileDetailsDialog : Dialog
                 _profileNameLabel.Text = "(No active profile)";
                 _identityLabel.Text = "-";
                 _authMethodLabel.Text = "-";
+                _cacheTypeLabel.Text = "-";
                 _cloudLabel.Text = "-";
                 _tenantLabel.Text = "-";
                 _authorityLabel.Text = "-";
@@ -315,11 +355,20 @@ internal sealed class ProfileDetailsDialog : Dialog
         // Auth method
         _authMethodLabel.Text = profile.AuthMethod.ToString();
 
+        // Cache type (token storage)
+        _cacheTypeLabel.Text = TokenCacheDetector.GetCacheType().ToString();
+
         // Cloud
         _cloudLabel.Text = profile.Cloud.ToString();
 
         // Tenant
         _tenantLabel.Text = profile.TenantId ?? "(not specified)";
+
+        // Object ID (Entra ID Object Id)
+        _objectIdLabel.Text = profile.ObjectId ?? "(not available)";
+
+        // PUID
+        _puidLabel.Text = profile.Puid ?? "(not available)";
 
         // Authority
         var authority = profile.Authority ?? CloudEndpoints.GetAuthorityUrl(profile.Cloud, profile.TenantId);
@@ -410,5 +459,23 @@ internal sealed class ProfileDetailsDialog : Dialog
             }
         }, TaskScheduler.Default);
 #pragma warning restore PPDS013
+    }
+
+    /// <inheritdoc />
+    public ProfileDetailsDialogState CaptureState()
+    {
+        var envType = _session.GetThemeService().DetectEnvironmentType(
+            _environmentUrlLabel.Text?.ToString() ?? string.Empty);
+
+        return new ProfileDetailsDialogState(
+            Title: Title?.ToString() ?? string.Empty,
+            ProfileName: _profileNameLabel.Text?.ToString() ?? "(unknown)",
+            AuthMethod: _authMethodLabel.Text?.ToString() ?? "Unknown",
+            Identity: _identityLabel.Text?.ToString(),
+            EnvironmentName: _environmentLabel.Text?.ToString(),
+            EnvironmentUrl: _environmentUrlLabel.Text?.ToString(),
+            EnvironmentType: envType,
+            IsActive: true,
+            CreatedAt: null);
     }
 }

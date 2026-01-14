@@ -64,11 +64,11 @@ public class AuthProfileTests
     }
 
     [Fact]
-    public void DisplayIdentifier_WithName_ReturnsName()
+    public void DisplayIdentifier_WithName_ReturnsIndexAndName()
     {
         var profile = new AuthProfile { Name = "MyProfile", Index = 5 };
 
-        profile.DisplayIdentifier.Should().Be("MyProfile");
+        profile.DisplayIdentifier.Should().Be("[5] MyProfile");
     }
 
     [Fact]

@@ -80,8 +80,8 @@ public class ProfileServiceTests : IDisposable
 
         // Assert
         Assert.Equal(2, profiles.Count);
-        Assert.Contains(profiles, p => p.DisplayIdentifier == "profile1");
-        Assert.Contains(profiles, p => p.DisplayIdentifier == "profile2");
+        Assert.Contains(profiles, p => p.DisplayIdentifier == "[1] profile1");
+        Assert.Contains(profiles, p => p.DisplayIdentifier == "[2] profile2");
     }
 
     [Fact]
@@ -100,7 +100,7 @@ public class ProfileServiceTests : IDisposable
 
         // Assert
         Assert.Single(profiles, p => p.IsActive);
-        Assert.True(profiles.First(p => p.DisplayIdentifier == "profile2").IsActive);
+        Assert.True(profiles.First(p => p.DisplayIdentifier == "[2] profile2").IsActive);
     }
 
     #endregion
@@ -130,7 +130,7 @@ public class ProfileServiceTests : IDisposable
 
         // Assert
         Assert.NotNull(active);
-        Assert.Equal("profile1", active.DisplayIdentifier);
+        Assert.Equal("[1] profile1", active.DisplayIdentifier);
         Assert.True(active.IsActive);
     }
 
@@ -152,13 +152,13 @@ public class ProfileServiceTests : IDisposable
         var result = await _service.SetActiveProfileAsync("profile2");
 
         // Assert
-        Assert.Equal("profile2", result.DisplayIdentifier);
+        Assert.Equal("[2] profile2", result.DisplayIdentifier);
         Assert.True(result.IsActive);
 
         // Verify persisted
         _store.ClearCache();
         var active = await _service.GetActiveProfileAsync();
-        Assert.Equal("profile2", active?.DisplayIdentifier);
+        Assert.Equal("[2] profile2", active?.DisplayIdentifier);
     }
 
     [Fact]
@@ -175,7 +175,7 @@ public class ProfileServiceTests : IDisposable
         var result = await _service.SetActiveProfileAsync("2"); // Index 2 = profile2
 
         // Assert
-        Assert.Equal("profile2", result.DisplayIdentifier);
+        Assert.Equal("[2] profile2", result.DisplayIdentifier);
     }
 
     [Fact]
@@ -231,7 +231,7 @@ public class ProfileServiceTests : IDisposable
         _store.ClearCache();
         var profiles = await _service.GetProfilesAsync();
         Assert.Single(profiles);
-        Assert.Equal("profile2", profiles[0].DisplayIdentifier);
+        Assert.Equal("[2] profile2", profiles[0].DisplayIdentifier);
     }
 
     [Fact]
@@ -267,7 +267,7 @@ public class ProfileServiceTests : IDisposable
         _store.ClearCache();
         var profiles = await _service.GetProfilesAsync();
         Assert.Single(profiles);
-        Assert.Equal("profile2", profiles[0].DisplayIdentifier);
+        Assert.Equal("[2] profile2", profiles[0].DisplayIdentifier);
     }
 
     #endregion
@@ -287,13 +287,13 @@ public class ProfileServiceTests : IDisposable
         var result = await _service.UpdateProfileAsync("oldname", newName: "newname");
 
         // Assert
-        Assert.Equal("newname", result.DisplayIdentifier);
+        Assert.Equal("[1] newname", result.DisplayIdentifier);
 
         // Verify persisted
         _store.ClearCache();
         var profiles = await _service.GetProfilesAsync();
         Assert.Single(profiles);
-        Assert.Equal("newname", profiles[0].DisplayIdentifier);
+        Assert.Equal("[1] newname", profiles[0].DisplayIdentifier);
     }
 
     [Fact]
@@ -360,8 +360,8 @@ public class ProfileServiceTests : IDisposable
         var profiles = await _service.GetProfilesAsync();
 
         // Assert
-        Assert.Equal(AuthMethod.InteractiveBrowser, profiles.First(p => p.DisplayIdentifier == "user").AuthMethod);
-        Assert.Equal(AuthMethod.ClientSecret, profiles.First(p => p.DisplayIdentifier == "spn").AuthMethod);
+        Assert.Equal(AuthMethod.InteractiveBrowser, profiles.First(p => p.DisplayIdentifier == "[1] user").AuthMethod);
+        Assert.Equal(AuthMethod.ClientSecret, profiles.First(p => p.DisplayIdentifier == "[2] spn").AuthMethod);
     }
 
     [Fact]

@@ -1,6 +1,8 @@
 using PPDS.Cli.Infrastructure.Errors;
 using PPDS.Cli.Services.Profile;
 using PPDS.Cli.Tui.Infrastructure;
+using PPDS.Cli.Tui.Testing;
+using PPDS.Cli.Tui.Testing.States;
 using PPDS.Cli.Tui.Views;
 using Terminal.Gui;
 
@@ -9,7 +11,7 @@ namespace PPDS.Cli.Tui.Dialogs;
 /// <summary>
 /// Dialog for selecting from available authentication profiles.
 /// </summary>
-internal sealed class ProfileSelectorDialog : Dialog
+internal sealed class ProfileSelectorDialog : TuiDialog, ITuiStateCapture<ProfileSelectorDialogState>
 {
     private readonly IProfileService _profileService;
     private readonly InteractiveSession? _session;
@@ -21,6 +23,8 @@ internal sealed class ProfileSelectorDialog : Dialog
     private IReadOnlyList<ProfileSummary> _profiles = Array.Empty<ProfileSummary>();
     private bool _createNewSelected;
     private ProfileSummary? _selectedProfile;
+    private bool _isLoading = true;
+    private string? _errorMessage;
 
     /// <summary>
     /// Gets whether the user selected "Create New Profile".
@@ -33,18 +37,23 @@ internal sealed class ProfileSelectorDialog : Dialog
     public ProfileSummary? SelectedProfile => _selectedProfile;
 
     /// <summary>
+    /// Gets whether a profile was deleted during this dialog session.
+    /// </summary>
+    public bool ProfileWasDeleted { get; private set; }
+
+    /// <summary>
     /// Creates a new profile selector dialog.
     /// </summary>
     /// <param name="profileService">The profile service for profile operations.</param>
     /// <param name="session">Optional session for showing profile details dialog.</param>
-    public ProfileSelectorDialog(IProfileService profileService, InteractiveSession? session = null) : base("Select Profile")
+    public ProfileSelectorDialog(IProfileService profileService, InteractiveSession? session = null)
+        : base("Select Profile", session)
     {
         _profileService = profileService ?? throw new ArgumentNullException(nameof(profileService));
         _session = session;
 
         Width = 60;
-        Height = 18;
-        ColorScheme = TuiColorPalette.Default;
+        Height = 19;
 
         // Profile list
         var listFrame = new FrameView("Profiles")
@@ -95,43 +104,55 @@ internal sealed class ProfileSelectorDialog : Dialog
             Y = Pos.Bottom(_detailLabel),
             Width = Dim.Fill() - 2,
             Height = 1,
-            Text = "F2 rename | Del delete | Ctrl+D details",
-            ColorScheme = TuiColorPalette.StatusBar_Default
+            Text = "F2 rename | Del delete",
+            ColorScheme = TuiColorPalette.Default
         };
 
-        // Buttons
+        // Buttons - Row 1 (primary actions)
         var selectButton = new Button("_Select")
         {
-            X = Pos.Center() - 24,
-            Y = Pos.AnchorEnd(1)
+            X = Pos.Center() - 20,
+            Y = Pos.AnchorEnd(2)
         };
         selectButton.Clicked += OnSelectClicked;
 
         var createButton = new Button("Create _New")
         {
-            X = Pos.Center() - 9,
-            Y = Pos.AnchorEnd(1)
+            X = Pos.Center() - 6,
+            Y = Pos.AnchorEnd(2)
         };
         createButton.Clicked += OnCreateClicked;
 
         var deleteButton = new Button("_Delete")
         {
-            X = Pos.Center() + 7,
-            Y = Pos.AnchorEnd(1)
+            X = Pos.Center() + 10,
+            Y = Pos.AnchorEnd(2)
         };
         deleteButton.Clicked += OnDeleteClicked;
 
+        // Buttons - Row 2 (secondary actions)
+        var detailsButton = new Button("De_tails")
+        {
+            X = Pos.Center() - 22,
+            Y = Pos.AnchorEnd(1)
+        };
+        detailsButton.Clicked += OnDetailsClicked;
+
+        var clearAllButton = new Button("Clear _All")
+        {
+            X = Pos.Center() - 7,
+            Y = Pos.AnchorEnd(1)
+        };
+        clearAllButton.Clicked += OnClearAllClicked;
+
         var cancelButton = new Button("_Cancel")
         {
-            X = Pos.Center() + 20,
+            X = Pos.Center() + 8,
             Y = Pos.AnchorEnd(1)
         };
         cancelButton.Clicked += () => { Application.RequestStop(); };
 
-        Add(listFrame, _spinner, _detailLabel, _hintLabel, selectButton, createButton, deleteButton, cancelButton);
-
-        // Start spinner while loading
-        _spinner.Start("Loading profiles...");
+        Add(listFrame, _spinner, _detailLabel, _hintLabel, selectButton, createButton, deleteButton, detailsButton, clearAllButton, cancelButton);
 
         // Handle keyboard shortcuts
         KeyPress += OnKeyPress;
@@ -146,21 +167,29 @@ internal sealed class ProfileSelectorDialog : Dialog
             }
         };
 
-        // Load profiles asynchronously (fire-and-forget with error handling)
-#pragma warning disable PPDS013 // Fire-and-forget with explicit error handling via ContinueWith
-        _ = LoadProfilesAsync().ContinueWith(t =>
+        // Defer loading until dialog is visible to ensure spinner renders
+        Loaded += () =>
         {
-            if (t.IsFaulted && t.Exception != null)
+            _spinner.Start("Loading profiles...");
+
+            // Load profiles asynchronously (fire-and-forget with error handling)
+#pragma warning disable PPDS013 // Fire-and-forget with explicit error handling via ContinueWith
+            _ = LoadProfilesAsync().ContinueWith(t =>
             {
-                Application.MainLoop?.Invoke(() =>
+                if (t.IsFaulted && t.Exception != null)
                 {
-                    _spinner.Stop();
-                    _detailLabel.Text = $"Error: {t.Exception.InnerException?.Message ?? t.Exception.Message}";
-                    _detailLabel.Visible = true;
-                });
-            }
-        }, TaskScheduler.Default);
+                    Application.MainLoop?.Invoke(() =>
+                    {
+                        _spinner.Stop();
+                        _errorMessage = t.Exception.InnerException?.Message ?? t.Exception.Message;
+                        _detailLabel.Text = $"Error: {_errorMessage}";
+                        _detailLabel.Visible = true;
+                        _isLoading = false;
+                    });
+                }
+            }, TaskScheduler.Default);
 #pragma warning restore PPDS013
+        };
     }
 
     private async Task LoadProfilesAsync()
@@ -176,14 +205,15 @@ internal sealed class ProfileSelectorDialog : Dialog
             // Stop spinner and show detail label
             _spinner.Stop();
             _detailLabel.Visible = true;
+            _isLoading = false;
+            _errorMessage = null;
 
             var items = new List<string>();
 
             foreach (var profile in _profiles)
             {
-                var marker = profile.IsActive ? "*" : " ";
                 var envHint = profile.EnvironmentName != null ? $" [{profile.EnvironmentName}]" : "";
-                items.Add($"{marker} {profile.DisplayIdentifier} ({profile.Identity}){envHint}");
+                items.Add($"{profile.DisplayIdentifier} ({profile.Identity}){envHint}");
             }
 
             _listView.SetSource(items);
@@ -252,6 +282,7 @@ internal sealed class ProfileSelectorDialog : Dialog
             ShowProfileDetailsDialog();
             e.Handled = true;
         }
+        // Note: Escape is handled by TuiDialog base class
     }
 
     private void ShowProfileDetailsDialog()
@@ -300,7 +331,8 @@ internal sealed class ProfileSelectorDialog : Dialog
         {
             X = 12,
             Y = 1,
-            Width = Dim.Fill() - 2
+            Width = Dim.Fill() - 2,
+            ColorScheme = TuiColorPalette.TextInput
         };
 
         var okButton = new Button("_OK")
@@ -383,7 +415,8 @@ internal sealed class ProfileSelectorDialog : Dialog
         Application.MainLoop?.Invoke(() =>
         {
             // Re-select the renamed profile to maintain context for the user
-            var renamedProfileIndex = _profiles.ToList().FindIndex(p => p.Name == newName);
+            var renamedProfileIndex = _profiles.ToList().FindIndex(p =>
+                string.Equals(p.Name, newName, StringComparison.OrdinalIgnoreCase));
             if (renamedProfileIndex >= 0)
             {
                 _listView.SelectedItem = renamedProfileIndex;
@@ -400,18 +433,13 @@ internal sealed class ProfileSelectorDialog : Dialog
 
         var profile = _profiles[_listView.SelectedItem];
 
-        // Cannot delete active profile
-        if (profile.IsActive)
-        {
-            MessageBox.ErrorQuery("Cannot Delete",
-                "Cannot delete the active profile.\n\nSwitch to a different profile first.",
-                "OK");
-            return;
-        }
-
-        // Show confirmation dialog
+        // Show confirmation dialog with extra warning if deleting active profile
+        var activeWarning = profile.IsActive
+            ? "This is your active profile. You will be signed out.\n\n"
+            : "";
         var result = MessageBox.Query("Confirm Delete",
             $"Delete profile \"{profile.DisplayIdentifier}\"?\n\n" +
+            activeWarning +
             "This will remove the profile and its stored credentials.\n" +
             "This action cannot be undone.",
             "Delete", "Cancel");
@@ -439,7 +467,65 @@ internal sealed class ProfileSelectorDialog : Dialog
 
         if (deleted)
         {
+            ProfileWasDeleted = true;
             await LoadProfilesAsync();
         }
     }
+
+    private void OnDetailsClicked()
+    {
+        if (_session == null)
+        {
+            MessageBox.Query("Details", "Profile details require session context.", "OK");
+            return;
+        }
+
+        // Show the profile details dialog for the active profile.
+        // Note: ProfileDetailsDialog currently only shows active profile details
+        // because it needs full AuthProfile data (token expiration, authority, etc.)
+        var dialog = new ProfileDetailsDialog(_session);
+        Application.Run(dialog);
+    }
+
+    private void OnClearAllClicked()
+    {
+        if (_profiles.Count == 0)
+        {
+            MessageBox.Query("No Profiles", "There are no profiles to clear.", "OK");
+            return;
+        }
+
+        var dialog = new ClearAllProfilesDialog(_profileService, _profiles.Count);
+        Application.Run(dialog);
+
+        if (dialog.Cleared)
+        {
+            // All profiles cleared - close this dialog
+            // Caller will handle the state reset
+            ProfileWasDeleted = true;
+            Application.RequestStop();
+        }
+    }
+
+    /// <inheritdoc />
+    public ProfileSelectorDialogState CaptureState()
+    {
+        var profileNames = _profiles.Select(p => p.DisplayIdentifier).ToList();
+        var selectedIndex = _listView.SelectedItem;
+        var selectedName = selectedIndex >= 0 && selectedIndex < _profiles.Count
+            ? _profiles[selectedIndex].DisplayIdentifier
+            : null;
+
+        return new ProfileSelectorDialogState(
+            Title: Title?.ToString() ?? string.Empty,
+            Profiles: profileNames,
+            SelectedIndex: selectedIndex,
+            SelectedProfileName: selectedName,
+            IsLoading: _isLoading,
+            HasCreateButton: true,
+            HasDetailsButton: _session != null,
+            ErrorMessage: _errorMessage);
+    }
+
+    // Note: Dispose is handled by TuiDialog base class which clears active dialog
 }

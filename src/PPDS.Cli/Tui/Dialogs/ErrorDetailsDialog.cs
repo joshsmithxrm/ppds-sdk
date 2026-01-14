@@ -1,5 +1,7 @@
 using System.Diagnostics;
 using PPDS.Cli.Tui.Infrastructure;
+using PPDS.Cli.Tui.Testing;
+using PPDS.Cli.Tui.Testing.States;
 using Terminal.Gui;
 
 namespace PPDS.Cli.Tui.Dialogs;
@@ -7,7 +9,7 @@ namespace PPDS.Cli.Tui.Dialogs;
 /// <summary>
 /// Dialog for displaying error details and recent error history.
 /// </summary>
-internal sealed class ErrorDetailsDialog : Dialog
+internal sealed class ErrorDetailsDialog : TuiDialog, ITuiStateCapture<ErrorDetailsDialogState>
 {
     private readonly ITuiErrorService _errorService;
     private readonly ListView _errorListView;
@@ -19,13 +21,14 @@ internal sealed class ErrorDetailsDialog : Dialog
     /// Creates a new error details dialog.
     /// </summary>
     /// <param name="errorService">The error service to get errors from.</param>
-    public ErrorDetailsDialog(ITuiErrorService errorService) : base("Error Details")
+    /// <param name="session">Optional session for hotkey registry integration.</param>
+    public ErrorDetailsDialog(ITuiErrorService errorService, InteractiveSession? session = null)
+        : base("Error Details", session)
     {
         _errorService = errorService ?? throw new ArgumentNullException(nameof(errorService));
 
         Width = 80;
         Height = 24;
-        ColorScheme = TuiColorPalette.Default;
 
         // Recent errors list (left side)
         var errorsFrame = new FrameView("Recent Errors")
@@ -66,7 +69,8 @@ internal sealed class ErrorDetailsDialog : Dialog
             Width = Dim.Fill(),
             Height = Dim.Fill(),
             ReadOnly = true,
-            WordWrap = true
+            WordWrap = true,
+            ColorScheme = TuiColorPalette.ReadOnlyText
         };
         detailsFrame.Add(_detailsTextView);
 
@@ -96,14 +100,14 @@ internal sealed class ErrorDetailsDialog : Dialog
         };
         openLogButton.Clicked += OnOpenLogClicked;
 
-        var clearButton = new Button("C_lear All")
+        var clearButton = new Button("Clear _All")
         {
             X = Pos.Right(openLogButton) + 2,
             Y = Pos.AnchorEnd(1)
         };
         clearButton.Clicked += OnClearClicked;
 
-        var closeButton = new Button("_Close")
+        var closeButton = new Button("Cl_ose")
         {
             X = Pos.AnchorEnd(12),
             Y = Pos.AnchorEnd(1)
@@ -111,16 +115,6 @@ internal sealed class ErrorDetailsDialog : Dialog
         closeButton.Clicked += () => Application.RequestStop();
 
         Add(errorsFrame, detailsFrame, _logPathLabel, copyButton, openLogButton, clearButton, closeButton);
-
-        // Handle Escape to close
-        KeyPress += (e) =>
-        {
-            if (e.KeyEvent.Key == Key.Esc)
-            {
-                Application.RequestStop();
-                e.Handled = true;
-            }
-        };
 
         // Load errors
         RefreshErrorList();
@@ -238,5 +232,25 @@ internal sealed class ErrorDetailsDialog : Dialog
             _errorService.ClearErrors();
             RefreshErrorList();
         }
+    }
+
+    /// <inheritdoc />
+    public ErrorDetailsDialogState CaptureState()
+    {
+        var errors = _errorService.RecentErrors;
+        var errorItems = errors.Select(e => new ErrorListItem(
+            Message: e.Message,
+            Context: e.Context,
+            Timestamp: e.Timestamp,
+            HasException: e.ExceptionType != null
+        )).ToList();
+
+        return new ErrorDetailsDialogState(
+            Title: Title?.ToString() ?? string.Empty,
+            Errors: errorItems,
+            SelectedIndex: _errorListView.SelectedItem,
+            SelectedErrorDetails: _selectedError?.GetFullDetails(),
+            ErrorCount: errors.Count,
+            HasClearButton: true);
     }
 }

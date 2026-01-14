@@ -232,6 +232,76 @@ public class QueryResultConverterTests
         Assert.Equal("Third", table.Rows[2]["name"]);
     }
 
+    [Fact]
+    public void ToDataTable_DuplicateColumnNames_DisambiguatesWithSuffix()
+    {
+        // This can happen with SQL like: SELECT accountid, accountid FROM account
+        var id = Guid.NewGuid();
+        var result = new QueryResult
+        {
+            EntityLogicalName = "account",
+            Columns = new List<QueryColumn>
+            {
+                new() { LogicalName = "accountid", DataType = QueryColumnType.Guid },
+                new() { LogicalName = "accountid", DataType = QueryColumnType.Guid }, // Duplicate
+                new() { LogicalName = "name", DataType = QueryColumnType.String }
+            },
+            Records = new List<IReadOnlyDictionary<string, QueryValue>>
+            {
+                new Dictionary<string, QueryValue>
+                {
+                    ["accountid"] = new() { Value = id },
+                    ["name"] = new() { Value = "Contoso" }
+                }
+            },
+            Count = 1
+        };
+
+        // Should not throw DuplicateNameException
+        var table = QueryResultConverter.ToDataTable(result);
+
+        // First column keeps original name, second gets _1 suffix
+        Assert.Equal(3, table.Columns.Count);
+        Assert.Equal("accountid", table.Columns[0].ColumnName);
+        Assert.Equal("accountid_1", table.Columns[1].ColumnName);
+        Assert.Equal("name", table.Columns[2].ColumnName);
+
+        // Both duplicate columns get the same value (from the record dict)
+        Assert.Equal(id.ToString(), table.Rows[0][0]);
+        Assert.Equal(id.ToString(), table.Rows[0][1]);
+        Assert.Equal("Contoso", table.Rows[0][2]);
+    }
+
+    [Fact]
+    public void ToDataTable_ThreeDuplicateColumnNames_DisambiguatesAll()
+    {
+        var result = new QueryResult
+        {
+            EntityLogicalName = "account",
+            Columns = new List<QueryColumn>
+            {
+                new() { LogicalName = "name", DataType = QueryColumnType.String },
+                new() { LogicalName = "name", DataType = QueryColumnType.String },
+                new() { LogicalName = "name", DataType = QueryColumnType.String }
+            },
+            Records = new List<IReadOnlyDictionary<string, QueryValue>>
+            {
+                new Dictionary<string, QueryValue>
+                {
+                    ["name"] = new() { Value = "Test" }
+                }
+            },
+            Count = 1
+        };
+
+        var table = QueryResultConverter.ToDataTable(result);
+
+        Assert.Equal(3, table.Columns.Count);
+        Assert.Equal("name", table.Columns[0].ColumnName);
+        Assert.Equal("name_1", table.Columns[1].ColumnName);
+        Assert.Equal("name_2", table.Columns[2].ColumnName);
+    }
+
     #endregion
 
     #region BuildRecordUrl Tests

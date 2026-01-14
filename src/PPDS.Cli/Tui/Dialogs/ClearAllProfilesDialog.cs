@@ -1,5 +1,7 @@
 using PPDS.Cli.Services.Profile;
 using PPDS.Cli.Tui.Infrastructure;
+using PPDS.Cli.Tui.Testing;
+using PPDS.Cli.Tui.Testing.States;
 using Terminal.Gui;
 
 namespace PPDS.Cli.Tui.Dialogs;
@@ -16,7 +18,7 @@ namespace PPDS.Cli.Tui.Dialogs;
 ///
 /// Requires typing the profile count to confirm (prevents accidental clicks).
 /// </remarks>
-internal sealed class ClearAllProfilesDialog : Dialog
+internal sealed class ClearAllProfilesDialog : TuiDialog, ITuiStateCapture<ClearAllProfilesDialogState>
 {
     private readonly IProfileService _profileService;
     private readonly TextField _confirmationField;
@@ -33,14 +35,15 @@ internal sealed class ClearAllProfilesDialog : Dialog
     /// </summary>
     /// <param name="profileService">The profile service.</param>
     /// <param name="profileCount">The number of profiles to be deleted.</param>
-    public ClearAllProfilesDialog(IProfileService profileService, int profileCount) : base("Clear All Profiles")
+    /// <param name="session">Optional session for hotkey registry integration.</param>
+    public ClearAllProfilesDialog(IProfileService profileService, int profileCount, InteractiveSession? session = null)
+        : base("Clear All Profiles", session)
     {
         _profileService = profileService ?? throw new ArgumentNullException(nameof(profileService));
         _profileCount = profileCount;
 
         Width = 65;
         Height = 17;
-        ColorScheme = TuiColorPalette.Default;
 
         // Warning header with icon
         var warningLabel = new Label("WARNING: This will delete ALL profiles")
@@ -102,7 +105,8 @@ internal sealed class ClearAllProfilesDialog : Dialog
         {
             X = 2,
             Y = 12,
-            Width = 10
+            Width = 10,
+            ColorScheme = TuiColorPalette.TextInput
         };
 
         // Buttons
@@ -153,16 +157,6 @@ internal sealed class ClearAllProfilesDialog : Dialog
             cancelButton
         );
 
-        // Handle Escape to close
-        KeyPress += (e) =>
-        {
-            if (e.KeyEvent.Key == Key.Esc)
-            {
-                Application.RequestStop();
-                e.Handled = true;
-            }
-        };
-
         // Focus on confirmation field
         _confirmationField.SetFocus();
     }
@@ -204,4 +198,12 @@ internal sealed class ClearAllProfilesDialog : Dialog
             Application.RequestStop();
         });
     }
+
+    /// <inheritdoc />
+    public ClearAllProfilesDialogState CaptureState() => new(
+        Title: Title?.ToString() ?? string.Empty,
+        WarningMessage: "WARNING: This will delete ALL profiles",
+        ProfileCount: _profileCount,
+        ConfirmButtonText: "Clear All",
+        CancelButtonText: "Cancel");
 }

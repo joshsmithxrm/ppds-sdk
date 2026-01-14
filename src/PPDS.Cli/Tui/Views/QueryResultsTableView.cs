@@ -13,13 +13,18 @@ internal sealed class QueryResultsTableView : FrameView
 {
     private readonly TableView _tableView;
     private readonly Label _statusLabel;
+    private readonly Label _emptyStateLabel;
 
     private DataTable _dataTable;
+    private DataTable? _unfilteredDataTable; // Original data before filtering
     private Dictionary<string, QueryColumnType> _columnTypes = new();
     private QueryResult? _lastResult;
     private string? _environmentUrl;
     private bool _isLoadingMore;
     private bool _guidColumnsHidden;
+    private string? _currentFilter;
+    private object? _statusRestoreToken; // Token to cancel pending status restore
+    private const int StatusRestoreDelayMs = 2500;
 
     /// <summary>
     /// Raised when the user scrolls to the end and more records are available.
@@ -41,6 +46,16 @@ internal sealed class QueryResultsTableView : FrameView
     /// Current page number (1-based).
     /// </summary>
     public int CurrentPageNumber { get; private set; } = 1;
+
+    /// <summary>
+    /// Gets the number of rows per page (for display purposes).
+    /// </summary>
+    public int PageSize => _tableView.Bounds.Height - 2; // Subtract header rows
+
+    /// <summary>
+    /// Gets the number of visible rows in the current view.
+    /// </summary>
+    public int VisibleRowCount => Math.Min(PageSize, _dataTable.Rows.Count);
 
     public QueryResultsTableView() : base("Results")
     {
@@ -67,15 +82,25 @@ internal sealed class QueryResultsTableView : FrameView
         _tableView.Style.AlwaysShowHeaders = true;
         _tableView.Style.ExpandLastColumn = true;
 
-        _statusLabel = new Label("No data")
+        _statusLabel = new Label(string.Empty)
         {
             X = 0,
             Y = Pos.Bottom(_tableView),
             Width = Dim.Fill(),
-            Height = 1
+            Height = 1,
+            TextAlignment = TextAlignment.Left
         };
 
-        Add(_tableView, _statusLabel);
+        // Centered empty state shown when no data
+        _emptyStateLabel = new Label("No data")
+        {
+            X = Pos.Center(),
+            Y = Pos.Center(),
+            TextAlignment = TextAlignment.Centered,
+            Visible = true
+        };
+
+        Add(_tableView, _statusLabel, _emptyStateLabel);
         SetupKeyboardShortcuts();
     }
 
@@ -93,11 +118,20 @@ internal sealed class QueryResultsTableView : FrameView
     public DataTable? GetDataTable() => _dataTable.Rows.Count > 0 ? _dataTable : null;
 
     /// <summary>
+    /// Gets the column type metadata for export operations.
+    /// </summary>
+    public IReadOnlyDictionary<string, QueryColumnType>? GetColumnTypes() =>
+        _columnTypes.Count > 0 ? _columnTypes : null;
+
+    /// <summary>
     /// Loads query results into the table, replacing any existing data.
     /// </summary>
     public void LoadResults(QueryResult result)
     {
         _lastResult = result;
+        _unfilteredDataTable = null; // Clear filter cache
+        _currentFilter = null;
+
         var (table, columnTypes) = QueryResultConverter.ToDataTableWithTypes(result);
         _dataTable = table;
         _columnTypes = columnTypes;
@@ -108,6 +142,9 @@ internal sealed class QueryResultsTableView : FrameView
         MoreRecordsAvailable = result.MoreRecords;
         PagingCookie = result.PagingCookie;
         CurrentPageNumber = result.PageNumber;
+
+        // Hide empty state when we have data
+        _emptyStateLabel.Visible = false;
 
         UpdateStatus();
     }
@@ -151,12 +188,15 @@ internal sealed class QueryResultsTableView : FrameView
     public void ClearData()
     {
         _dataTable = new DataTable();
+        _unfilteredDataTable = null; // Clear filter cache
+        _currentFilter = null;
         _tableView.Table = _dataTable;
         _lastResult = null;
         MoreRecordsAvailable = false;
         PagingCookie = null;
         CurrentPageNumber = 1;
-        _statusLabel.Text = "No data";
+        _statusLabel.Text = string.Empty;
+        _emptyStateLabel.Visible = true;
     }
 
     /// <summary>
@@ -165,12 +205,27 @@ internal sealed class QueryResultsTableView : FrameView
     /// <param name="filterText">Text to search for in any string column.</param>
     public void ApplyFilter(string? filterText)
     {
-        if (_dataTable.Rows.Count == 0)
+        // Store original data on first filter
+        if (_unfilteredDataTable == null && _dataTable.Rows.Count > 0)
+        {
+            _unfilteredDataTable = _dataTable.Copy();
+        }
+
+        var sourceTable = _unfilteredDataTable ?? _dataTable;
+        if (sourceTable.Rows.Count == 0)
             return;
+
+        _currentFilter = filterText;
 
         if (string.IsNullOrWhiteSpace(filterText))
         {
-            _dataTable.DefaultView.RowFilter = string.Empty;
+            // Clear filter - restore original data
+            if (_unfilteredDataTable != null)
+            {
+                _dataTable = _unfilteredDataTable.Copy();
+                _tableView.Table = _dataTable;
+                ApplyColumnSizing();
+            }
             UpdateStatus();
             return;
         }
@@ -179,7 +234,7 @@ internal sealed class QueryResultsTableView : FrameView
         var conditions = new List<string>();
         var escaped = EscapeFilterValue(filterText);
 
-        foreach (DataColumn column in _dataTable.Columns)
+        foreach (DataColumn column in sourceTable.Columns)
         {
             // Only filter string columns
             if (column.DataType == typeof(string))
@@ -190,10 +245,14 @@ internal sealed class QueryResultsTableView : FrameView
 
         if (conditions.Count > 0)
         {
-            _dataTable.DefaultView.RowFilter = string.Join(" OR ", conditions);
-            var filteredCount = _dataTable.DefaultView.Count;
-            var totalCount = _dataTable.Rows.Count;
-            _statusLabel.Text = $"Showing {filteredCount} of {totalCount} rows (filtered by: {filterText})";
+            // Apply filter to source and create new filtered table
+            sourceTable.DefaultView.RowFilter = string.Join(" OR ", conditions);
+            _dataTable = sourceTable.DefaultView.ToTable();
+            sourceTable.DefaultView.RowFilter = string.Empty; // Reset source filter
+
+            _tableView.Table = _dataTable;
+            ApplyColumnSizing();
+            UpdateStatus();
         }
     }
 
@@ -215,6 +274,11 @@ internal sealed class QueryResultsTableView : FrameView
     {
         _tableView.KeyPress += (e) =>
         {
+            // Only handle shortcuts when table has focus
+            // Prevents Ctrl+C/X from triggering when query input has focus
+            if (!_tableView.HasFocus)
+                return;
+
             switch (e.KeyEvent.Key)
             {
                 case Key.CtrlMask | Key.C:
@@ -281,11 +345,11 @@ internal sealed class QueryResultsTableView : FrameView
         }
         catch (InvalidOperationException ex)
         {
-            _statusLabel.Text = $"Error loading: {ex.Message}";
+            ShowTemporaryStatus($"Error loading: {ex.Message}");
         }
         catch (HttpRequestException ex)
         {
-            _statusLabel.Text = $"Network error: {ex.Message}";
+            ShowTemporaryStatus($"Network error: {ex.Message}");
         }
         finally
         {
@@ -297,7 +361,7 @@ internal sealed class QueryResultsTableView : FrameView
     {
         if (_tableView.Table == null || _tableView.SelectedRow < 0)
         {
-            _statusLabel.Text = "No cell selected";
+            ShowTemporaryStatus("No cell selected");
             return;
         }
 
@@ -312,11 +376,11 @@ internal sealed class QueryResultsTableView : FrameView
             if (ClipboardHelper.CopyToClipboard(value))
             {
                 var displayValue = value.Length > 40 ? value[..37] + "..." : value;
-                _statusLabel.Text = $"Copied: {displayValue}";
+                ShowTemporaryStatus($"Copied: {displayValue}");
             }
             else
             {
-                _statusLabel.Text = $"Copy failed. Value: {value}";
+                ShowTemporaryStatus($"Copy failed. Value: {value}");
             }
         }
     }
@@ -328,16 +392,16 @@ internal sealed class QueryResultsTableView : FrameView
         {
             if (ClipboardHelper.CopyToClipboard(url))
             {
-                _statusLabel.Text = "URL copied to clipboard";
+                ShowTemporaryStatus("URL copied to clipboard");
             }
             else
             {
-                _statusLabel.Text = url;
+                ShowTemporaryStatus(url);
             }
         }
         else
         {
-            _statusLabel.Text = "Cannot build URL (no environment or primary key)";
+            ShowTemporaryStatus("Cannot build URL (no environment or primary key)");
         }
     }
 
@@ -348,16 +412,16 @@ internal sealed class QueryResultsTableView : FrameView
         {
             if (BrowserHelper.OpenUrl(url))
             {
-                _statusLabel.Text = "Opened in browser";
+                ShowTemporaryStatus("Opened in browser");
             }
             else
             {
-                _statusLabel.Text = "Failed to open browser";
+                ShowTemporaryStatus("Failed to open browser");
             }
         }
         else
         {
-            _statusLabel.Text = "Cannot build URL (no environment or primary key)";
+            ShowTemporaryStatus("Cannot build URL (no environment or primary key)");
         }
     }
 
@@ -391,79 +455,113 @@ internal sealed class QueryResultsTableView : FrameView
 
     private void UpdateStatus()
     {
-        var rowCount = _dataTable.Rows.Count;
+        // Cancel any pending restore since we're updating status now
+        _statusRestoreToken = null;
+
+        var sourceCount = _unfilteredDataTable?.Rows.Count ?? _dataTable.Rows.Count;
+        var displayCount = _dataTable.Rows.Count;
         var moreText = MoreRecordsAvailable ? " (more available)" : "";
         var guidText = _guidColumnsHidden ? " | GUIDs hidden (Ctrl+H)" : "";
-        _statusLabel.Text = $"{rowCount} rows{moreText}{guidText} | Ctrl+C: copy | Ctrl+U: copy URL | Ctrl+O: open";
+        var filterText = !string.IsNullOrEmpty(_currentFilter)
+            ? $" (filtered: {displayCount} of {sourceCount})"
+            : "";
+
+        _statusLabel.TextAlignment = TextAlignment.Left;
+        _statusLabel.Text = $"{displayCount} rows{filterText}{moreText}{guidText} | Ctrl+C: copy | Ctrl+U: copy URL | Ctrl+O: open";
     }
 
     /// <summary>
-    /// Applies type-aware column sizing based on the column data types.
+    /// Shows a temporary status message, then auto-restores the default status after a delay.
+    /// </summary>
+    private void ShowTemporaryStatus(string message)
+    {
+        // Cancel any pending restore
+        var token = new object();
+        _statusRestoreToken = token;
+
+        _statusLabel.TextAlignment = TextAlignment.Left;
+        _statusLabel.Text = message;
+
+        // Schedule restore after delay
+        _ = Task.Delay(StatusRestoreDelayMs).ContinueWith(_ =>
+        {
+            Application.MainLoop?.Invoke(() =>
+            {
+                // Only restore if this token is still active (not superseded by another message)
+                if (_statusRestoreToken == token)
+                {
+                    UpdateStatus();
+                }
+            });
+        }, TaskScheduler.Default);
+    }
+
+    /// <summary>
+    /// Applies content-aware column sizing with padding.
+    /// Columns are sized based on actual data with breathing room.
     /// </summary>
     private void ApplyColumnSizing()
     {
         _tableView.Style.ColumnStyles.Clear();
 
+        const int padding = 2; // Extra space on each side
+        const int minWidth = 6;
+        const int maxWidth = 60;
+
         foreach (DataColumn column in _dataTable.Columns)
         {
-            if (!_columnTypes.TryGetValue(column.ColumnName, out var dataType))
+            _columnTypes.TryGetValue(column.ColumnName, out var dataType);
+
+            // Calculate optimal width based on content
+            var headerWidth = column.ColumnName.Length;
+            var maxContentWidth = 0;
+
+            // Sample first 100 rows for performance
+            var rowsToSample = Math.Min(_dataTable.Rows.Count, 100);
+            for (int i = 0; i < rowsToSample; i++)
             {
-                continue;
+                var value = _dataTable.Rows[i][column]?.ToString() ?? string.Empty;
+                maxContentWidth = Math.Max(maxContentWidth, value.Length);
             }
 
-            var style = GetColumnStyle(dataType);
-            if (style != null)
-            {
-                // Apply hidden state for GUID columns if toggled
-                if (_guidColumnsHidden && dataType == QueryColumnType.Guid)
-                {
-                    style.Visible = false;
-                }
+            // Use the larger of header or content, plus padding
+            var optimalWidth = Math.Max(headerWidth, maxContentWidth) + padding;
 
-                _tableView.Style.ColumnStyles[column] = style;
+            // Apply type-specific constraints
+            var (typeMin, typeMax) = GetTypeWidthConstraints(dataType);
+            var finalWidth = Math.Clamp(optimalWidth, Math.Max(minWidth, typeMin), Math.Min(maxWidth, typeMax));
+
+            var style = new TableView.ColumnStyle
+            {
+                MinWidth = finalWidth,
+                MaxWidth = finalWidth + 10 // Allow some expansion
+            };
+
+            // Apply hidden state for GUID columns if toggled
+            if (_guidColumnsHidden && dataType == QueryColumnType.Guid)
+            {
+                style.Visible = false;
             }
+
+            _tableView.Style.ColumnStyles[column] = style;
         }
 
         _tableView.SetNeedsDisplay();
     }
 
     /// <summary>
-    /// Gets the appropriate column style for a given data type.
+    /// Gets min/max width constraints for a data type.
     /// </summary>
-    private static TableView.ColumnStyle? GetColumnStyle(QueryColumnType dataType)
+    private static (int min, int max) GetTypeWidthConstraints(QueryColumnType dataType)
     {
         return dataType switch
         {
-            // GUID columns: fixed width of 38 (36 chars + 2 for padding)
-            QueryColumnType.Guid => new TableView.ColumnStyle { MinWidth = 38, MaxWidth = 38 },
-
-            // DateTime columns: fixed width of 20 (yyyy-MM-dd HH:mm:ss + padding)
-            QueryColumnType.DateTime => new TableView.ColumnStyle { MinWidth = 20, MaxWidth = 20 },
-
-            // Boolean columns: fixed width of 5 (Yes/No)
-            QueryColumnType.Boolean => new TableView.ColumnStyle { MinWidth = 5, MaxWidth = 5 },
-
-            // Integer columns: constrained width
-            QueryColumnType.Integer or QueryColumnType.BigInt =>
-                new TableView.ColumnStyle { MinWidth = 8, MaxWidth = 20 },
-
-            // Decimal/currency columns: constrained width
-            QueryColumnType.Decimal or QueryColumnType.Double or QueryColumnType.Money =>
-                new TableView.ColumnStyle { MinWidth = 10, MaxWidth = 20 },
-
-            // Lookup columns: moderate flexibility
-            QueryColumnType.Lookup => new TableView.ColumnStyle { MinWidth = 15, MaxWidth = 50 },
-
-            // OptionSet columns: constrained width
-            QueryColumnType.OptionSet or QueryColumnType.MultiSelectOptionSet =>
-                new TableView.ColumnStyle { MinWidth = 10, MaxWidth = 30 },
-
-            // String/Memo columns: flexible, minimum width only
-            QueryColumnType.String or QueryColumnType.Memo =>
-                new TableView.ColumnStyle { MinWidth = 10 },
-
-            // Unknown or other types: no specific styling
-            _ => null
+            QueryColumnType.Guid => (36, 38),
+            QueryColumnType.DateTime => (19, 22),
+            QueryColumnType.Boolean => (5, 8),
+            QueryColumnType.Integer or QueryColumnType.BigInt => (6, 20),
+            QueryColumnType.Decimal or QueryColumnType.Double or QueryColumnType.Money => (8, 20),
+            _ => (6, 100)
         };
     }
 

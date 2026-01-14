@@ -1,6 +1,8 @@
 using Microsoft.Crm.Sdk.Messages;
 using Microsoft.Extensions.DependencyInjection;
 using PPDS.Cli.Tui.Infrastructure;
+using PPDS.Cli.Tui.Testing;
+using PPDS.Cli.Tui.Testing.States;
 using PPDS.Dataverse.Pooling;
 using Terminal.Gui;
 
@@ -10,7 +12,7 @@ namespace PPDS.Cli.Tui.Dialogs;
 /// Dialog showing detailed environment and organization information.
 /// Equivalent to 'ppds env who' command.
 /// </summary>
-internal sealed class EnvironmentDetailsDialog : Dialog
+internal sealed class EnvironmentDetailsDialog : TuiDialog, ITuiStateCapture<EnvironmentDetailsDialogState>
 {
     private readonly InteractiveSession _session;
     private readonly string _environmentUrl;
@@ -21,8 +23,6 @@ internal sealed class EnvironmentDetailsDialog : Dialog
     private readonly Label _envNameLabel;
     private readonly Label _urlLabel;
     private readonly Label _uniqueNameLabel;
-    private readonly Label _typeLabel;
-    private readonly Label _regionLabel;
     private readonly Label _versionLabel;
     private readonly Label _orgIdLabel;
     private readonly Label _userIdLabel;
@@ -30,6 +30,7 @@ internal sealed class EnvironmentDetailsDialog : Dialog
     private readonly Label _connectedAsLabel;
     private readonly Label _statusLabel;
     private readonly Button _refreshButton;
+    private bool _disposed;
 
     /// <summary>
     /// Creates a new environment details dialog.
@@ -40,16 +41,15 @@ internal sealed class EnvironmentDetailsDialog : Dialog
     public EnvironmentDetailsDialog(
         InteractiveSession session,
         string environmentUrl,
-        string? environmentDisplayName = null) : base("Environment Details")
+        string? environmentDisplayName = null) : base("Environment Details", session)
     {
         _session = session ?? throw new ArgumentNullException(nameof(session));
         _environmentUrl = environmentUrl ?? throw new ArgumentNullException(nameof(environmentUrl));
         _environmentDisplayName = environmentDisplayName;
         _themeService = session.GetThemeService();
 
-        Width = 65;
+        Width = Dim.Percent(80);
         Height = 20;
-        ColorScheme = TuiColorPalette.Default;
 
         // Environment name header with type-specific coloring
         var envType = _themeService.DetectEnvironmentType(_environmentUrl);
@@ -81,8 +81,7 @@ internal sealed class EnvironmentDetailsDialog : Dialog
 
         _urlLabel = CreateDetailRow("URL:", ref row, labelWidth);
         _uniqueNameLabel = CreateDetailRow("Unique Name:", ref row, labelWidth);
-        _typeLabel = CreateDetailRow("Type:", ref row, labelWidth);
-        _regionLabel = CreateDetailRow("Region:", ref row, labelWidth);
+        // Type and Region removed - type already shown in header badge
         _versionLabel = CreateDetailRow("Version:", ref row, labelWidth);
 
         // Blank line before IDs
@@ -122,7 +121,7 @@ internal sealed class EnvironmentDetailsDialog : Dialog
         closeButton.Clicked += () => { Application.RequestStop(); };
 
         Add(_envNameLabel, separator,
-            _urlLabel, _uniqueNameLabel, _typeLabel, _regionLabel, _versionLabel,
+            _urlLabel, _uniqueNameLabel, _versionLabel,
             _orgIdLabel, _userIdLabel, _businessUnitIdLabel, _connectedAsLabel,
             _statusLabel, _refreshButton, closeButton);
 
@@ -133,12 +132,13 @@ internal sealed class EnvironmentDetailsDialog : Dialog
     /// <inheritdoc />
     protected override void Dispose(bool disposing)
     {
-        if (disposing)
+        if (disposing && !_disposed)
         {
+            _disposed = true;
             _cancellationSource.Cancel();
             _cancellationSource.Dispose();
         }
-        base.Dispose(disposing);
+        base.Dispose(disposing); // Calls TuiDialog.Dispose which clears active dialog
     }
 
     private Label CreateDetailRow(string labelText, ref int row, int labelWidth)
@@ -175,7 +175,8 @@ internal sealed class EnvironmentDetailsDialog : Dialog
         {
             Application.MainLoop?.Invoke(() =>
             {
-                if (cancellationToken.IsCancellationRequested)
+                // Check _disposed before accessing token (CTS may be disposed)
+                if (_disposed)
                 {
                     return;
                 }
@@ -233,7 +234,8 @@ internal sealed class EnvironmentDetailsDialog : Dialog
 
         Application.MainLoop?.Invoke(() =>
         {
-            if (cancellationToken.IsCancellationRequested)
+            // Check _disposed before accessing token (CTS may be disposed)
+            if (_disposed)
             {
                 return;
             }
@@ -250,8 +252,7 @@ internal sealed class EnvironmentDetailsDialog : Dialog
             // Update detail values
             _urlLabel.Text = _environmentUrl;
             _uniqueNameLabel.Text = orgUniqueName ?? "(not available)";
-            _typeLabel.Text = envType ?? "(not specified)";
-            _regionLabel.Text = region ?? "(not specified)";
+            // Type and region removed - type is shown in header badge
             _versionLabel.Text = version ?? "(not available)";
 
             _orgIdLabel.Text = orgId != Guid.Empty ? orgId.ToString() : "(not available)";
@@ -259,9 +260,6 @@ internal sealed class EnvironmentDetailsDialog : Dialog
             _businessUnitIdLabel.Text = whoAmIResponse.BusinessUnitId.ToString();
 
             _connectedAsLabel.Text = connectedAs;
-
-            // Apply type-specific styling to type label
-            _typeLabel.ColorScheme = GetTypeColorScheme(envType);
 
             _statusLabel.Text = "Details loaded successfully";
             _statusLabel.ColorScheme = TuiColorPalette.Success;
@@ -273,20 +271,17 @@ internal sealed class EnvironmentDetailsDialog : Dialog
         LoadDetailsAsync(_cancellationSource.Token);
     }
 
-    private static ColorScheme GetTypeColorScheme(string? envType)
+    /// <inheritdoc />
+    public EnvironmentDetailsDialogState CaptureState()
     {
-        if (string.IsNullOrEmpty(envType))
-        {
-            return TuiColorPalette.Default;
-        }
+        var envType = _themeService.DetectEnvironmentType(_environmentUrl);
 
-        return envType.ToLowerInvariant() switch
-        {
-            "production" => TuiColorPalette.StatusBar_Production,
-            "sandbox" => TuiColorPalette.StatusBar_Sandbox,
-            "developer" or "development" => TuiColorPalette.StatusBar_Development,
-            "trial" => TuiColorPalette.StatusBar_Trial,
-            _ => TuiColorPalette.Default
-        };
+        return new EnvironmentDetailsDialogState(
+            Title: Title?.ToString() ?? string.Empty,
+            DisplayName: _environmentDisplayName ?? "(unknown)",
+            Url: _environmentUrl,
+            EnvironmentType: envType,
+            OrganizationId: _orgIdLabel.Text?.ToString(),
+            Version: _versionLabel.Text?.ToString());
     }
 }

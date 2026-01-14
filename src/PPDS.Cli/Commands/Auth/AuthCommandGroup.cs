@@ -832,7 +832,7 @@ public static class AuthCommandGroup
             }
             else
             {
-                profile = collection.GetByName(name!);
+                profile = collection.GetByNameOrIndex(name!);
                 if (profile == null)
                 {
                     Console.Error.WriteLine($"Error: Profile '{name}' not found.");
@@ -926,7 +926,7 @@ public static class AuthCommandGroup
             }
             else
             {
-                profile = collection.GetByName(name!);
+                profile = collection.GetByNameOrIndex(name!);
                 if (profile == null)
                 {
                     Console.Error.WriteLine($"Error: Profile '{name}' not found.");

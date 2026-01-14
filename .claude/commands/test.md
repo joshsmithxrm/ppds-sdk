@@ -34,16 +34,63 @@ Fast, no external dependencies. Default choice.
 
 ### TUI Tests
 
+TUI testing has three layers:
+1. **TuiUnit** - State assertions (fast, no terminal needed)
+2. **tui-e2e** - Visual snapshots using @microsoft/tui-test (needs Node.js)
+3. **TuiIntegration** - Integration with FakeXrmEasy (future)
+
 ```bash
 # Build first
 dotnet build src/PPDS.Cli/PPDS.Cli.csproj --no-restore
 
-# TUI unit tests (fast)
+# TUI unit tests - state assertions (fast)
 dotnet test tests/PPDS.Cli.Tests/PPDS.Cli.Tests.csproj --filter "Category=TuiUnit" --no-build
+
+# TUI visual snapshots (if Node.js available)
+# Use --prefix to run npm from the repo root
+if (Get-Command node -ErrorAction SilentlyContinue) {
+    npm test --prefix tests/tui-e2e
+}
 
 # TUI integration tests (if unit pass)
 dotnet test tests/PPDS.Cli.Tests/PPDS.Cli.Tests.csproj --filter "Category=TuiIntegration" --no-build
 ```
+
+**Updating snapshots:** If visual changes are intentional, update snapshots:
+```bash
+npm test --prefix tests/tui-e2e -- --update-snapshots
+```
+
+#### TUI Testing Philosophy
+
+TUI tests verify **presentation**, not business logic. CLI and TUI share Application Services (ADR-0015), so service logic is tested once at the CLI layer.
+
+**What TUI E2E tests verify:**
+- Does the screen render correctly? (snapshots)
+- Do keyboard shortcuts work? (key sequences)
+- Does navigation flow correctly? (screen transitions)
+- Do errors display properly? (error dialogs)
+
+**What TUI E2E tests do NOT verify:**
+- Query execution correctness (CLI tests `ISqlQueryService`)
+- Export format validity (CLI tests `IExportService`)
+- Authentication flows (CLI tests auth)
+
+**Trust the service layer:** If CLI tests pass, services work. Don't duplicate that coverage.
+
+#### Interpreting Snapshot Diffs
+
+When E2E tests fail with snapshot diffs:
+
+1. **Read the ASCII diff** - Shows expected vs actual terminal output
+2. **Identify what's wrong** - Layout shifted? Text missing? Wrong content?
+3. **Fix the TUI code** - The rendering issue is in the view/screen code
+4. **Re-run tests** - Verify fix with `npm test --prefix tests/tui-e2e`
+5. **If change was intentional** - Update snapshots with `--update-snapshots`
+
+Snapshots are the visual spec. They define "correct" appearance. When you see a diff:
+- If the "actual" looks wrong → fix the code
+- If the "actual" looks right (intentional change) → update the snapshot
 
 ### Integration Tests
 
@@ -177,3 +224,4 @@ ppds plugins --help
 
 - ADR-0028: TUI Testing Strategy
 - ADR-0029: Testing Strategy
+- `tests/tui-e2e/` - TUI visual snapshot tests using @microsoft/tui-test
