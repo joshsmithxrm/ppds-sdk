@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Authentication uses native OS credential storage** - Replaced custom `SecureCredentialStore` with native OS credential storage APIs for better security and reliability. Uses Windows Credential Manager, macOS Keychain, or Linux Secret Service directly. ([#485](https://github.com/joshsmithxrm/power-platform-developer-suite/issues/485))
+
+### Fixed
+
+- **Query MSAL for token state instead of stale profile metadata** - Token validity is now checked against MSAL's actual token cache state rather than profile metadata that may be stale. ([#491](https://github.com/joshsmithxrm/power-platform-developer-suite/issues/491))
+- **Credential store bypass for test scenarios** - Check `PPDS_TEST_CLIENT_SECRET` environment variable for credential store bypass in test/CI scenarios. ([#488](https://github.com/joshsmithxrm/power-platform-developer-suite/issues/488))
+
 ## [1.0.0-beta.5] - 2026-01-06
 
 ### Added
