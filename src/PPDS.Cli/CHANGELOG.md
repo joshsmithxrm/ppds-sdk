@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0-beta.12] - 2026-01-14
+
 ### Added
 
 - **Plugin lifecycle commands** - Full plugin registration and management:
@@ -17,7 +19,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `ppds plugins update` - Update existing plugin ([#489](https://github.com/joshsmithxrm/power-platform-developer-suite/issues/489))
   - `ppds plugins list --filter` - Filtering options for plugin list ([#464](https://github.com/joshsmithxrm/power-platform-developer-suite/issues/464))
 - **Plugin step configuration** - Enable/disable plugin steps and username impersonation support ([#490](https://github.com/joshsmithxrm/power-platform-developer-suite/issues/490))
-- **Early-bound entities for plugin registration** - Generated entity classes for plugin management ([#440](https://github.com/joshsmithxrm/power-platform-developer-suite/issues/440))
 
 ### Changed
 
@@ -330,7 +331,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Packaged as .NET global tool (`ppds`)
 - Targets: `net8.0`, `net9.0`, `net10.0`
 
-[Unreleased]: https://github.com/joshsmithxrm/power-platform-developer-suite/compare/Cli-v1.0.0-beta.11...HEAD
+[Unreleased]: https://github.com/joshsmithxrm/power-platform-developer-suite/compare/Cli-v1.0.0-beta.12...HEAD
+[1.0.0-beta.12]: https://github.com/joshsmithxrm/power-platform-developer-suite/compare/Cli-v1.0.0-beta.11...Cli-v1.0.0-beta.12
 [1.0.0-beta.11]: https://github.com/joshsmithxrm/power-platform-developer-suite/compare/Cli-v1.0.0-beta.10...Cli-v1.0.0-beta.11
 [1.0.0-beta.10]: https://github.com/joshsmithxrm/power-platform-developer-suite/compare/Cli-v1.0.0-beta.9...Cli-v1.0.0-beta.10
 [1.0.0-beta.9]: https://github.com/joshsmithxrm/power-platform-developer-suite/compare/Cli-v1.0.0-beta.8...Cli-v1.0.0-beta.9

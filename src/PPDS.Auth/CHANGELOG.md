@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0-beta.6] - 2026-01-14
+
 ### Changed
 
 - **Authentication uses native OS credential storage** - Replaced custom `SecureCredentialStore` with native OS credential storage APIs for better security and reliability. Uses Windows Credential Manager, macOS Keychain, or Linux Secret Service directly. ([#485](https://github.com/joshsmithxrm/power-platform-developer-suite/issues/485))
@@ -115,7 +117,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - JWT claims parsing for identity information
 - Targets: `net8.0`, `net9.0`, `net10.0`
 
-[Unreleased]: https://github.com/joshsmithxrm/power-platform-developer-suite/compare/Auth-v1.0.0-beta.5...HEAD
+[Unreleased]: https://github.com/joshsmithxrm/power-platform-developer-suite/compare/Auth-v1.0.0-beta.6...HEAD
+[1.0.0-beta.6]: https://github.com/joshsmithxrm/power-platform-developer-suite/compare/Auth-v1.0.0-beta.5...Auth-v1.0.0-beta.6
 [1.0.0-beta.5]: https://github.com/joshsmithxrm/power-platform-developer-suite/compare/Auth-v1.0.0-beta.4...Auth-v1.0.0-beta.5
 [1.0.0-beta.4]: https://github.com/joshsmithxrm/power-platform-developer-suite/compare/Auth-v1.0.0-beta.3...Auth-v1.0.0-beta.4
 [1.0.0-beta.3]: https://github.com/joshsmithxrm/power-platform-developer-suite/compare/Auth-v1.0.0-beta.2...Auth-v1.0.0-beta.3
