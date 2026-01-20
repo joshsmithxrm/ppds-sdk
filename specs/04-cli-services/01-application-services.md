@@ -16,7 +16,7 @@ The Application Services subsystem implements a layered architecture that separa
 | `IQueryHistoryService` | Persist and retrieve query history per-environment |
 | `IExportService` | Export query results to CSV/TSV/JSON/clipboard |
 | `IConnectionService` | Power Apps Admin API for connection management |
-| `IPluginRegistrationService` | Plugin SDK integration |
+| `IPluginRegistrationService` | Plugin assembly registration and management |
 
 ### Classes
 
@@ -171,7 +171,26 @@ public class PpdsException : Exception
 
 ## Progress Reporting (ADR-0025)
 
-### UI-Agnostic Interface
+Two UI-agnostic progress interfaces exist for different use cases:
+
+### IOperationProgress (General Operations)
+
+Used by most application services for simple progress reporting:
+
+```csharp
+public interface IOperationProgress
+{
+    void ReportStatus(string message);
+    void ReportProgress(int current, int total, string? message = null);
+    void ReportProgress(double fraction, string? message = null);
+    void ReportComplete(string message);
+    void ReportError(string message);
+}
+```
+
+### IProgressReporter (Migration Operations)
+
+Used by migration services with richer metadata:
 
 ```csharp
 public interface IProgressReporter
@@ -195,21 +214,20 @@ public sealed record ProgressSnapshot
 
 ### Adapter Pattern
 
-| Interface | Adapter | Implementation |
-|-----------|---------|----------------|
-| CLI | `CliProgressReporter` | Spectre.Console progress bars |
-| TUI | `TuiProgressReporter` | Terminal.Gui progress bars |
-| Non-interactive | `NullProgressReporter` | No-op singleton |
+| Interface | Null Adapter |
+|-----------|--------------|
+| `IOperationProgress` | `NullOperationProgress.Instance` |
+| `IProgressReporter` | `NullProgressReporter.Instance` |
 
 ### Service Integration
 
-Services accept optional `IProgressReporter` for operations >1 second:
+Services accept optional progress interfaces for operations >1 second:
 
 ```csharp
 public async Task ExportAsync(
     DataTable table,
     Stream stream,
-    IOperationProgress? progress = null,  // Optional
+    IOperationProgress? progress = null,
     CancellationToken cancellationToken = default)
 {
     progress?.ReportStatus($"Exporting {totalRows} rows...");
@@ -324,6 +342,8 @@ public static IServiceCollection AddCliApplicationServices(this IServiceCollecti
 | `src/PPDS.Cli/Services/ServiceRegistration.cs` | DI registration |
 | `src/PPDS.Cli/Services/Query/ISqlQueryService.cs` | SQL service interface |
 | `src/PPDS.Cli/Services/Query/SqlQueryService.cs` | SQL service implementation |
+| `src/PPDS.Cli/Services/Query/SqlQueryRequest.cs` | SQL query request DTO |
+| `src/PPDS.Cli/Services/Query/SqlQueryResult.cs` | SQL query result DTO |
 | `src/PPDS.Cli/Services/Profile/IProfileService.cs` | Profile service interface |
 | `src/PPDS.Cli/Services/Profile/ProfileService.cs` | Profile service implementation |
 | `src/PPDS.Cli/Services/Environment/IEnvironmentService.cs` | Environment service interface |
@@ -332,11 +352,18 @@ public static IServiceCollection AddCliApplicationServices(this IServiceCollecti
 | `src/PPDS.Cli/Services/History/QueryHistoryService.cs` | History service implementation |
 | `src/PPDS.Cli/Services/Export/IExportService.cs` | Export service interface |
 | `src/PPDS.Cli/Services/Export/ExportService.cs` | Export service implementation |
+| `src/PPDS.Cli/Services/IConnectionService.cs` | Connection service interface |
+| `src/PPDS.Cli/Services/ConnectionService.cs` | Connection service implementation |
+| `src/PPDS.Cli/Plugins/Registration/IPluginRegistrationService.cs` | Plugin registration interface |
 | `src/PPDS.Cli/Infrastructure/Errors/PpdsException.cs` | Exception hierarchy |
 | `src/PPDS.Cli/Infrastructure/Errors/ErrorCodes.cs` | Error codes catalog |
-| `src/PPDS.Cli/Infrastructure/Errors/ExceptionMapper.cs` | Exception-to-error mapping |
-| `src/PPDS.Cli/Infrastructure/Progress/IProgressReporter.cs` | Progress interface |
-| `src/PPDS.Cli/Infrastructure/Progress/ProgressSnapshot.cs` | Progress state model |
+| `src/PPDS.Cli/Infrastructure/Errors/ExceptionMapper.cs` | Exception-to-exit code mapping |
+| `src/PPDS.Cli/Infrastructure/Errors/ExitCodes.cs` | CLI exit codes |
+| `src/PPDS.Cli/Infrastructure/IOperationProgress.cs` | General progress interface |
+| `src/PPDS.Cli/Infrastructure/Progress/IProgressReporter.cs` | Migration progress interface (includes ProgressSnapshot) |
 | `src/PPDS.Cli/Infrastructure/ProfileServiceFactory.cs` | Service provider factory |
 | `tests/PPDS.Cli.Tests/Services/Query/SqlQueryServiceTests.cs` | SQL service tests |
 | `tests/PPDS.Cli.Tests/Services/Profile/ProfileServiceTests.cs` | Profile service tests |
+| `tests/PPDS.Cli.Tests/Services/Environment/EnvironmentServiceTests.cs` | Environment service tests |
+| `tests/PPDS.Cli.Tests/Services/Export/ExportServiceTests.cs` | Export service tests |
+| `tests/PPDS.Cli.Tests/Services/History/QueryHistoryServiceTests.cs` | History service tests |
