@@ -60,16 +60,23 @@ Use '{0}.EntityLogicalName' instead of string literal "{1}"
 | String Literal | Suggested Type |
 |----------------|----------------|
 | `pluginassembly` | `PluginAssembly` |
+| `pluginpackage` | `PluginPackage` |
 | `plugintype` | `PluginType` |
 | `sdkmessage` | `SdkMessage` |
+| `sdkmessagefilter` | `SdkMessageFilter` |
 | `sdkmessageprocessingstep` | `SdkMessageProcessingStep` |
 | `sdkmessageprocessingstepimage` | `SdkMessageProcessingStepImage` |
 | `solution` | `Solution` |
 | `solutioncomponent` | `SolutionComponent` |
 | `asyncoperation` | `AsyncOperation` |
+| `importjob` | `ImportJob` |
 | `systemuser` | `SystemUser` |
+| `role` | `Role` |
 | `publisher` | `Publisher` |
+| `environmentvariabledefinition` | `EnvironmentVariableDefinition` |
+| `environmentvariablevalue` | `EnvironmentVariableValue` |
 | `workflow` | `Workflow` |
+| `connectionreference` | `ConnectionReference` |
 | `plugintracelog` | `PluginTraceLog` |
 | (unknown) | PascalCase conversion |
 
