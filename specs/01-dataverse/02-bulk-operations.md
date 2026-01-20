@@ -200,4 +200,7 @@ When a batch fails with a "Does Not Exist" error, the executor scans all records
 | `src/PPDS.Dataverse/BulkOperations/BatchParallelismCoordinator.cs` | Batch coordination |
 | `tests/PPDS.Dataverse.Tests/BulkOperations/BulkOperationResultTests.cs` | Result unit tests |
 | `tests/PPDS.Dataverse.Tests/BulkOperations/BulkOperationOptionsTests.cs` | Options unit tests |
+| `tests/PPDS.Dataverse.Tests/BulkOperations/CustomLogicBypassTests.cs` | CustomLogicBypass tests |
+| `tests/PPDS.Dataverse.Tests/BulkOperations/BatchFailureDiagnosticTests.cs` | Diagnostic tests |
+| `tests/PPDS.Dataverse.Tests/BulkOperations/BatchParallelismCoordinatorTests.cs` | Coordinator tests |
 | `tests/PPDS.LiveTests/BulkOperations/BulkOperationLiveTests.cs` | Integration tests |
