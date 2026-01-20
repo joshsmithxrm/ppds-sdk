@@ -25,13 +25,12 @@ The Dependency Analysis subsystem uses Tarjan's algorithm to detect circular ref
 | Type | Purpose |
 |------|---------|
 | `DependencyGraph` | Complete graph with tiers and cycles |
-| `EntityNode` | Entity vertex in graph |
+| `EntityNode` | Entity vertex with tier assignment |
 | `DependencyEdge` | Lookup relationship edge |
-| `DependencyType` | Edge type (Lookup, Owner, Customer, ParentChild) |
+| `DependencyType` | Edge type (Lookup, Owner, Customer) |
 | `CircularReference` | Strongly connected component |
 | `ExecutionPlan` | Import plan with deferred fields |
 | `ImportTier` | Set of entities importable in parallel |
-| `DeferredField` | Field requiring second-pass update |
 
 ## Algorithm Details
 
@@ -60,9 +59,9 @@ edges.Where(e => e.FromEntity == e.ToEntity)
 After SCC detection, builds topologically sorted tiers using Kahn's algorithm:
 
 1. **Graph Condensation**: Treat each SCC as single node
-2. **Dependency Count**: Count edges TO each node (dependencies)
-3. **Zero-dependency tier**: Process nodes with no dependencies first
-4. **Decrement and repeat**: When processing a dependency, decrement dependents' counts
+2. **Dependency Count**: Count outgoing edges FROM each node (number of dependencies)
+3. **Zero-dependency tier**: Process nodes with no outgoing dependencies first
+4. **Decrement and repeat**: When processing a dependency, decrement the count for nodes that depend on it
 5. **Expand SCCs**: Replace SCC placeholders with member entities
 
 ## Behaviors
@@ -117,7 +116,8 @@ For circular references, fields are deferred when:
 
 | Condition | Behavior |
 |-----------|----------|
-| Null schema | Throws `ArgumentNullException` |
+| Null schema | `DependencyGraphBuilder.Build` throws `ArgumentNullException` |
+| Null graph or schema | `ExecutionPlanBuilder.Build` throws `ArgumentNullException` |
 | Missing entity in cycle | Logged, continues gracefully |
 | Unexpected cycle in condensed graph | Warns and includes remaining nodes |
 
@@ -125,20 +125,29 @@ For circular references, fields are deferred when:
 
 | Property | Type | Description |
 |----------|------|-------------|
-| `Entities` | List&lt;EntityNode&gt; | All entity vertices |
-| `Dependencies` | List&lt;DependencyEdge&gt; | All lookup edges |
-| `CircularReferences` | List&lt;CircularReference&gt; | Detected SCCs (cycles) |
-| `Tiers` | List&lt;List&lt;string&gt;&gt; | Topologically sorted tiers |
+| `Entities` | IReadOnlyList&lt;EntityNode&gt; | All entity vertices |
+| `Dependencies` | IReadOnlyList&lt;DependencyEdge&gt; | All lookup edges |
+| `CircularReferences` | IReadOnlyList&lt;CircularReference&gt; | Detected SCCs (cycles) |
+| `Tiers` | IReadOnlyList&lt;IReadOnlyList&lt;string&gt;&gt; | Topologically sorted tiers |
 | `TierCount` | int | Number of tiers |
 | `HasCircularReferences` | bool | Any cycles detected |
+
+## EntityNode Properties
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `LogicalName` | string | Entity logical name |
+| `DisplayName` | string | Entity display name |
+| `RecordCount` | int | Record count (populated during export) |
+| `TierNumber` | int | Assigned tier number |
 
 ## ExecutionPlan Properties
 
 | Property | Type | Description |
 |----------|------|-------------|
-| `Tiers` | List&lt;ImportTier&gt; | Ordered import tiers |
-| `DeferredFields` | Dict&lt;string, List&lt;string&gt;&gt; | Fields to defer per entity |
-| `ManyToManyRelationships` | List&lt;RelationshipSchema&gt; | N:N relationships to process after |
+| `Tiers` | IReadOnlyList&lt;ImportTier&gt; | Ordered import tiers |
+| `DeferredFields` | IReadOnlyDictionary&lt;string, IReadOnlyList&lt;string&gt;&gt; | Fields to defer per entity |
+| `ManyToManyRelationships` | IReadOnlyList&lt;RelationshipSchema&gt; | N:N relationships to process after |
 | `TierCount` | int | Number of tiers |
 | `DeferredFieldCount` | int | Total deferred fields |
 
@@ -147,7 +156,7 @@ For circular references, fields are deferred when:
 | Property | Type | Description |
 |----------|------|-------------|
 | `TierNumber` | int | 0-based tier index |
-| `Entities` | List&lt;string&gt; | Entities in this tier |
+| `Entities` | IReadOnlyList&lt;string&gt; | Entities in this tier |
 | `HasCircularReferences` | bool | Tier contains cycle members |
 | `RequiresWait` | bool | Wait for completion before next tier |
 

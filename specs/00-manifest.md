@@ -37,7 +37,7 @@ Progress tracking for specification generation. Claude reads this file each iter
 
 | # | Subsystem | Status | Review Status | Spec File |
 |---|-----------|--------|---------------|-----------|
-| 3.1 | Dependency Analysis (Tarjan) | complete | | [01-dependency-analysis.md](03-migration/01-dependency-analysis.md) |
+| 3.1 | Dependency Analysis (Tarjan) | complete | reviewed | [01-dependency-analysis.md](03-migration/01-dependency-analysis.md) |
 | 3.2 | Export Pipeline | complete | | [02-export-pipeline.md](03-migration/02-export-pipeline.md) |
 | 3.3 | Import Pipeline | complete | | [03-import-pipeline.md](03-migration/03-import-pipeline.md) |
 | 3.4 | Circular References | complete | | [04-circular-references.md](03-migration/04-circular-references.md) |
