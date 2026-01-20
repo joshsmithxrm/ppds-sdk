@@ -79,7 +79,7 @@ Progress tracking for specification generation. Claude reads this file each iter
 | # | Subsystem | Status | Spec File |
 |---|-----------|--------|-----------|
 | 8.1 | Attributes | complete | [01-attributes.md](08-plugins/01-attributes.md) |
-| 8.2 | Analyzers | pending | - |
+| 8.2 | Analyzers | complete | [02-analyzers.md](08-plugins/02-analyzers.md) |
 
 ---
 
@@ -94,5 +94,5 @@ Progress tracking for specification generation. Claude reads this file each iter
 | PPDS.TUI | 3 | 3 | 0 |
 | PPDS.Mcp | 2 | 2 | 0 |
 | VS Code Extension | 2 | 2 | 0 |
-| PPDS.Plugins | 2 | 1 | 1 |
-| **Total** | **29** | **28** | **1** |
+| PPDS.Plugins | 2 | 2 | 0 |
+| **Total** | **29** | **29** | **0** |
