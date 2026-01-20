@@ -64,7 +64,7 @@ Progress tracking for specification generation. Claude reads this file each iter
 
 | # | Subsystem | Status | Spec File |
 |---|-----------|--------|-----------|
-| 6.1 | Server Architecture | pending | - |
+| 6.1 | Server Architecture | complete | [01-server-architecture.md](06-mcp/01-server-architecture.md) |
 | 6.2 | Tools | pending | - |
 
 ### 7. VS Code Extension
@@ -92,7 +92,7 @@ Progress tracking for specification generation. Claude reads this file each iter
 | PPDS.Migration | 6 | 6 | 0 |
 | PPDS.Cli Services | 3 | 3 | 0 |
 | PPDS.TUI | 3 | 3 | 0 |
-| PPDS.Mcp | 2 | 0 | 2 |
+| PPDS.Mcp | 2 | 1 | 1 |
 | VS Code Extension | 2 | 0 | 2 |
 | PPDS.Plugins | 2 | 0 | 2 |
-| **Total** | **29** | **23** | **6** |
+| **Total** | **29** | **24** | **5** |
