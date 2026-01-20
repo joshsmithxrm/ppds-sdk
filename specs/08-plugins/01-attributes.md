@@ -262,3 +262,4 @@ Attributes are immutable after construction. Thread safety is inherent to the at
 | `src/PPDS.Cli/Plugins/Extraction/AssemblyExtractor.cs` | Attribute extraction |
 | `tests/PPDS.Plugins.Tests/PluginStepAttributeTests.cs` | Step attribute tests |
 | `tests/PPDS.Plugins.Tests/PluginImageAttributeTests.cs` | Image attribute tests |
+| `tests/PPDS.Plugins.Tests/EnumTests.cs` | Enum value tests |

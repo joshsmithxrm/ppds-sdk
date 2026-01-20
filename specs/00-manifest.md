@@ -78,7 +78,7 @@ Progress tracking for specification generation. Claude reads this file each iter
 
 | # | Subsystem | Status | Review Status | Spec File |
 |---|-----------|--------|---------------|-----------|
-| 8.1 | Attributes | complete | | [01-attributes.md](08-plugins/01-attributes.md) |
+| 8.1 | Attributes | complete | reviewed | [01-attributes.md](08-plugins/01-attributes.md) |
 | 8.2 | Analyzers | complete | | [02-analyzers.md](08-plugins/02-analyzers.md) |
 
 ---
