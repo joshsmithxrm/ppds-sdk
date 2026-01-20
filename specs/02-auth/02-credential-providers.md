@@ -41,8 +41,26 @@ The Credential Providers subsystem provides authenticated `ServiceClient` instan
 | `StoredCredential` | Credential data model (secrets, passwords) |
 | `CachedTokenInfo` | Token cache status without triggering auth |
 | `CredentialResult` | Success/failure result of auth attempt |
-| `DeviceCodeInfo` | Device code display info (code, URL, expiry) |
-| `PreAuthDialogResult` | User choice before interactive auth |
+| `DeviceCodeInfo` | Device code display info (code, URL, message) |
+| `PreAuthDialogResult` | User choice before interactive auth (enum) |
+| `PowerPlatformToken` | Access token for Power Platform APIs |
+| `ParsedJwtClaims` | Claims extracted from JWT tokens |
+
+### Power Platform Token Provider
+
+| Interface | Purpose |
+|-----------|---------|
+| `IPowerPlatformTokenProvider` | Acquires tokens for Power Apps/Automate REST APIs |
+| `PowerPlatformTokenProvider` | MSAL implementation supporting user and SPN flows |
+
+### Internal Helpers
+
+| Class | Purpose |
+|-------|---------|
+| `MsalClientBuilder` | Creates and configures MSAL public client apps with token cache |
+| `MsalAccountHelper` | Account lookup logic for silent auth (HomeAccountId > TenantId > Username) |
+| `TokenCacheManager` | Clears MSAL file-based token cache |
+| `JwtClaimsParser` | Extracts claims (PUID) from JWT tokens |
 
 ## Behaviors
 
@@ -149,6 +167,9 @@ The Credential Providers subsystem provides authenticated `ServiceClient` instan
 
 ## Stored Credential Format
 
+Credentials are stored as JSON in platform-native credential stores, keyed by applicationId (lowercase).
+A manifest entry (`_manifest`) tracks all stored applicationIds to support enumeration.
+
 ```json
 {
   "s": "client-secret-value",
@@ -188,12 +209,12 @@ The Credential Providers subsystem provides authenticated `ServiceClient` instan
 
 | File | Purpose |
 |------|---------|
-| `src/PPDS.Auth/Credentials/ICredentialProvider.cs` | Provider interface |
+| `src/PPDS.Auth/Credentials/ICredentialProvider.cs` | Provider interface + CachedTokenInfo + CredentialResult |
 | `src/PPDS.Auth/Credentials/CredentialProviderFactory.cs` | Factory |
-| `src/PPDS.Auth/Credentials/ISecureCredentialStore.cs` | Store interface |
+| `src/PPDS.Auth/Credentials/ISecureCredentialStore.cs` | Store interface + StoredCredential |
 | `src/PPDS.Auth/Credentials/NativeCredentialStore.cs` | Platform-native store |
 | `src/PPDS.Auth/Credentials/InteractiveBrowserCredentialProvider.cs` | Browser flow |
-| `src/PPDS.Auth/Credentials/DeviceCodeCredentialProvider.cs` | Device code flow |
+| `src/PPDS.Auth/Credentials/DeviceCodeCredentialProvider.cs` | Device code flow + DeviceCodeInfo |
 | `src/PPDS.Auth/Credentials/ClientSecretCredentialProvider.cs` | Client secret flow |
 | `src/PPDS.Auth/Credentials/CertificateFileCredentialProvider.cs` | Certificate file flow |
 | `src/PPDS.Auth/Credentials/CertificateStoreCredentialProvider.cs` | Certificate store flow |
@@ -202,4 +223,10 @@ The Credential Providers subsystem provides authenticated `ServiceClient` instan
 | `src/PPDS.Auth/Credentials/AzureDevOpsFederatedCredentialProvider.cs` | Azure DevOps OIDC |
 | `src/PPDS.Auth/Credentials/UsernamePasswordCredentialProvider.cs` | ROPC flow |
 | `src/PPDS.Auth/Credentials/AuthenticationException.cs` | Auth exception |
-| `src/PPDS.Auth/Credentials/PreAuthDialogResult.cs` | Pre-auth user choice |
+| `src/PPDS.Auth/Credentials/PreAuthDialogResult.cs` | Pre-auth user choice enum |
+| `src/PPDS.Auth/Credentials/IPowerPlatformTokenProvider.cs` | Power Platform token interface + PowerPlatformToken |
+| `src/PPDS.Auth/Credentials/PowerPlatformTokenProvider.cs` | Power Platform token implementation |
+| `src/PPDS.Auth/Credentials/MsalClientBuilder.cs` | MSAL client creation and cache setup |
+| `src/PPDS.Auth/Credentials/MsalAccountHelper.cs` | MSAL account lookup helper |
+| `src/PPDS.Auth/Credentials/TokenCacheManager.cs` | Token cache clearing |
+| `src/PPDS.Auth/Credentials/JwtClaimsParser.cs` | JWT claims extraction |
