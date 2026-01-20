@@ -18,13 +18,18 @@ The SQL Transpiler converts a subset of SQL SELECT syntax into Dataverse FetchXM
 
 | Type | Purpose |
 |------|---------|
+| `ISqlSelectColumn` | Interface for SELECT columns (regular or aggregate) |
 | `SqlSelectStatement` | Complete SELECT statement AST |
 | `SqlColumnRef` | Column reference (qualified, simple, or wildcard) |
 | `SqlAggregateColumn` | Aggregate function call (COUNT, SUM, etc.) |
 | `SqlTableRef` | Table reference with optional alias |
 | `SqlJoin` | JOIN clause (INNER, LEFT, RIGHT) |
 | `SqlOrderByItem` | ORDER BY column with direction |
-| `SqlCondition` | WHERE condition (comparison, LIKE, IS NULL, IN) |
+| `ISqlCondition` | Interface for WHERE conditions |
+| `SqlComparisonCondition` | Column comparison (=, <>, <, >, etc.) |
+| `SqlLikeCondition` | LIKE pattern matching |
+| `SqlNullCondition` | IS [NOT] NULL condition |
+| `SqlInCondition` | IN (values) condition |
 | `SqlLogicalCondition` | AND/OR logical combination |
 | `SqlLiteral` | Literal value (string, number, null) |
 
@@ -33,8 +38,10 @@ The SQL Transpiler converts a subset of SQL SELECT syntax into Dataverse FetchXM
 | Type | Purpose |
 |------|---------|
 | `SqlToken` | Lexer token (type, value, position) |
+| `SqlTokenType` | Enum of all token types (keywords, operators, literals) |
 | `SqlComment` | Captured comment for preservation |
 | `SqlLexerResult` | Tokens and comments from lexing |
+| `SqlLiteralType` | Enum for literal types (String, Number, Null) |
 | `TranspileResult` | FetchXML string plus virtual column metadata |
 | `VirtualColumnInfo` | Info about virtual *name columns |
 
