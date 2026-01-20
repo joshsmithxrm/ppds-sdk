@@ -229,7 +229,7 @@ public interface ITuiStateCapture<out TState>
 ## Related
 
 - [PPDS.Cli Services: Application Services](../04-cli-services/01-application-services.md) - Service layer consumed by TUI
-- [ADR-0028: TUI Testing](../../docs/adr/0028_TUI_TESTING.md) - Testing strategy
+- [ADR-0028: TUI Testing Strategy](../../docs/adr/0028_TUI_TESTING_STRATEGY.md) - Testing strategy
 - [ADR-0015: Application Service Layer](../../docs/adr/0015_APPLICATION_SERVICE_LAYER.md) - Architecture principles
 
 ## Source Files
