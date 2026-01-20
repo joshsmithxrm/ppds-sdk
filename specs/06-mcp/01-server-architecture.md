@@ -161,7 +161,8 @@ Invalidation disposes affected pools and removes from cache.
 |--------|-------|-------------|
 | `Enabled` | `true` | Pool enabled |
 | `DisableAffinityCookie` | `true` | Better load distribution |
-| `MaxPoolSize` | 52 | Connections per source |
+
+Note: `MaxPoolSize` (52) is set on `ProfileConnectionSource`, not `ConnectionPoolOptions`.
 
 ## Thread Safety
 
@@ -197,10 +198,12 @@ public class QuerySqlTool
         _context = context;
     }
 
-    public async Task<string> ExecuteAsync(string sql, CancellationToken ct)
+    public async Task<QueryResult> ExecuteAsync(string sql, CancellationToken ct)
     {
-        var pool = await _context.GetPoolAsync(ct);
-        // Use pool for query execution
+        // CreateServiceProviderAsync for full DI access (IQueryExecutor, IMetadataService, etc.)
+        await using var sp = await _context.CreateServiceProviderAsync(ct);
+        var queryExecutor = sp.GetRequiredService<IQueryExecutor>();
+        // Execute query...
     }
 }
 ```
