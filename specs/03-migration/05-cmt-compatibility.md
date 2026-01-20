@@ -14,6 +14,7 @@ The CMT Compatibility subsystem provides read/write support for Microsoft's Conf
 | `ICmtDataReader` | Reads CMT data.zip archives |
 | `ICmtSchemaWriter` | Writes CMT-compatible schema.xml files |
 | `ICmtDataWriter` | Writes CMT-compatible data.zip archives |
+| `IUserMappingReader` | Reads user mapping XML files |
 
 ### Classes
 
@@ -23,7 +24,7 @@ The CMT Compatibility subsystem provides read/write support for Microsoft's Conf
 | `CmtDataReader` | Reads ZIP archives into `MigrationData` |
 | `CmtSchemaWriter` | Serializes `MigrationSchema` to XML |
 | `CmtDataWriter` | Creates ZIP archives from `MigrationData` |
-| `UserMappingReader` | Reads user mapping XML files |
+| `UserMappingReader` | Reads user mapping XML into `UserMappingCollection` |
 
 ### DTOs/Models
 
@@ -34,7 +35,9 @@ The CMT Compatibility subsystem provides read/write support for Microsoft's Conf
 | `FieldSchema` | Field definition with type and constraints |
 | `RelationshipSchema` | Relationship definition (1:M or M:M) |
 | `MigrationData` | Complete export with schema, records, and M2M |
-| `ManyToManyRelationshipData` | M2M associations grouped by source |
+| `ManyToManyRelationshipData` | M2M associations grouped by source (defined in `MigrationData.cs`) |
+| `UserMappingCollection` | Collection of user mappings with default fallback |
+| `UserMapping` | Source-to-target user ID mapping |
 
 ## File Format Structure
 
@@ -307,8 +310,9 @@ PPDS extends the standard CMT format with:
 
 ## Related
 
-- [Spec: Export Pipeline](../specs/03-migration/02-export-pipeline.md)
-- [Spec: Import Pipeline](../specs/03-migration/03-import-pipeline.md)
+- [Spec: Export Pipeline](02-export-pipeline.md)
+- [Spec: Import Pipeline](03-import-pipeline.md)
+- [Spec: User Mapping](06-user-mapping.md)
 - [Microsoft CMT Documentation](https://docs.microsoft.com/power-platform/admin/manage-configuration-data)
 
 ## Source Files
@@ -323,13 +327,14 @@ PPDS extends the standard CMT format with:
 | `src/PPDS.Migration/Formats/CmtSchemaWriter.cs` | Schema writer implementation |
 | `src/PPDS.Migration/Formats/ICmtDataWriter.cs` | Data writer interface |
 | `src/PPDS.Migration/Formats/CmtDataWriter.cs` | Data writer implementation |
-| `src/PPDS.Migration/Formats/UserMappingReader.cs` | User mapping XML reader |
+| `src/PPDS.Migration/Formats/UserMappingReader.cs` | User mapping reader (includes `IUserMappingReader`) |
 | `src/PPDS.Migration/Models/MigrationSchema.cs` | Schema model |
 | `src/PPDS.Migration/Models/EntitySchema.cs` | Entity schema model |
 | `src/PPDS.Migration/Models/FieldSchema.cs` | Field schema model |
 | `src/PPDS.Migration/Models/RelationshipSchema.cs` | Relationship schema model |
-| `src/PPDS.Migration/Models/MigrationData.cs` | Export data model |
-| `src/PPDS.Migration/Models/ManyToManyRelationshipData.cs` | M2M data model |
+| `src/PPDS.Migration/Models/MigrationData.cs` | Export data model (includes `ManyToManyRelationshipData`) |
+| `src/PPDS.Migration/Models/UserMapping.cs` | User mapping models (`UserMapping`, `UserMappingCollection`) |
 | `tests/PPDS.Migration.Tests/Formats/CmtSchemaReaderTests.cs` | Schema reader tests |
 | `tests/PPDS.Migration.Tests/Formats/CmtDataReaderTests.cs` | Data reader tests |
+| `tests/PPDS.Migration.Tests/Formats/CmtSchemaWriterTests.cs` | Schema writer tests |
 | `tests/PPDS.Migration.Tests/Formats/CmtDataWriterTests.cs` | Data writer tests |
