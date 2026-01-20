@@ -25,6 +25,8 @@ The Environment Discovery subsystem uses Microsoft's Global Discovery Service to
 | Type | Purpose |
 |------|---------|
 | `DiscoveredEnvironment` | Environment metadata from discovery |
+| `EnvironmentResolutionResult` | Result of resolution attempt (success/failure + environment info) |
+| `ResolutionMethod` | Enum: `DirectConnection` or `GlobalDiscovery` |
 
 ### Exceptions
 
@@ -58,7 +60,7 @@ The Environment Discovery subsystem uses Microsoft's Global Discovery Service to
 
 ### Environment Resolution
 
-The resolver searches environments in priority order:
+The `EnvironmentResolver.Resolve` method searches environments in priority order:
 
 1. **GUID ID**: Exact match on `Id`
 2. **URL**: Exact match on `ApiUrl` or `Url`
@@ -66,6 +68,8 @@ The resolver searches environments in priority order:
 4. **Friendly name**: Exact match on `FriendlyName`
 5. **Partial URL**: Contains match on `ApiUrl` or exact on `UrlName`
 6. **Partial friendly name**: Contains match on `FriendlyName`
+
+The `EnvironmentResolver.ResolveByUrl` method provides URL-only matching by extracting and comparing hostnames.
 
 ### Lifecycle
 
@@ -139,11 +143,11 @@ The resolver searches environments in priority order:
 
 | Cloud | Endpoint |
 |-------|----------|
-| Public | `https://globaldisco.crm.dynamics.com/` |
-| GCC | `https://globaldisco.crm9.dynamics.com/` |
-| GCCHigh | `https://globaldisco.crm.microsoftdynamics.us/` |
-| DoD | `https://globaldisco.crm.appsplatform.us/` |
-| China | `https://globaldisco.crm.dynamics.cn/` |
+| Public | `https://globaldisco.crm.dynamics.com` |
+| UsGov | `https://globaldisco.crm9.dynamics.com` |
+| UsGovHigh | `https://globaldisco.crm.microsoftdynamics.us` |
+| UsGovDod | `https://globaldisco.crm.appsplatform.us` |
+| China | `https://globaldisco.crm.dynamics.cn` |
 
 ## Thread Safety
 
