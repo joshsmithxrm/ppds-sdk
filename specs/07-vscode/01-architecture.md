@@ -294,4 +294,5 @@ Extension is last in order - benefits from stable patterns.
 | `src/PPDS.Cli/Commands/Serve/ServeCommand.cs` | Daemon startup |
 | `src/PPDS.Cli/Commands/Serve/Handlers/RpcMethodHandler.cs` | RPC method implementations |
 | `src/PPDS.Cli/Commands/Serve/Handlers/RpcException.cs` | Error handling |
+| `src/PPDS.Cli/Commands/Serve/Handlers/DaemonDeviceCodeHandler.cs` | Device code flow notifications |
 | `src/PPDS.Cli/Infrastructure/DaemonConnectionPoolManager.cs` | Daemon pool management |
