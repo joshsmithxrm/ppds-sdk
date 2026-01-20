@@ -79,6 +79,20 @@ Returns current authentication profile context.
 | `tokenExpiresOn` | DateTimeOffset? | Token expiration |
 | `tokenStatus` | string? | "valid" or "expired" |
 | `environment` | EnvironmentDetails? | Currently selected environment |
+| `createdAt` | DateTimeOffset? | Profile creation timestamp |
+| `lastUsedAt` | DateTimeOffset? | Last time the profile was used |
+
+**EnvironmentDetails:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `url` | string | Environment API URL |
+| `displayName` | string | Human-readable display name |
+| `uniqueName` | string? | Unique environment name |
+| `environmentId` | string? | Power Platform environment ID |
+| `organizationId` | string? | Dataverse organization ID |
+| `type` | string? | Production, Sandbox, Developer, Trial |
+| `region` | string? | Geographic region |
 
 **Edge Cases:**
 - Token info failure returns null `tokenStatus`/`tokenExpiresOn`
@@ -108,11 +122,15 @@ Lists available Dataverse environments with optional filtering.
 | Field | Type | Description |
 |-------|------|-------------|
 | `id` | Guid | Organization ID |
+| `environmentId` | string? | Power Platform environment ID |
 | `friendlyName` | string | Display name |
 | `uniqueName` | string | Technical name |
 | `apiUrl` | string | API URL (use for selection) |
+| `url` | string? | Web application URL |
 | `type` | string? | Production, Sandbox, Developer, Trial |
 | `state` | string | Enabled or Disabled |
+| `region` | string? | Geographic region |
+| `version` | string? | Dataverse version |
 | `isActive` | bool | Whether currently selected |
 
 ---
@@ -134,6 +152,7 @@ Selects a Dataverse environment; invalidates cached connection pool.
 | `url` | string | Selected environment API URL |
 | `displayName` | string | Display name |
 | `uniqueName` | string? | Technical name |
+| `environmentId` | string? | Power Platform environment ID |
 | `resolutionMethod` | string | Direct, Discovery, or Api |
 
 **Error Scenarios:**
@@ -233,7 +252,12 @@ Retrieves entity schema (all attributes with types).
 | `displayName` | string? | Display name |
 | `attributeType` | string | String, Integer, Money, Lookup, etc. |
 | `isCustomAttribute` | bool | Whether custom |
+| `isPrimaryId` | bool | Whether this is the primary ID attribute |
+| `isPrimaryName` | bool | Whether this is the primary name attribute |
 | `maxLength` | int? | Max length for strings |
+| `minValue` | decimal? | Min value for numeric attributes |
+| `maxValue` | decimal? | Max value for numeric attributes |
+| `precision` | int? | Decimal precision for money/decimal |
 | `targetEntities` | List\<string\>? | Lookup targets |
 | `optionSetValues` | List\<OptionSetValue\>? | Picklist options |
 
@@ -254,7 +278,10 @@ Analyzes entity data with record count and samples.
 | Field | Type | Description |
 |-------|------|-------------|
 | `entityName` | string | Entity logical name |
+| `displayName` | string? | Human-readable display name |
 | `recordCount` | int | Total records |
+| `primaryIdAttribute` | string? | Primary ID attribute name |
+| `primaryNameAttribute` | string? | Primary name attribute name |
 | `attributeCount` | int | Total attributes |
 | `customAttributeCount` | int | Custom attributes |
 | `sampleRecords` | List\<Dict\> | 5 most recent records |
@@ -320,7 +347,9 @@ Lists registered plugin assemblies.
 | `id` | Guid | Assembly ID |
 | `name` | string? | Assembly name |
 | `version` | string? | Version |
+| `publicKeyToken` | string? | Public key token |
 | `isolationMode` | string? | None or Sandbox |
+| `sourceType` | string? | Database, Disk, GAC |
 | `types` | List\<PluginTypeResult\> | Plugin types (up to 100) |
 
 ---
@@ -353,8 +382,10 @@ Lists plugin trace logs with filtering.
 | `id` | Guid | Trace ID (for ppds_plugin_traces_get) |
 | `typeName` | string | Plugin class name |
 | `messageName` | string? | Create, Update, etc. |
+| `primaryEntity` | string? | Primary entity logical name |
 | `mode` | string | Synchronous or Asynchronous |
 | `depth` | int | Execution depth (1 = top) |
+| `createdOn` | DateTime | When the trace was created |
 | `durationMs` | int? | Execution duration |
 | `hasException` | bool | Whether exception occurred |
 | `correlationId` | Guid? | For timeline grouping |
@@ -377,13 +408,22 @@ Gets detailed trace information.
 |-------|------|-------------|
 | `id` | Guid | Trace ID |
 | `typeName` | string | Plugin class name |
+| `messageName` | string? | Create, Update, etc. |
+| `primaryEntity` | string? | Primary entity logical name |
+| `mode` | string | Synchronous or Asynchronous |
+| `operationType` | string | Plugin or WorkflowActivity |
+| `depth` | int | Execution depth (1 = top) |
+| `createdOn` | DateTime | When the trace was created |
 | `durationMs` | int? | Execution duration |
 | `constructorDurationMs` | int? | Constructor duration |
+| `executionStartTime` | DateTime? | Execution start time |
 | `hasException` | bool | Whether exception occurred |
 | `exceptionDetails` | string? | Full exception with stack trace |
-| `messageBlock` | string? | System.Debug output |
+| `messageBlock` | string? | Trace output from plugin |
 | `configuration` | string? | Unsecured config |
 | `correlationId` | Guid? | Correlation ID |
+| `requestId` | Guid? | Request ID |
+| `pluginStepId` | Guid? | Plugin step ID |
 
 **Error Scenarios:**
 
@@ -419,7 +459,12 @@ Builds hierarchical execution timeline for correlated traces.
 |-------|------|-------------|
 | `id` | Guid | Trace ID |
 | `typeName` | string | Plugin class name |
+| `messageName` | string? | Create, Update, etc. |
+| `primaryEntity` | string? | Primary entity logical name |
+| `mode` | string | Synchronous or Asynchronous |
 | `depth` | int | Plugin chain depth |
+| `durationMs` | int? | Execution duration |
+| `hasException` | bool | Whether exception occurred |
 | `hierarchyDepth` | int | Tree depth (0 = root) |
 | `offsetPercent` | double | Position in timeline (0-100) |
 | `widthPercent` | double | Duration as percentage |
@@ -504,9 +549,9 @@ public sealed class MyTool
 
 - **Internal:**
   - `McpToolContext` - Connection pool and service access
-  - `IMetadataService` - Entity metadata
-  - `IQueryExecutor` - Query execution
-  - `IPluginTraceService` - Plugin trace retrieval
+  - `IMetadataService` - Entity metadata (see [Metadata Service](../01-dataverse/05-metadata-service.md))
+  - `IQueryExecutor` - Query execution (see [Query Executor](../01-dataverse/06-query-executor.md))
+  - `IPluginTraceService` - Plugin trace retrieval (`src/PPDS.Dataverse/Services/IPluginTraceService.cs`)
 - **External:**
   - `ModelContextProtocol.Server` - Tool attributes
 

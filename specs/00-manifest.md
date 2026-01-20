@@ -65,7 +65,7 @@ Progress tracking for specification generation. Claude reads this file each iter
 | # | Subsystem | Status | Review Status | Spec File |
 |---|-----------|--------|---------------|-----------|
 | 6.1 | Server Architecture | complete | reviewed | [01-server-architecture.md](06-mcp/01-server-architecture.md) |
-| 6.2 | Tools | complete | | [02-tools.md](06-mcp/02-tools.md) |
+| 6.2 | Tools | complete | reviewed | [02-tools.md](06-mcp/02-tools.md) |
 
 ### 7. VS Code Extension
 
