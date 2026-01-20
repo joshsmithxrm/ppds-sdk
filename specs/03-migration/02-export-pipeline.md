@@ -197,12 +197,12 @@ output.zip
 
 ## Related
 
-- [ADR-0002: Connection Pooling](../docs/adr/002-connection-pooling.md)
-- [ADR-0005: DOP-Based Parallelism](../docs/adr/005-dop-based-parallelism.md)
-- [ADR-0015: Application Service Layer](../docs/adr/015-application-service-layer.md)
-- [ADR-0016: File Format Policy](../docs/adr/016-file-format-policy.md)
-- [Spec: Connection Pooling](../specs/01-dataverse/01-connection-pooling.md)
-- [Spec: Dependency Analysis](../specs/03-migration/01-dependency-analysis.md)
+- [ADR-0002: Multi Connection Pooling](../../docs/adr/0002_MULTI_CONNECTION_POOLING.md)
+- [ADR-0005: DOP-Based Parallelism](../../docs/adr/0005_DOP_BASED_PARALLELISM.md)
+- [ADR-0015: Application Service Layer](../../docs/adr/0015_APPLICATION_SERVICE_LAYER.md)
+- [ADR-0016: File Format Policy](../../docs/adr/0016_FILE_FORMAT_POLICY.md)
+- [Spec: Connection Pooling](../01-dataverse/01-connection-pooling.md)
+- [Spec: Dependency Analysis](01-dependency-analysis.md)
 
 ## Source Files
 
@@ -211,17 +211,20 @@ output.zip
 | `src/PPDS.Migration/Export/IExporter.cs` | Main export interface |
 | `src/PPDS.Migration/Export/ParallelExporter.cs` | Parallel export implementation |
 | `src/PPDS.Migration/Export/ExportOptions.cs` | Export configuration |
-| `src/PPDS.Migration/Export/ExportResult.cs` | Export result models |
+| `src/PPDS.Migration/Export/ExportResult.cs` | Export result models (`ExportResult`, `EntityExportResult`) |
+| `src/PPDS.Migration/Formats/ICmtSchemaReader.cs` | Schema reader interface |
 | `src/PPDS.Migration/Formats/CmtSchemaReader.cs` | Schema XML parser |
+| `src/PPDS.Migration/Formats/ICmtDataWriter.cs` | Data writer interface |
 | `src/PPDS.Migration/Formats/CmtDataWriter.cs` | ZIP/XML data writer |
+| `src/PPDS.Migration/Schema/ISchemaGenerator.cs` | Schema generator interface |
 | `src/PPDS.Migration/Schema/DataverseSchemaGenerator.cs` | Schema generation from metadata |
+| `src/PPDS.Migration/Schema/SchemaGeneratorOptions.cs` | Schema generation configuration |
 | `src/PPDS.Migration/Models/MigrationSchema.cs` | Schema model |
 | `src/PPDS.Migration/Models/EntitySchema.cs` | Entity schema model |
 | `src/PPDS.Migration/Models/FieldSchema.cs` | Field schema model |
 | `src/PPDS.Migration/Models/RelationshipSchema.cs` | Relationship schema model |
-| `src/PPDS.Migration/Models/MigrationData.cs` | Complete export data model |
-| `src/PPDS.Migration/Models/ManyToManyRelationshipData.cs` | M2M association model |
-| `src/PPDS.Migration/Progress/MigrationError.cs` | Error tracking model |
+| `src/PPDS.Migration/Models/MigrationData.cs` | Export data model (includes `ManyToManyRelationshipData`) |
+| `src/PPDS.Migration/Progress/MigrationResult.cs` | Result model (includes `MigrationError`) |
 | `src/PPDS.Migration/DependencyInjection/ServiceCollectionExtensions.cs` | DI registration |
 | `src/PPDS.Cli/Commands/Data/ExportCommand.cs` | CLI command |
 | `tests/PPDS.Migration.Tests/Export/ExportOptionsTests.cs` | Options unit tests |
