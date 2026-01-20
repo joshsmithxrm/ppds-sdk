@@ -35,8 +35,13 @@ Each TUI component has a corresponding state record for testing:
 | `AboutDialog` | `AboutDialogState` | Title, ProductName, Version, GitHubUrl |
 | `KeyboardShortcutsDialog` | `KeyboardShortcutsDialogState` | Shortcuts, ShortcutCount |
 | `PreAuthenticationDialog` | `PreAuthenticationDialogState` | AvailableOptions, SelectedOption |
+| `ReAuthenticationDialog` | `ReAuthenticationDialogState` | Title, ErrorMessage, ShouldReauthenticate |
 | `ProfileSelectorDialog` | `ProfileSelectorDialogState` | Profiles, SelectedIndex |
+| `ProfileCreationDialog` | `ProfileCreationDialogState` | ProfileName, SelectedAuthMethod, CanCreate |
+| `ProfileDetailsDialog` | `ProfileDetailsDialogState` | ProfileName, AuthMethod, EnvironmentUrl, IsActive |
+| `ClearAllProfilesDialog` | `ClearAllProfilesDialogState` | WarningMessage, ProfileCount |
 | `EnvironmentSelectorDialog` | `EnvironmentSelectorDialogState` | Environments, SelectedIndex |
+| `EnvironmentDetailsDialog` | `EnvironmentDetailsDialogState` | DisplayName, Url, EnvironmentType |
 | `ExportDialog` | `ExportDialogState` | Format, FilePath, IncludeHeaders |
 | `QueryHistoryDialog` | `QueryHistoryDialogState` | Entries, SelectedIndex |
 | `ErrorDetailsDialog` | `ErrorDetailsDialogState` | Errors, DebugLogContent |
@@ -268,6 +273,11 @@ public void AboutDialogState_RecordEquality_WorksCorrectly()
 | `src/PPDS.Cli/Tui/Testing/States/*.cs` | State record types |
 | `src/PPDS.Cli/Infrastructure/IServiceProviderFactory.cs` | DI abstraction |
 | `src/PPDS.Cli/Infrastructure/ProfileBasedServiceProviderFactory.cs` | Production factory |
+| `tests/PPDS.Cli.Tests/Mocks/MockServiceProviderFactory.cs` | Test mock that returns ServiceProvider with fakes |
+| `tests/PPDS.Cli.Tests/Mocks/FakeSqlQueryService.cs` | Configurable query result stub |
+| `tests/PPDS.Cli.Tests/Mocks/FakeQueryHistoryService.cs` | In-memory history storage |
+| `tests/PPDS.Cli.Tests/Mocks/FakeExportService.cs` | Export operation tracking |
+| `tests/PPDS.Cli.Tests/Mocks/TempProfileStore.cs` | Isolated ProfileStore with temp directory |
 | `tests/PPDS.Cli.Tests/Tui/Dialogs/DialogStateCaptureTests.cs` | Dialog state tests |
 | `tests/PPDS.Cli.Tests/Tui/Screens/ITuiScreenContractTests.cs` | Interface contract tests |
 | `tests/PPDS.Cli.Tests/Tui/InteractiveSessionTests.cs` | Session lifecycle tests |
