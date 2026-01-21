@@ -18,7 +18,7 @@ PPDS already has a comprehensive `specs/IMPLEMENTATION_PLAN.md` with 11 systems 
 | 4 | cli.md | src/PPDS.Cli/Commands/ | P2 | Complete |
 | 5 | application-services.md | src/PPDS.Cli/Services/ | P2 | Complete |
 | 6 | migration.md | src/PPDS.Migration/ | P3 | Complete |
-| 7 | tui.md | src/PPDS.Cli/Tui/ | P3 | Pending |
+| 7 | tui.md | src/PPDS.Cli/Tui/ | P3 | Complete |
 | 8 | error-handling.md | src/PPDS.Cli/Infrastructure/ | P4 | Pending |
 | 9 | mcp.md | src/PPDS.Mcp/ | P4 | Pending |
 | 10 | testing.md | tests/ | P5 | Pending |
