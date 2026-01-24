@@ -37,7 +37,7 @@
     - Priority: P1
     - Key interfaces: IBulkOperationExecutor
 
-- [ ] **4. Generate spec: authentication.md** <!-- id: spec-auth -->
+- [x] **4. Generate spec: authentication.md** <!-- id: spec-auth -->
     - Source: src/PPDS.Auth/ (all subdirectories)
     - Priority: P1
     - Key interfaces: ICredentialProvider, ISecureCredentialStore, IPowerPlatformTokenProvider, IGlobalDiscoveryService
