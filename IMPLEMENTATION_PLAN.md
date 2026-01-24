@@ -22,7 +22,7 @@
 
 ### Spec Generation Order
 
-- [ ] **1. Generate spec: architecture.md** <!-- id: spec-arch -->
+- [x] **1. Generate spec: architecture.md** <!-- id: spec-arch -->
     - Source: Cross-cutting (PPDS.Cli/Infrastructure/)
     - Priority: P0 (Blocking - all others depend on this)
     - Key interfaces: IOperationProgress, IOutputWriter, PpdsException, ErrorCodes
