@@ -32,7 +32,7 @@
     - Priority: P0 (Core infrastructure)
     - Key interfaces: IDataverseConnectionPool, IPooledClient, IConnectionSource, IThrottleTracker
 
-- [ ] **3. Generate spec: bulk-operations.md** <!-- id: spec-bulk -->
+- [x] **3. Generate spec: bulk-operations.md** <!-- id: spec-bulk -->
     - Source: src/PPDS.Dataverse/BulkOperations/
     - Priority: P1
     - Key interfaces: IBulkOperationExecutor
