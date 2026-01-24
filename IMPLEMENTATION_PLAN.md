@@ -42,7 +42,7 @@
     - Priority: P1
     - Key interfaces: ICredentialProvider, ISecureCredentialStore, IPowerPlatformTokenProvider, IGlobalDiscoveryService
 
-- [ ] **5. Generate spec: migration.md** <!-- id: spec-migration -->
+- [x] **5. Generate spec: migration.md** <!-- id: spec-migration -->
     - Source: src/PPDS.Migration/ (all subdirectories)
     - Priority: P1
     - Key interfaces: IImporter, IExporter, IDependencyGraphBuilder, IExecutionPlanBuilder, CMT format interfaces
