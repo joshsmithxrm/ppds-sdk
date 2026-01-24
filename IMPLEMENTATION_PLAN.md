@@ -62,7 +62,7 @@
     - Priority: P2
     - Key patterns: Command groups, output formatting, GlobalOptions
 
-- [ ] **9. Generate spec: tui.md** <!-- id: spec-tui -->
+- [x] **9. Generate spec: tui.md** <!-- id: spec-tui -->
     - Source: src/PPDS.Cli/Tui/
     - Priority: P2
     - Key interfaces: ITuiScreen, ITuiThemeService, ITuiErrorService, ITuiStateCapture
