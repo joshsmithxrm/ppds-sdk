@@ -57,7 +57,7 @@
     - Priority: P2
     - Key interfaces: ISolutionService, IPluginTraceService, IFlowService, IRoleService, IUserService, +4 more
 
-- [ ] **8. Generate spec: cli.md** <!-- id: spec-cli -->
+- [x] **8. Generate spec: cli.md** <!-- id: spec-cli -->
     - Source: src/PPDS.Cli/Commands/, Infrastructure/Output/
     - Priority: P2
     - Key patterns: Command groups, output formatting, GlobalOptions
