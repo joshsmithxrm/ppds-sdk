@@ -2,6 +2,7 @@ using PPDS.Auth;
 using PPDS.Auth.Credentials;
 using PPDS.Auth.Profiles;
 using PPDS.Cli.Tui.Infrastructure;
+using Maestro.TerminalGui;
 using Terminal.Gui;
 
 namespace PPDS.Cli.Tui;
@@ -109,7 +110,9 @@ internal sealed class PpdsApplication : IDisposable
         Console.Out.Write("\x1b[2 q\x1b]12;black\x07");
         Console.Out.Flush();
 
-        Application.Init();
+        // Initialize Maestro (wraps Application.Init)
+        using var maestro = MaestroApplication.Create();
+        maestro.Init();
 
         // Wire up global key interception via HotkeyRegistry
         // This intercepts ALL keys before any view processes them

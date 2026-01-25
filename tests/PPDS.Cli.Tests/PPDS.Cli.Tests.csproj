@@ -30,6 +30,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\PPDS.Cli\PPDS.Cli.csproj" />
+    <ProjectReference Include="..\..\..\..\maestro\src\Maestro.TerminalGui.V1\Maestro.TerminalGui.V1.csproj" />
   </ItemGroup>
 
 </Project>
