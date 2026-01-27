@@ -27,7 +27,7 @@
     - Priority: P1 (declared in README but missing)
     - Content: Plugin attributes, enums, extraction, registration workflow
 
-- [ ] **Generate spec: analyzers.md** <!-- id: spec-analyzers -->
+- [x] **Generate spec: analyzers.md** <!-- id: spec-analyzers -->
     - Source: `src/PPDS.Analyzers/`
     - Priority: P1 (declared in README but missing)
     - Content: Roslyn analyzer rules, diagnostic codes (PPDS001-PPDS013)
