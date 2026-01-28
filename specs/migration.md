@@ -2,7 +2,7 @@
 
 **Status:** Implemented
 **Version:** 1.0
-**Last Updated:** 2026-01-23
+**Last Updated:** 2026-01-28
 **Code:** [src/PPDS.Migration/](../src/PPDS.Migration/)
 
 ---
@@ -79,6 +79,7 @@ The migration system provides high-performance data export and import between Da
 | `BulkOperationProber` | Detects per-entity bulk API support |
 | `CmtDataReader/Writer` | CMT format serialization |
 | `CmtSchemaReader/Writer` | CMT schema XML handling |
+| `PluginStepManager` | Disable/enable plugin steps during import |
 
 ### Dependencies
 
@@ -237,8 +238,27 @@ public interface IProgressReporter
     void Report(ProgressEventArgs args);
     void Complete(MigrationResult result);
     void Error(Exception exception, string? context = null);
+    void Reset();
 }
 ```
+
+### IPluginStepManager
+
+Manages plugin step disabling/enabling during import for entities with `disableplugins=true` ([`Import/PluginStepManager.cs:176-200`](../src/PPDS.Migration/Import/PluginStepManager.cs#L176-L200)).
+
+```csharp
+public interface IPluginStepManager
+{
+    Task<IReadOnlyList<Guid>> GetActivePluginStepsAsync(
+        IEnumerable<int> objectTypeCodes, CancellationToken cancellationToken = default);
+    Task DisablePluginStepsAsync(
+        IEnumerable<Guid> stepIds, CancellationToken cancellationToken = default);
+    Task EnablePluginStepsAsync(
+        IEnumerable<Guid> stepIds, CancellationToken cancellationToken = default);
+}
+```
+
+Used by `TieredImporter` when `RespectDisablePluginsSetting=true` and schema entities have `disableplugins="true"`. Steps are re-enabled in a `finally` block after import completes.
 
 ### Usage Pattern
 
@@ -518,7 +538,7 @@ public class MyPhaseProcessor : IImportPhaseProcessor
 | Setting | Type | Required | Default | Description |
 |---------|------|----------|---------|-------------|
 | `DegreeOfParallelism` | int | No | CPU × 2 | Entity-level parallelism |
-| `FetchXmlPageSize` | int | No | 5000 | Records per FetchXML page |
+| `PageSize` | int | No | 5000 | Records per FetchXML page |
 | `ProgressInterval` | int | No | 100 | Report progress every N records |
 
 ### ImportOptions
@@ -536,6 +556,9 @@ public class MyPhaseProcessor : IImportPhaseProcessor
 | `UserMappings` | collection | No | null | Source→target user mappings |
 | `CurrentUserId` | Guid? | No | null | Fallback for unmapped users |
 | `RespectDisablePluginsSetting` | bool | No | true | Honor schema `disableplugins` |
+| `SuppressDuplicateDetection` | bool | No | false | Suppress duplicate detection rules |
+| `ErrorCallback` | Action\<MigrationError\>? | No | null | Real-time error streaming (thread-safe) |
+| `OutputManager` | ImportOutputManager? | No | null | Checkpoint logging for structured progress |
 
 ### SchemaGeneratorOptions
 
