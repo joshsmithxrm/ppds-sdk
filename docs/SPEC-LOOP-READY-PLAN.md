@@ -54,11 +54,36 @@ Four areas verified. Three specs updated, one noted as future work.
 
 ---
 
-## Phase 3: Write UI Specs — FUTURE (Human Gate)
+## Phase 3: Write UI Specs — COMPLETE
 
-Design session in plan mode. Write new specs with `Status: Draft`, `Code: None` for TUI screens/dialogs that consume backend services. Each UI spec references the backend spec it depends on.
+5 TUI screen specs created with `Status: Draft`, `Code: None`. Each references the backend specs it depends on.
 
-This is creative/architectural work — decide which screens to build, what workflows they support, how they compose services. Human reviews and approves before ralph builds.
+### 3a. Plugin Traces Screen — COMPLETE
+- `tui-plugin-traces.md` (540 lines): PluginTraceScreen + 3 dialogs (detail, filter, timeline)
+- Depends on: `plugin-traces.md` (IPluginTraceService, TimelineHierarchyBuilder)
+- Workflows: browse/filter traces, inspect detail, view timeline hierarchy, bulk delete
+
+### 3b. Plugin Registration Screen — COMPLETE
+- `tui-plugin-registration.md` (523 lines): TreeView hierarchy browser + ConfirmDestructiveActionDialog
+- Depends on: `plugins.md` (IPluginRegistrationService, 37 methods)
+- Workflows: browse Package/Assembly/Type/Step/Image hierarchy, toggle step state, unregister with cascade preview
+
+### 3c. Solutions Screen — COMPLETE
+- `tui-solutions.md` (366 lines): SolutionScreen with component inspection
+- Depends on: `dataverse-services.md` (ISolutionService, IImportJobService)
+- Workflows: browse solutions, view components, export, monitor imports
+
+### 3d. Environment Dashboard — COMPLETE
+- `tui-environment-dashboard.md` (511 lines): Tabbed dashboard (Users, Flows, EnvVars, ConnRefs)
+- Depends on: `dataverse-services.md` (5 service interfaces)
+- Workflows: user/role management, flow enable/disable, env var editing, connection reference analysis
+
+### 3e. Data Migration Screen — COMPLETE
+- `tui-migration.md` (588 lines): MigrationScreen + ExecutionPlanPreviewDialog
+- Depends on: `migration.md`, `bulk-operations.md`
+- Workflows: configure export/import, preview execution plan, real-time progress with rate/ETA
+
+**Spot-check before writing:** All Phase 2 member counts verified (IPluginRegistrationService=37, IPluginTraceService=12, PluginTraceFilter=16, ImportOptions=14).
 
 ---
 
@@ -74,7 +99,8 @@ This is creative/architectural work — decide which screens to build, what work
 
 | File | Purpose |
 |------|---------|
-| `ppds/specs/*.md` | 13 specs (12 accuracy-fixed in Phase 1, 1 new in Phase 2) |
+| `ppds/specs/*.md` | 18 specs (13 backend + 5 UI) |
+| `ppds/specs/tui-*.md` | 5 UI specs (Phase 3) |
 | `ppds/specs/SPEC-TEMPLATE.md` | Template for new specs |
 | `ppds/docs/SPEC-LOOP-READY-PLAN.md` | This plan |
 | `vault/Methodology/Specs/ADDENDUM-SPEC-VERIFICATION.md` | Methodology fix for spec-gen accuracy |
@@ -87,3 +113,4 @@ This is creative/architectural work — decide which screens to build, what work
 - Branch: `feat/spec-system-v2`
 - Phase 1 committed: 8 spec drift fixes (`5ec0297`)
 - Phase 2 committed: migration.md update (`c77e02b`), plugin-traces.md created (`1390ff4`), plugins.md expanded (`e5e36d2`)
+- Phase 3 committed: 5 UI specs (`6012086`..`54eb6ab`)
