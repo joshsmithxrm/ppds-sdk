@@ -497,9 +497,9 @@ internal sealed class SqlQueryScreen : ITuiScreen, ITuiStateCapture<SqlQueryScre
             });
 
             // Save to history (fire-and-forget)
-#pragma warning disable PPDS013 // Fire-and-forget - history save shouldn't block UI
-            _ = SaveToHistoryAsync(sql, result.Result.Count, result.Result.ExecutionTimeMs);
-#pragma warning restore PPDS013
+            _errorService.FireAndForget(
+                SaveToHistoryAsync(sql, result.Result.Count, result.Result.ExecutionTimeMs),
+                "SaveHistory");
         }
         catch (DataverseAuthenticationException authEx) when (authEx.RequiresReauthentication)
         {
@@ -719,20 +719,7 @@ internal sealed class SqlQueryScreen : ITuiScreen, ITuiStateCapture<SqlQueryScre
             return;
         }
 
-#pragma warning disable PPDS013 // Fire-and-forget with proper error handling
-        _ = ShowFetchXmlDialogAsync(sql).ContinueWith(t =>
-        {
-            if (t.IsFaulted)
-            {
-                Application.MainLoop?.Invoke(() =>
-                {
-                    MessageBox.ErrorQuery("FetchXML Error",
-                        t.Exception?.InnerException?.Message ?? "Failed to transpile SQL",
-                        "OK");
-                });
-            }
-        }, TaskScheduler.Default);
-#pragma warning restore PPDS013
+        _errorService.FireAndForget(ShowFetchXmlDialogAsync(sql), "ShowFetchXml");
     }
 
     private async Task ShowFetchXmlDialogAsync(string sql)

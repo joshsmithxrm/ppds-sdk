@@ -427,15 +427,7 @@ internal sealed class TuiShell : Window, ITuiStateCapture<TuiShellState>
 
         if (dialog.SelectedProfile != null)
         {
-#pragma warning disable PPDS013 // Fire-and-forget with explicit error handling
-            _ = SetActiveProfileAsync(dialog.SelectedProfile).ContinueWith(t =>
-            {
-                if (t.IsFaulted)
-                {
-                    _errorService.ReportError("Failed to switch profile", t.Exception, "SwitchProfile");
-                }
-            }, TaskScheduler.Default);
-#pragma warning restore PPDS013
+            _errorService.FireAndForget(SetActiveProfileAsync(dialog.SelectedProfile), "SwitchProfile");
         }
         else if (dialog.CreateNewSelected)
         {
@@ -467,15 +459,7 @@ internal sealed class TuiShell : Window, ITuiStateCapture<TuiShellState>
 
             if (url != null)
             {
-#pragma warning disable PPDS013 // Fire-and-forget with explicit error handling
-                _ = SetEnvironmentAsync(url, name).ContinueWith(t =>
-                {
-                    if (t.IsFaulted)
-                    {
-                        _errorService.ReportError("Failed to set environment", t.Exception, "SetEnvironment");
-                    }
-                }, TaskScheduler.Default);
-#pragma warning restore PPDS013
+                _errorService.FireAndForget(SetEnvironmentAsync(url, name), "SetEnvironment");
             }
         }
     }
@@ -493,15 +477,9 @@ internal sealed class TuiShell : Window, ITuiStateCapture<TuiShellState>
             var envUrl = dialog.SelectedEnvironmentUrl ?? dialog.CreatedProfile.EnvironmentUrl;
             var envName = dialog.SelectedEnvironmentName ?? dialog.CreatedProfile.EnvironmentName;
 
-#pragma warning disable PPDS013 // Fire-and-forget with explicit error handling
-            _ = SetActiveProfileWithEnvironmentAsync(dialog.CreatedProfile, envUrl, envName).ContinueWith(t =>
-            {
-                if (t.IsFaulted)
-                {
-                    _errorService.ReportError("Failed to switch to new profile", t.Exception, "ProfileCreation");
-                }
-            }, TaskScheduler.Default);
-#pragma warning restore PPDS013
+            _errorService.FireAndForget(
+                SetActiveProfileWithEnvironmentAsync(dialog.CreatedProfile, envUrl, envName),
+                "ProfileCreation");
         }
     }
 
@@ -552,8 +530,7 @@ internal sealed class TuiShell : Window, ITuiStateCapture<TuiShellState>
 
     private void RefreshProfileState()
     {
-#pragma warning disable PPDS013 // Fire-and-forget with explicit error handling
-        _ = Task.Run(async () =>
+        _errorService.FireAndForget(Task.Run(async () =>
         {
             var profileService = _session.GetProfileService();
             var profiles = await profileService.GetProfilesAsync();
@@ -573,21 +550,12 @@ internal sealed class TuiShell : Window, ITuiStateCapture<TuiShellState>
                 }
                 _statusBar.Refresh();
             });
-        });
-#pragma warning restore PPDS013
+        }), "RefreshProfileState");
     }
 
     private void LoadProfileInfoAsync()
     {
-#pragma warning disable PPDS013 // Fire-and-forget with explicit error handling
-        _ = LoadProfileInfoInternalAsync().ContinueWith(t =>
-        {
-            if (t.IsFaulted && t.Exception != null)
-            {
-                _errorService.ReportError("Failed to load profile info", t.Exception, "LoadProfileInfo");
-            }
-        }, TaskScheduler.Default);
-#pragma warning restore PPDS013
+        _errorService.FireAndForget(LoadProfileInfoInternalAsync(), "LoadProfileInfo");
     }
 
     private async Task LoadProfileInfoInternalAsync()
