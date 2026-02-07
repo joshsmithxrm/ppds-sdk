@@ -383,12 +383,6 @@ internal sealed class SqlQueryScreen : ITuiScreen, ITuiStateCapture<SqlQueryScre
                     }
                     break;
 
-                case Key.CtrlMask | Key.W:
-                    // Ctrl+W always closes the screen immediately
-                    CloseRequested?.Invoke();
-                    e.Handled = true;
-                    break;
-
                 case Key k when k == (Key)'q' || k == (Key)'Q':
                     // Q closes when not typing in query input (vim-style)
                     if (!_queryInput.HasFocus)
@@ -497,9 +491,9 @@ internal sealed class SqlQueryScreen : ITuiScreen, ITuiStateCapture<SqlQueryScre
             });
 
             // Save to history (fire-and-forget)
-#pragma warning disable PPDS013 // Fire-and-forget - history save shouldn't block UI
-            _ = SaveToHistoryAsync(sql, result.Result.Count, result.Result.ExecutionTimeMs);
-#pragma warning restore PPDS013
+            _errorService.FireAndForget(
+                SaveToHistoryAsync(sql, result.Result.Count, result.Result.ExecutionTimeMs),
+                "SaveHistory");
         }
         catch (DataverseAuthenticationException authEx) when (authEx.RequiresReauthentication)
         {
@@ -678,7 +672,7 @@ internal sealed class SqlQueryScreen : ITuiScreen, ITuiStateCapture<SqlQueryScre
         }
 
         var columnTypes = _resultsTable.GetColumnTypes();
-        var exportService = new ExportService(Microsoft.Extensions.Logging.Abstractions.NullLogger<ExportService>.Instance);
+        var exportService = _session.GetExportService();
         var dialog = new ExportDialog(exportService, dataTable, columnTypes);
 
         Application.Run(dialog);
@@ -719,20 +713,7 @@ internal sealed class SqlQueryScreen : ITuiScreen, ITuiStateCapture<SqlQueryScre
             return;
         }
 
-#pragma warning disable PPDS013 // Fire-and-forget with proper error handling
-        _ = ShowFetchXmlDialogAsync(sql).ContinueWith(t =>
-        {
-            if (t.IsFaulted)
-            {
-                Application.MainLoop?.Invoke(() =>
-                {
-                    MessageBox.ErrorQuery("FetchXML Error",
-                        t.Exception?.InnerException?.Message ?? "Failed to transpile SQL",
-                        "OK");
-                });
-            }
-        }, TaskScheduler.Default);
-#pragma warning restore PPDS013
+        _errorService.FireAndForget(ShowFetchXmlDialogAsync(sql), "ShowFetchXml");
     }
 
     private async Task ShowFetchXmlDialogAsync(string sql)
