@@ -70,9 +70,6 @@ internal sealed class TabManager : ITuiStateCapture<TabManagerState>, IDisposabl
         {
             _activeIndex--;
         }
-        // If activeIndex == index and tabs remain, it now points to the next tab (which slid down)
-        // or the previous if we were at the end. Clamp just in case.
-        _activeIndex = Math.Min(_activeIndex, _tabs.Count - 1);
 
         TabsChanged?.Invoke();
         ActiveTabChanged?.Invoke();

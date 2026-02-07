@@ -13,7 +13,11 @@ internal sealed class TabBar : View, ITuiStateCapture<TabBarState>
 {
     private readonly TabManager _tabManager;
     private readonly List<Label> _tabLabels = new();
+    private Label? _addButton;
     private bool _isVisible;
+
+    /// <summary>Raised when the [+] button is clicked to request a new tab.</summary>
+    public event Action? NewTabClicked;
 
     public TabBar(TabManager tabManager)
     {
@@ -35,12 +39,17 @@ internal sealed class TabBar : View, ITuiStateCapture<TabBarState>
 
         if (Application.Driver != null)
         {
-            // Clear existing labels
+            // Clear existing labels and [+] button
             foreach (var label in _tabLabels)
             {
                 Remove(label);
             }
             _tabLabels.Clear();
+            if (_addButton != null)
+            {
+                Remove(_addButton);
+                _addButton = null;
+            }
 
             Visible = _isVisible;
 
@@ -74,8 +83,8 @@ internal sealed class TabBar : View, ITuiStateCapture<TabBarState>
                 xPos += text.Length;
             }
 
-            // Add [+] button
-            var addLabel = new Label(" [+] ")
+            // Add [+] button (separate from tab labels)
+            _addButton = new Label(" [+] ")
             {
                 X = xPos,
                 Y = 0,
@@ -83,8 +92,8 @@ internal sealed class TabBar : View, ITuiStateCapture<TabBarState>
                 Height = 1,
                 ColorScheme = TuiColorPalette.MenuBar
             };
-            _tabLabels.Add(addLabel);
-            Add(addLabel);
+            _addButton.MouseClick += (_) => NewTabClicked?.Invoke();
+            Add(_addButton);
 
             SetNeedsDisplay();
         }

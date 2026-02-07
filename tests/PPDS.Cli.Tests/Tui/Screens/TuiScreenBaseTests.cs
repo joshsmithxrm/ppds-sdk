@@ -29,7 +29,7 @@ public sealed class TuiScreenBaseTests : IDisposable
     [Fact]
     public void Constructor_SetsSessionAndErrorService()
     {
-        var screen = new StubScreen(_session);
+        using var screen = new StubScreen(_session);
         Assert.NotNull(screen.Content);
         Assert.Equal("Stub", screen.Title);
     }
@@ -37,14 +37,14 @@ public sealed class TuiScreenBaseTests : IDisposable
     [Fact]
     public void Constructor_BindsEnvironmentUrl()
     {
-        var screen = new StubScreen(_session, "https://dev.crm.dynamics.com");
+        using var screen = new StubScreen(_session, "https://dev.crm.dynamics.com");
         Assert.Equal("https://dev.crm.dynamics.com", screen.EnvironmentUrl);
     }
 
     [Fact]
     public void Dispose_CancelsCancellationToken()
     {
-        var screen = new StubScreen(_session);
+        using var screen = new StubScreen(_session);
         var token = screen.ExposedCancellationToken;
         Assert.False(token.IsCancellationRequested);
 
@@ -56,7 +56,7 @@ public sealed class TuiScreenBaseTests : IDisposable
     [Fact]
     public void OnActivated_RegistersHotkeys()
     {
-        var screen = new StubScreen(_session);
+        using var screen = new StubScreen(_session);
         var registry = new HotkeyRegistry();
 
         screen.OnActivated(registry);
@@ -68,7 +68,7 @@ public sealed class TuiScreenBaseTests : IDisposable
     [Fact]
     public void OnDeactivating_ClearsHotkeys()
     {
-        var screen = new StubScreen(_session);
+        using var screen = new StubScreen(_session);
         var registry = new HotkeyRegistry();
 
         screen.OnActivated(registry);
@@ -81,7 +81,7 @@ public sealed class TuiScreenBaseTests : IDisposable
     [Fact]
     public void Dispose_CallsOnDeactivating()
     {
-        var screen = new StubScreen(_session);
+        using var screen = new StubScreen(_session);
         var registry = new HotkeyRegistry();
         screen.OnActivated(registry);
 
@@ -110,7 +110,7 @@ public sealed class TuiScreenBaseTests : IDisposable
     [Fact]
     public void RequestClose_RaisesCloseRequestedEvent()
     {
-        var screen = new StubScreen(_session);
+        using var screen = new StubScreen(_session);
         var raised = false;
         screen.CloseRequested += () => raised = true;
 
@@ -122,7 +122,7 @@ public sealed class TuiScreenBaseTests : IDisposable
     [Fact]
     public void NotifyMenuChanged_RaisesMenuStateChangedEvent()
     {
-        var screen = new StubScreen(_session);
+        using var screen = new StubScreen(_session);
         var raised = false;
         screen.MenuStateChanged += () => raised = true;
 

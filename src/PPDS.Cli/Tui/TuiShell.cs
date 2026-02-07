@@ -35,7 +35,6 @@ internal sealed class TuiShell : Window, ITuiStateCapture<TuiShellState>
     private ITuiScreen? _currentScreen;
     private View? _mainMenuContent;
     private SplashView? _splashView;
-    private bool _hasError;
     private DateTime _lastMenuClickTime = DateTime.MinValue;
     private const int MenuClickDebounceMs = 150;
 
@@ -71,6 +70,7 @@ internal sealed class TuiShell : Window, ITuiStateCapture<TuiShellState>
 
         // Wire tab manager to swap content when active tab changes
         _tabManager.ActiveTabChanged += OnActiveTabChanged;
+        _tabBar.NewTabClicked += NavigateToSqlQuery;
 
         // Status line for contextual messages (above status bar)
         _statusLine = new TuiStatusLine();
@@ -172,6 +172,12 @@ internal sealed class TuiShell : Window, ITuiStateCapture<TuiShellState>
 
     private void OnActiveTabChanged()
     {
+        var activeTab = _tabManager.ActiveTab;
+
+        // Skip if already showing the correct screen (NavigateTo already activated it)
+        if (activeTab != null && _currentScreen == activeTab.Screen)
+            return;
+
         // Deactivate current screen if any
         if (_currentScreen != null)
         {
@@ -182,7 +188,6 @@ internal sealed class TuiShell : Window, ITuiStateCapture<TuiShellState>
             _currentScreen = null;
         }
 
-        var activeTab = _tabManager.ActiveTab;
         if (activeTab == null)
         {
             // No tabs remain - show main menu
@@ -225,6 +230,9 @@ internal sealed class TuiShell : Window, ITuiStateCapture<TuiShellState>
 
         _splashView = new SplashView();
         _contentArea.Add(_splashView);
+
+        // Start spinner animation (safe — guarded by Application.Driver != null inside)
+        _splashView.StartSpinner();
 
         RebuildMenuBar();
     }
@@ -430,6 +438,19 @@ internal sealed class TuiShell : Window, ITuiStateCapture<TuiShellState>
             HotkeyScope.Global,
             "Next tab",
             () => _tabManager.ActivateNext()));
+
+        // Alternative tab cycling for terminals that don't support Ctrl+Tab
+        _hotkeyRegistrations.Add(_hotkeyRegistry.Register(
+            Key.CtrlMask | Key.PageDown,
+            HotkeyScope.Global,
+            "Next tab",
+            () => _tabManager.ActivateNext()));
+
+        _hotkeyRegistrations.Add(_hotkeyRegistry.Register(
+            Key.CtrlMask | Key.PageUp,
+            HotkeyScope.Global,
+            "Previous tab",
+            () => _tabManager.ActivatePrevious()));
     }
 
     private void NavigateToSqlQuery()
@@ -622,7 +643,6 @@ internal sealed class TuiShell : Window, ITuiStateCapture<TuiShellState>
     {
         Application.MainLoop?.Invoke(() =>
         {
-            _hasError = true;
             _statusLine.SetMessage($"Error: {error.BriefSummary} (F12 for details)");
         });
     }
@@ -632,7 +652,6 @@ internal sealed class TuiShell : Window, ITuiStateCapture<TuiShellState>
         using var dialog = new ErrorDetailsDialog(_errorService);
         Application.Run(dialog);
 
-        _hasError = false;
         _statusLine.ClearMessage();
     }
 
@@ -656,7 +675,7 @@ internal sealed class TuiShell : Window, ITuiStateCapture<TuiShellState>
             CurrentScreenType: _currentScreen?.GetType().Name,
             IsMainMenuVisible: _currentScreen == null,
             TabCount: _tabManager.TabCount,
-            HasErrors: _hasError,
+            HasErrors: _errorService.RecentErrors.Count > 0,
             ErrorCount: _errorService.RecentErrors.Count);
     }
 
@@ -680,8 +699,9 @@ internal sealed class TuiShell : Window, ITuiStateCapture<TuiShellState>
                 _currentScreen = null;
             }
 
-            // Unsubscribe from tab manager events before disposing
+            // Unsubscribe from tab events before disposing
             _tabManager.ActiveTabChanged -= OnActiveTabChanged;
+            _tabBar.NewTabClicked -= NavigateToSqlQuery;
             _tabManager.Dispose();
             _tabBar.Dispose();
 

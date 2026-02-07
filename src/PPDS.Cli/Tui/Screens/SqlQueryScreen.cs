@@ -383,12 +383,6 @@ internal sealed class SqlQueryScreen : ITuiScreen, ITuiStateCapture<SqlQueryScre
                     }
                     break;
 
-                case Key.CtrlMask | Key.W:
-                    // Ctrl+W always closes the screen immediately
-                    CloseRequested?.Invoke();
-                    e.Handled = true;
-                    break;
-
                 case Key k when k == (Key)'q' || k == (Key)'Q':
                     // Q closes when not typing in query input (vim-style)
                     if (!_queryInput.HasFocus)
