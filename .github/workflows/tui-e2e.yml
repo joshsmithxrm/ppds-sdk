@@ -56,6 +56,8 @@ jobs:
     - name: Run TUI E2E tests
       working-directory: tests/tui-e2e
       run: npm test
+      env:
+        PPDS_FORCE_TUI: '1'
 
     - name: Upload test results
       uses: actions/upload-artifact@v6
