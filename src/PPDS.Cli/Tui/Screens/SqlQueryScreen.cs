@@ -678,7 +678,7 @@ internal sealed class SqlQueryScreen : ITuiScreen, ITuiStateCapture<SqlQueryScre
         }
 
         var columnTypes = _resultsTable.GetColumnTypes();
-        var exportService = new ExportService(Microsoft.Extensions.Logging.Abstractions.NullLogger<ExportService>.Instance);
+        var exportService = _session.GetExportService();
         var dialog = new ExportDialog(exportService, dataTable, columnTypes);
 
         Application.Run(dialog);

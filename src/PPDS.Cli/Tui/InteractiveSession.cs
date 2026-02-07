@@ -46,6 +46,11 @@ internal sealed class InteractiveSession : IAsyncDisposable
     private bool _disposed;
     private ITuiErrorService? _errorService;
     private IHotkeyRegistry? _hotkeyRegistry;
+    private IProfileService? _profileService;
+    private IEnvironmentService? _environmentService;
+    private ITuiThemeService? _themeService;
+    private IQueryHistoryService? _queryHistoryService;
+    private IExportService? _exportService;
 
     /// <summary>
     /// Event raised when the environment changes (either via initialization or explicit switch).
@@ -459,7 +464,7 @@ internal sealed class InteractiveSession : IAsyncDisposable
     /// <returns>The profile service.</returns>
     public IProfileService GetProfileService()
     {
-        return new ProfileService(_profileStore, NullLogger<ProfileService>.Instance);
+        return _profileService ??= new ProfileService(_profileStore, NullLogger<ProfileService>.Instance);
     }
 
     /// <summary>
@@ -469,7 +474,7 @@ internal sealed class InteractiveSession : IAsyncDisposable
     /// <returns>The environment service.</returns>
     public IEnvironmentService GetEnvironmentService()
     {
-        return new EnvironmentService(_profileStore, NullLogger<EnvironmentService>.Instance);
+        return _environmentService ??= new EnvironmentService(_profileStore, NullLogger<EnvironmentService>.Instance);
     }
 
     /// <summary>
@@ -488,7 +493,7 @@ internal sealed class InteractiveSession : IAsyncDisposable
     /// <returns>The theme service.</returns>
     public ITuiThemeService GetThemeService()
     {
-        return new TuiThemeService();
+        return _themeService ??= new TuiThemeService();
     }
 
     /// <summary>
@@ -518,7 +523,17 @@ internal sealed class InteractiveSession : IAsyncDisposable
     /// <returns>The query history service.</returns>
     public IQueryHistoryService GetQueryHistoryService()
     {
-        return new QueryHistoryService(NullLogger<QueryHistoryService>.Instance);
+        return _queryHistoryService ??= new QueryHistoryService(NullLogger<QueryHistoryService>.Instance);
+    }
+
+    /// <summary>
+    /// Gets the export service for local export operations.
+    /// This service uses local file storage and does not require a Dataverse connection.
+    /// </summary>
+    /// <returns>The export service.</returns>
+    public IExportService GetExportService()
+    {
+        return _exportService ??= new ExportService(NullLogger<ExportService>.Instance);
     }
 
     #endregion
