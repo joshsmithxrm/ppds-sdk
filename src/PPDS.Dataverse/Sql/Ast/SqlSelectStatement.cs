@@ -7,8 +7,11 @@ namespace PPDS.Dataverse.Sql.Ast;
 /// <summary>
 /// Complete SQL SELECT statement AST.
 /// </summary>
-public sealed class SqlSelectStatement
+public sealed class SqlSelectStatement : ISqlStatement
 {
+    /// <inheritdoc />
+    public int SourcePosition { get; }
+
     /// <summary>
     /// The columns in the SELECT clause.
     /// </summary>
@@ -50,6 +53,11 @@ public sealed class SqlSelectStatement
     public IReadOnlyList<SqlColumnRef> GroupBy { get; }
 
     /// <summary>
+    /// The HAVING clause condition, if present.
+    /// </summary>
+    public ISqlCondition? Having { get; }
+
+    /// <summary>
     /// Comments that appear before the SELECT keyword.
     /// </summary>
     public List<string> LeadingComments { get; } = new();
@@ -65,7 +73,9 @@ public sealed class SqlSelectStatement
         IReadOnlyList<SqlOrderByItem>? orderBy = null,
         int? top = null,
         bool distinct = false,
-        IReadOnlyList<SqlColumnRef>? groupBy = null)
+        IReadOnlyList<SqlColumnRef>? groupBy = null,
+        ISqlCondition? having = null,
+        int sourcePosition = 0)
     {
         Columns = columns ?? throw new ArgumentNullException(nameof(columns));
         From = from ?? throw new ArgumentNullException(nameof(from));
@@ -75,6 +85,8 @@ public sealed class SqlSelectStatement
         Top = top;
         Distinct = distinct;
         GroupBy = groupBy ?? Array.Empty<SqlColumnRef>();
+        Having = having;
+        SourcePosition = sourcePosition;
     }
 
     /// <summary>
@@ -145,7 +157,9 @@ public sealed class SqlSelectStatement
             OrderBy,
             top,
             Distinct,
-            GroupBy);
+            GroupBy,
+            Having,
+            SourcePosition);
         newStatement.LeadingComments.AddRange(LeadingComments);
         return newStatement;
     }
@@ -173,7 +187,9 @@ public sealed class SqlSelectStatement
             OrderBy,
             Top,
             Distinct,
-            GroupBy);
+            GroupBy,
+            Having,
+            SourcePosition);
         newStatement.LeadingComments.AddRange(LeadingComments);
         return newStatement;
     }
@@ -228,7 +244,9 @@ public sealed class SqlSelectStatement
             OrderBy,
             Top,
             Distinct,
-            GroupBy);
+            GroupBy,
+            Having,
+            SourcePosition);
         newStatement.LeadingComments.AddRange(LeadingComments);
         return newStatement;
     }

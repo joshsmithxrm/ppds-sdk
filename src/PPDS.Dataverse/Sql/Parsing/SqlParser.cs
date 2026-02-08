@@ -43,10 +43,24 @@ public sealed class SqlParser
     }
 
     /// <summary>
-    /// Parses SQL text into an AST.
+    /// Parses SQL text into a SELECT statement AST.
     /// </summary>
     /// <exception cref="SqlParseException">If parsing fails.</exception>
     public SqlSelectStatement Parse()
+    {
+        var statement = ParseStatement();
+        if (statement is SqlSelectStatement select)
+        {
+            return select;
+        }
+        throw Error("Expected SELECT statement");
+    }
+
+    /// <summary>
+    /// Parses SQL text into an AST statement (supports all statement types).
+    /// </summary>
+    /// <exception cref="SqlParseException">If parsing fails.</exception>
+    public ISqlStatement ParseStatement()
     {
         _position = 0;
         _commentIndex = 0;
@@ -60,12 +74,21 @@ public sealed class SqlParser
     }
 
     /// <summary>
-    /// Static convenience method to parse SQL.
+    /// Static convenience method to parse SQL into a SELECT statement.
     /// </summary>
     public static SqlSelectStatement Parse(string sql)
     {
         var parser = new SqlParser(sql);
         return parser.Parse();
+    }
+
+    /// <summary>
+    /// Static convenience method to parse SQL into a statement.
+    /// </summary>
+    public static ISqlStatement ParseSql(string sql)
+    {
+        var parser = new SqlParser(sql);
+        return parser.ParseStatement();
     }
 
     #region Leading/Trailing Comments
