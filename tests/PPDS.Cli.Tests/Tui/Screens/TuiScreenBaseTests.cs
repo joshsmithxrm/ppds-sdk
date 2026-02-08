@@ -42,6 +42,35 @@ public sealed class TuiScreenBaseTests : IDisposable
     }
 
     [Fact]
+    public void Constructor_CapturesEnvironmentDisplayName()
+    {
+        // Arrange - set session environment first
+        _session.UpdateDisplayedEnvironment("https://dev.crm.dynamics.com", "Dev Env");
+
+        // Act
+        using var screen = new StubScreen(_session);
+
+        // Assert
+        Assert.Equal("Dev Env", screen.EnvironmentDisplayName);
+    }
+
+    [Fact]
+    public void EnvironmentDisplayName_StaysFrozenAfterSessionChange()
+    {
+        // Arrange - set session environment and create screen
+        _session.UpdateDisplayedEnvironment("https://dev.crm.dynamics.com", "Dev Env");
+        using var screen = new StubScreen(_session);
+
+        // Act - change session environment after screen creation
+        _session.UpdateDisplayedEnvironment("https://prod.crm.dynamics.com", "Prod Env");
+
+        // Assert - screen still has original value
+        Assert.Equal("Dev Env", screen.EnvironmentDisplayName);
+        // Session has updated value
+        Assert.Equal("Prod Env", _session.CurrentEnvironmentDisplayName);
+    }
+
+    [Fact]
     public void Dispose_CancelsCancellationToken()
     {
         using var screen = new StubScreen(_session);

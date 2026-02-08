@@ -1,4 +1,5 @@
 using PPDS.Cli.Tui.Infrastructure;
+using Terminal.Gui;
 using Xunit;
 
 namespace PPDS.Cli.Tests.Tui.Infrastructure;
@@ -10,6 +11,7 @@ namespace PPDS.Cli.Tests.Tui.Infrastructure;
 /// These tests verify color scheme definitions follow the blue background rule.
 /// Tests can run without Terminal.Gui context since ColorScheme creation uses fallback.
 /// </remarks>
+[Trait("Category", "TuiUnit")]
 public class TuiColorPaletteTests
 {
     /// <summary>
@@ -61,4 +63,99 @@ public class TuiColorPaletteTests
             Assert.NotNull(scheme);
         }
     }
+
+    #region GetTabScheme Tests
+
+    [Fact]
+    public void GetTabScheme_ActiveTab_ReturnsTabActiveScheme()
+    {
+        // Act - any environment type with isActive=true
+        var scheme = TuiColorPalette.GetTabScheme(EnvironmentType.Production, isActive: true);
+
+        // Assert - should match TabActive (white on dark gray)
+        Assert.Equal(Color.White, scheme.Normal.Foreground);
+        Assert.Equal(Color.DarkGray, scheme.Normal.Background);
+    }
+
+    [Theory]
+    [InlineData(EnvironmentType.Production)]
+    [InlineData(EnvironmentType.Sandbox)]
+    [InlineData(EnvironmentType.Development)]
+    [InlineData(EnvironmentType.Trial)]
+    [InlineData(EnvironmentType.Unknown)]
+    public void GetTabScheme_ActiveTab_ReturnsSameSchemeRegardlessOfType(EnvironmentType envType)
+    {
+        var scheme = TuiColorPalette.GetTabScheme(envType, isActive: true);
+        var expected = TuiColorPalette.TabActive;
+
+        Assert.Equal(expected.Normal.Foreground, scheme.Normal.Foreground);
+        Assert.Equal(expected.Normal.Background, scheme.Normal.Background);
+    }
+
+    [Fact]
+    public void GetTabScheme_InactiveProduction_HasRedForeground()
+    {
+        var scheme = TuiColorPalette.GetTabScheme(EnvironmentType.Production, isActive: false);
+        Assert.Equal(Color.Red, scheme.Normal.Foreground);
+    }
+
+    [Fact]
+    public void GetTabScheme_InactiveSandbox_HasBrownForeground()
+    {
+        var scheme = TuiColorPalette.GetTabScheme(EnvironmentType.Sandbox, isActive: false);
+        Assert.Equal(Color.Brown, scheme.Normal.Foreground);
+    }
+
+    [Fact]
+    public void GetTabScheme_InactiveDevelopment_HasGreenForeground()
+    {
+        var scheme = TuiColorPalette.GetTabScheme(EnvironmentType.Development, isActive: false);
+        Assert.Equal(Color.Green, scheme.Normal.Foreground);
+    }
+
+    [Fact]
+    public void GetTabScheme_InactiveTrial_HasCyanForeground()
+    {
+        var scheme = TuiColorPalette.GetTabScheme(EnvironmentType.Trial, isActive: false);
+        Assert.Equal(Color.Cyan, scheme.Normal.Foreground);
+    }
+
+    [Fact]
+    public void GetTabScheme_InactiveUnknown_HasGrayForeground()
+    {
+        var scheme = TuiColorPalette.GetTabScheme(EnvironmentType.Unknown, isActive: false);
+        Assert.Equal(Color.Gray, scheme.Normal.Foreground);
+    }
+
+    [Theory]
+    [InlineData(EnvironmentType.Production)]
+    [InlineData(EnvironmentType.Sandbox)]
+    [InlineData(EnvironmentType.Development)]
+    [InlineData(EnvironmentType.Trial)]
+    [InlineData(EnvironmentType.Unknown)]
+    public void GetTabScheme_AllInactiveSchemes_PassBlueBackgroundRule(EnvironmentType envType)
+    {
+        var scheme = TuiColorPalette.GetTabScheme(envType, isActive: false);
+
+        Color[] blueBackgrounds = { Color.Cyan, Color.BrightCyan, Color.Blue, Color.BrightBlue };
+        var attributes = new[]
+        {
+            ("Normal", scheme.Normal),
+            ("Focus", scheme.Focus),
+            ("HotNormal", scheme.HotNormal),
+            ("HotFocus", scheme.HotFocus),
+            ("Disabled", scheme.Disabled)
+        };
+
+        foreach (var (name, attr) in attributes)
+        {
+            if (blueBackgrounds.Contains(attr.Background))
+            {
+                Assert.True(attr.Foreground == Color.Black,
+                    $"GetTabScheme({envType}, inactive).{name}: {attr.Foreground} on {attr.Background} violates blue background rule");
+            }
+        }
+    }
+
+    #endregion
 }

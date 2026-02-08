@@ -75,6 +75,71 @@ public sealed class TabBarTests : IDisposable
         Assert.Equal(0, state.ActiveIndex);
     }
 
+    [Fact]
+    public void CaptureState_ReflectsEnvironmentAwareTitles()
+    {
+        // Arrange - set up session with environment display name
+        _session.UpdateDisplayedEnvironment("https://dev.crm.dynamics.com", "Dev Env");
+        _tabManager.AddTab(
+            new StubScreen(_session, "SQL Query - Dev Env"),
+            "https://dev.crm.dynamics.com", "Dev Env");
+
+        // Act
+        var state = _tabBar.CaptureState();
+
+        // Assert - state captures the environment-aware title
+        Assert.Single(state.TabLabels);
+        Assert.Contains("Dev Env", state.TabLabels[0]);
+    }
+
+    [Fact]
+    public void TabManager_TracksEnvironmentType_ForBadgeRendering()
+    {
+        // Arrange - add tabs with different environment types
+        // TabManager.AddTab uses TuiThemeService to detect type from URL
+        _tabManager.AddTab(
+            new StubScreen(_session, "SQL DEV"),
+            "https://dev.crm.dynamics.com", "DEV");
+        _tabManager.AddTab(
+            new StubScreen(_session, "SQL PROD"),
+            "https://contoso.crm.dynamics.com", "PROD");
+
+        // Act
+        var state = _tabManager.CaptureState();
+
+        // Assert - environment types are correctly detected for badge rendering
+        Assert.Equal(EnvironmentType.Development, state.Tabs[0].EnvironmentType);
+        Assert.Equal(EnvironmentType.Production, state.Tabs[1].EnvironmentType);
+    }
+
+    [Fact]
+    public void TabManager_UnknownEnvironment_DetectedAsUnknown()
+    {
+        // Arrange - add tab with unrecognizable URL
+        _tabManager.AddTab(
+            new StubScreen(_session, "SQL Custom"),
+            "https://custom.example.com", "Custom");
+
+        // Act
+        var state = _tabManager.CaptureState();
+
+        // Assert - unknown type means no badge will be rendered
+        Assert.Equal(EnvironmentType.Unknown, state.Tabs[0].EnvironmentType);
+    }
+
+    [Fact]
+    public void TabManager_NullEnvironmentUrl_DetectedAsUnknown()
+    {
+        // Arrange
+        _tabManager.AddTab(new StubScreen(_session), null, null);
+
+        // Act
+        var state = _tabManager.CaptureState();
+
+        // Assert
+        Assert.Equal(EnvironmentType.Unknown, state.Tabs[0].EnvironmentType);
+    }
+
     private sealed class StubScreen : TuiScreenBase
     {
         private readonly string _title;

@@ -260,6 +260,77 @@ public sealed class InteractiveSessionLifecycleTests : IDisposable
 
     #endregion
 
+    #region UpdateDisplayedEnvironment Tests
+
+    [Fact]
+    public void UpdateDisplayedEnvironment_FiresEventWithCorrectValues()
+    {
+        // Arrange
+        var session = new InteractiveSession(null, _tempStore.Store, _mockFactory);
+        string? eventUrl = null;
+        string? eventName = null;
+        session.EnvironmentChanged += (url, name) =>
+        {
+            eventUrl = url;
+            eventName = name;
+        };
+
+        // Act
+        session.UpdateDisplayedEnvironment("https://dev.crm.dynamics.com", "Dev Env");
+
+        // Assert
+        Assert.Equal("https://dev.crm.dynamics.com", eventUrl);
+        Assert.Equal("Dev Env", eventName);
+    }
+
+    [Fact]
+    public void UpdateDisplayedEnvironment_UpdatesProperties()
+    {
+        // Arrange
+        var session = new InteractiveSession(null, _tempStore.Store, _mockFactory);
+
+        // Act
+        session.UpdateDisplayedEnvironment("https://dev.crm.dynamics.com", "Dev Env");
+
+        // Assert
+        Assert.Equal("https://dev.crm.dynamics.com", session.CurrentEnvironmentUrl);
+        Assert.Equal("Dev Env", session.CurrentEnvironmentDisplayName);
+    }
+
+    [Fact]
+    public void UpdateDisplayedEnvironment_NoOpsWhenUnchanged()
+    {
+        // Arrange
+        var session = new InteractiveSession(null, _tempStore.Store, _mockFactory);
+        session.UpdateDisplayedEnvironment("https://dev.crm.dynamics.com", "Dev Env");
+
+        var eventCount = 0;
+        session.EnvironmentChanged += (_, _) => eventCount++;
+
+        // Act - call again with same values
+        session.UpdateDisplayedEnvironment("https://dev.crm.dynamics.com", "Dev Env");
+
+        // Assert - event should NOT fire
+        Assert.Equal(0, eventCount);
+    }
+
+    [Fact]
+    public void UpdateDisplayedEnvironment_DoesNotPersistToProfile()
+    {
+        // Arrange - session with no seeded profiles (no real profile store backing)
+        var session = new InteractiveSession(null, _tempStore.Store, _mockFactory);
+
+        // Act - should not throw even without a real profile store
+        var exception = Record.Exception(() =>
+            session.UpdateDisplayedEnvironment("https://dev.crm.dynamics.com", "Dev Env"));
+
+        // Assert - no file I/O attempted (no exception from empty store)
+        Assert.Null(exception);
+        Assert.Empty(_mockFactory.CreationLog); // No providers created
+    }
+
+    #endregion
+
     #region Environment Switching Tests
 
     [Fact]
