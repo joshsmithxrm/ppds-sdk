@@ -51,6 +51,12 @@ internal abstract class TuiScreenBase : ITuiScreen
     public string? EnvironmentUrl { get; protected set; }
 
     /// <summary>
+    /// The display name of the environment this screen is bound to.
+    /// Captured at construction time so it stays stable across session environment changes.
+    /// </summary>
+    public string? EnvironmentDisplayName { get; protected set; }
+
+    /// <summary>
     /// Cancellation token that fires when the screen is closed or disposed.
     /// Use this instead of CancellationToken.None for all async operations.
     /// </summary>
@@ -61,6 +67,7 @@ internal abstract class TuiScreenBase : ITuiScreen
         Session = session ?? throw new ArgumentNullException(nameof(session));
         ErrorService = session.GetErrorService();
         EnvironmentUrl = environmentUrl ?? session.CurrentEnvironmentUrl;
+        EnvironmentDisplayName = session.CurrentEnvironmentDisplayName;
 
         Content = new View
         {

@@ -60,17 +60,19 @@ internal sealed class TabBar : View, ITuiStateCapture<TabBarState>
             {
                 var tab = _tabManager.Tabs[i];
                 var index = i; // Capture for closure
-                var text = $" {i + 1}: {tab.Screen.Title} ";
+                var envLabel = GetEnvironmentLabel(tab.EnvironmentType);
+                var text = string.IsNullOrEmpty(envLabel)
+                    ? $" {i + 1}: {tab.Screen.Title} "
+                    : $" {i + 1}: {tab.Screen.Title} [{envLabel}] ";
 
+                var isActive = i == _tabManager.ActiveIndex;
                 var label = new Label(text)
                 {
                     X = xPos,
                     Y = 0,
                     Width = text.Length,
                     Height = 1,
-                    ColorScheme = i == _tabManager.ActiveIndex
-                        ? TuiColorPalette.TabActive
-                        : TuiColorPalette.TabInactive
+                    ColorScheme = TuiColorPalette.GetTabScheme(tab.EnvironmentType, isActive)
                 };
 
                 label.MouseClick += (_) =>
@@ -105,9 +107,9 @@ internal sealed class TabBar : View, ITuiStateCapture<TabBarState>
 
         for (int i = 0; i < _tabManager.Tabs.Count && i < _tabLabels.Count; i++)
         {
-            _tabLabels[i].ColorScheme = i == _tabManager.ActiveIndex
-                ? TuiColorPalette.TabActive
-                : TuiColorPalette.TabInactive;
+            var isActive = i == _tabManager.ActiveIndex;
+            _tabLabels[i].ColorScheme = TuiColorPalette.GetTabScheme(
+                _tabManager.Tabs[i].EnvironmentType, isActive);
         }
         SetNeedsDisplay();
     }
@@ -125,6 +127,15 @@ internal sealed class TabBar : View, ITuiStateCapture<TabBarState>
             TabLabels: labels,
             IsVisible: _isVisible);
     }
+
+    private static string GetEnvironmentLabel(EnvironmentType envType) => envType switch
+    {
+        EnvironmentType.Production => "PROD",
+        EnvironmentType.Sandbox => "SANDBOX",
+        EnvironmentType.Development => "DEV",
+        EnvironmentType.Trial => "TRIAL",
+        _ => ""
+    };
 
     protected override void Dispose(bool disposing)
     {

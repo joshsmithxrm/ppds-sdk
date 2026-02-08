@@ -207,6 +207,36 @@ public static class TuiColorPalette
         Disabled = MakeAttr(Color.DarkGray, Color.Black)
     };
 
+    /// <summary>
+    /// Gets the tab color scheme for the given environment type and active state.
+    /// Active tabs use white text on dark gray. Inactive tabs use environment-tinted
+    /// foreground on black to visually distinguish environments.
+    /// </summary>
+    public static ColorScheme GetTabScheme(EnvironmentType envType, bool isActive)
+    {
+        if (isActive) return TabActive;
+
+        var fg = envType switch
+        {
+            EnvironmentType.Production => Color.Red,
+            EnvironmentType.Sandbox => Color.Brown,
+            EnvironmentType.Development => Color.Green,
+            EnvironmentType.Trial => Color.Cyan,
+            _ => Color.Gray
+        };
+
+        // For Trial (Cyan foreground), use Black background per blue rule
+        // But Cyan foreground on Black background is fine (rule is about Cyan *background*)
+        return new ColorScheme
+        {
+            Normal = MakeAttr(fg, Color.Black),
+            Focus = MakeAttr(Color.White, Color.Black),
+            HotNormal = MakeAttr(fg, Color.Black),
+            HotFocus = MakeAttr(Color.White, Color.Black),
+            Disabled = MakeAttr(Color.DarkGray, Color.Black)
+        };
+    }
+
     #endregion
 
     #region Accent Colors

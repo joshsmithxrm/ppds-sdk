@@ -184,6 +184,9 @@ internal sealed class TuiShell : Window, ITuiStateCapture<TuiShellState>
         _contentArea.Add(_currentScreen.Content);
         _currentScreen.OnActivated(_hotkeyRegistry);
 
+        // Sync status bar to reflect this tab's environment
+        _session.UpdateDisplayedEnvironment(activeTab.EnvironmentUrl, activeTab.EnvironmentDisplayName);
+
         RebuildMenuBar();
         _currentScreen.Content.SetFocus();
     }

@@ -38,7 +38,7 @@ internal sealed class SqlQueryScreen : TuiScreenBase, ITuiStateCapture<SqlQueryS
 
     /// <inheritdoc />
     public override string Title => EnvironmentUrl != null
-        ? $"SQL Query - {Session.CurrentEnvironmentDisplayName ?? EnvironmentUrl}"
+        ? $"SQL Query - {EnvironmentDisplayName ?? EnvironmentUrl}"
         : "SQL Query";
 
     // Note: Keep underscore on MenuBarItem (_Query) for Alt+Q to open menu.

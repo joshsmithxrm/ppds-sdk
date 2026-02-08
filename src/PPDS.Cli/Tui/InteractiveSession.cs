@@ -159,6 +159,22 @@ internal sealed class InteractiveSession : IAsyncDisposable
     }
 
     /// <summary>
+    /// Updates the displayed environment without persisting to profile or pre-warming providers.
+    /// Use this when switching tabs to sync the status bar with the active tab's environment.
+    /// </summary>
+    /// <param name="environmentUrl">The environment URL to display.</param>
+    /// <param name="displayName">The display name for the environment.</param>
+    public void UpdateDisplayedEnvironment(string? environmentUrl, string? displayName)
+    {
+        if (_activeEnvironmentUrl == environmentUrl && _activeEnvironmentDisplayName == displayName)
+            return;
+
+        _activeEnvironmentUrl = environmentUrl;
+        _activeEnvironmentDisplayName = displayName;
+        EnvironmentChanged?.Invoke(environmentUrl, displayName);
+    }
+
+    /// <summary>
     /// Switches to a new environment, updating the profile and warming the new connection.
     /// </summary>
     /// <param name="environmentUrl">The new environment URL.</param>
