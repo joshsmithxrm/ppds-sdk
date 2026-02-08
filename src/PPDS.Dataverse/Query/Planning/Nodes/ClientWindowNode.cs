@@ -4,6 +4,7 @@ using System.Globalization;
 using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Threading;
+using PPDS.Dataverse.Query.Execution;
 using PPDS.Dataverse.Sql.Ast;
 
 namespace PPDS.Dataverse.Query.Planning.Nodes;
@@ -21,6 +22,9 @@ public sealed class ClientWindowNode : IQueryPlanNode
     /// <summary>The window function definitions to compute.</summary>
     public IReadOnlyList<WindowDefinition> Windows { get; }
 
+    /// <summary>Maximum rows to materialize before throwing. 0 = unlimited.</summary>
+    public int MaxMaterializationRows { get; }
+
     /// <inheritdoc />
     public string Description
     {
@@ -37,10 +41,11 @@ public sealed class ClientWindowNode : IQueryPlanNode
     /// <inheritdoc />
     public IReadOnlyList<IQueryPlanNode> Children => new[] { Input };
 
-    public ClientWindowNode(IQueryPlanNode input, IReadOnlyList<WindowDefinition> windows)
+    public ClientWindowNode(IQueryPlanNode input, IReadOnlyList<WindowDefinition> windows, int maxMaterializationRows = 500_000)
     {
         Input = input ?? throw new ArgumentNullException(nameof(input));
         Windows = windows ?? throw new ArgumentNullException(nameof(windows));
+        MaxMaterializationRows = maxMaterializationRows;
     }
 
     /// <inheritdoc />
@@ -54,6 +59,15 @@ public sealed class ClientWindowNode : IQueryPlanNode
         {
             cancellationToken.ThrowIfCancellationRequested();
             allRows.Add(row);
+
+            if (MaxMaterializationRows > 0 && allRows.Count > MaxMaterializationRows)
+            {
+                throw new QueryExecutionException(
+                    QueryErrorCode.MemoryLimitExceeded,
+                    $"Window function materialized {allRows.Count:N0} rows, exceeding the " +
+                    $"{MaxMaterializationRows:N0} row limit. Add a WHERE or TOP clause " +
+                    "to reduce the result set.");
+            }
         }
 
         if (allRows.Count == 0)

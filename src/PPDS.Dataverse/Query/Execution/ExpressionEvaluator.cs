@@ -103,7 +103,8 @@ public sealed class ExpressionEvaluator : IExpressionEvaluator
     {
         if (VariableScope == null)
         {
-            throw new InvalidOperationException(
+            throw new QueryExecutionException(
+                QueryErrorCode.ExecutionFailed,
                 $"Variable {varExpr.VariableName} cannot be resolved: no VariableScope is configured.");
         }
 
@@ -149,7 +150,9 @@ public sealed class ExpressionEvaluator : IExpressionEvaluator
         return unary.Operator switch
         {
             SqlUnaryOperator.Negate => NegateValue(operand),
-            SqlUnaryOperator.Not => operand is bool b ? !b : throw new InvalidOperationException("NOT requires a boolean operand."),
+            SqlUnaryOperator.Not => operand is bool b ? !b : throw new QueryExecutionException(
+                QueryErrorCode.TypeMismatch,
+                $"NOT requires a boolean operand, but got {operand.GetType().Name}."),
             _ => throw new NotSupportedException($"Unary operator {unary.Operator} is not supported.")
         };
     }
@@ -467,7 +470,10 @@ public sealed class ExpressionEvaluator : IExpressionEvaluator
                 SqlBinaryOperator.Modulo => rd == 0 ? throw new DivideByZeroException() : ld % rd,
                 _ => throw new NotSupportedException($"Operator {op} is not supported for arithmetic.")
             },
-            _ => throw new InvalidOperationException($"Cannot apply {op} to {left.GetType().Name} and {right.GetType().Name}.")
+            _ => throw new QueryExecutionException(
+                QueryErrorCode.TypeMismatch,
+                $"Cannot perform arithmetic ({op}) on incompatible types: " +
+                $"{left.GetType().Name} and {right.GetType().Name}.")
         };
     }
 
@@ -501,7 +507,9 @@ public sealed class ExpressionEvaluator : IExpressionEvaluator
             decimal d => -d,
             double d => -d,
             float f => -f,
-            _ => throw new InvalidOperationException($"Cannot negate {value.GetType().Name}.")
+            _ => throw new QueryExecutionException(
+                QueryErrorCode.TypeMismatch,
+                $"Cannot negate value of type {value.GetType().Name}.")
         };
     }
 

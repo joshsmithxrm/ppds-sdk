@@ -33,7 +33,9 @@ public sealed class VariableScope
     public void Set(string name, object? value)
     {
         if (!_variables.ContainsKey(name))
-            throw new InvalidOperationException($"Variable {name} has not been declared");
+            throw new QueryExecutionException(
+                QueryErrorCode.ExecutionFailed,
+                $"Variable {name} has not been declared. Use DECLARE {name} <type> before SET.");
         _variables[name] = _variables[name] with { Value = value };
     }
 
@@ -46,7 +48,9 @@ public sealed class VariableScope
     {
         if (_variables.TryGetValue(name, out var info))
             return info.Value;
-        throw new InvalidOperationException($"Variable {name} has not been declared");
+        throw new QueryExecutionException(
+            QueryErrorCode.ExecutionFailed,
+            $"Variable {name} has not been declared. Use DECLARE {name} <type> before referencing it.");
     }
 
     /// <summary>
