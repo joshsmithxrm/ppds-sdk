@@ -40,6 +40,7 @@ public sealed class ExpressionEvaluator : IExpressionEvaluator
             SqlCaseExpression caseExpr => EvaluateCase(caseExpr, row),
             SqlIifExpression iif => EvaluateIif(iif, row),
             SqlFunctionExpression func => EvaluateFunction(func, row),
+            SqlCastExpression cast => EvaluateCast(cast, row),
             _ => throw new NotSupportedException($"Expression type {expression.GetType().Name} is not yet supported.")
         };
     }
@@ -168,6 +169,17 @@ public sealed class ExpressionEvaluator : IExpressionEvaluator
         }
 
         return _functionRegistry.Invoke(func.FunctionName, args);
+    }
+
+    private object? EvaluateCast(SqlCastExpression cast, IReadOnlyDictionary<string, QueryValue> row)
+    {
+        var value = Evaluate(cast.Expression, row);
+        if (value is null)
+        {
+            return null;
+        }
+
+        return Functions.CastConverter.Convert(value, cast.TargetType, cast.Style);
     }
 
     #endregion

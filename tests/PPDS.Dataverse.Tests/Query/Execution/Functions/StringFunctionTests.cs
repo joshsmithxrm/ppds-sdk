@@ -535,9 +535,10 @@ public class StringFunctionTests
     [Fact]
     public void Stuff_BasicUsage()
     {
-        // STUFF('hello world', 6, 5, 'there') => 'hello there'
+        // STUFF('hello world', 7, 5, 'there') => 'hello there'
+        // Position 7 = 'w', delete 5 chars 'world', insert 'there'
         var result = _eval.Evaluate(
-            Fn("STUFF", Str("hello world"), Num("6"), Num("5"), Str("there")),
+            Fn("STUFF", Str("hello world"), Num("7"), Num("5"), Str("there")),
             EmptyRow);
         Assert.Equal("hello there", result);
     }
