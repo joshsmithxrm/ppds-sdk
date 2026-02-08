@@ -110,7 +110,7 @@ internal sealed class TabBar : View, ITuiStateCapture<TabBarState>
         {
             var isActive = i == _tabManager.ActiveIndex;
             _tabLabels[i].ColorScheme = TuiColorPalette.GetTabScheme(
-                _tabManager.Tabs[i].EnvironmentType, isActive);
+                _tabManager.Tabs[i].EnvironmentColor, isActive);
         }
         SetNeedsDisplay();
     }

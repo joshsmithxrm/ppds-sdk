@@ -14,7 +14,7 @@ internal sealed class EnvironmentConfigDialog : TuiDialog
     private readonly TextField _labelField;
     private readonly TextField _typeField;
     private readonly ListView _colorList;
-    private readonly EnvironmentColor[] _colorValues;
+    private readonly EnvironmentColor?[] _colorValues;
 
     /// <summary>
     /// Gets whether the configuration was changed and saved.
@@ -73,7 +73,7 @@ internal sealed class EnvironmentConfigDialog : TuiDialog
             Width = Dim.Fill() - 3,
             ColorScheme = TuiColorPalette.TextInput
         };
-        var typeHint = new Label("(e.g., Production, Sandbox, Development, Test, UAT, Gold)")
+        var typeHint = new Label("(e.g., Production, Sandbox, Dev, UAT)")
         {
             X = 10,
             Y = 6,
@@ -88,8 +88,12 @@ internal sealed class EnvironmentConfigDialog : TuiDialog
             Y = 8
         };
 
-        _colorValues = Enum.GetValues<EnvironmentColor>();
-        var colorNames = _colorValues.Select(c => c.ToString()).ToList();
+        _colorValues = new EnvironmentColor?[] { null }
+            .Concat(Enum.GetValues<EnvironmentColor>().Cast<EnvironmentColor?>())
+            .ToArray();
+        var colorNames = _colorValues
+            .Select(c => c?.ToString() ?? "(Use type default)")
+            .ToList();
 
         _colorList = new ListView(colorNames)
         {
@@ -143,7 +147,7 @@ internal sealed class EnvironmentConfigDialog : TuiDialog
                     _typeField.Text = config.Type;
                 if (config.Color != null)
                 {
-                    var idx = Array.IndexOf(_colorValues, config.Color.Value);
+                    var idx = Array.IndexOf(_colorValues, (EnvironmentColor?)config.Color.Value);
                     if (idx >= 0)
                         _colorList.SelectedItem = idx;
                 }
@@ -163,7 +167,7 @@ internal sealed class EnvironmentConfigDialog : TuiDialog
 
         if (_colorList.SelectedItem >= 0 && _colorList.SelectedItem < _colorValues.Length)
         {
-            color = _colorValues[_colorList.SelectedItem];
+            color = _colorValues[_colorList.SelectedItem]; // null if "(Use type default)" selected
         }
 
         // Only save if at least one field is populated
