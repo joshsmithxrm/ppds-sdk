@@ -388,8 +388,11 @@ public sealed class ProfileService : IProfileService
         }
     }
 
-    private static AuthMethod DetermineAuthMethod(ProfileCreateRequest request)
+    internal static AuthMethod DetermineAuthMethod(ProfileCreateRequest request)
     {
+        if (request.AuthMethod.HasValue)
+            return request.AuthMethod.Value;
+
         if (request.UseGitHubFederated)
             return AuthMethod.GitHubFederated;
 

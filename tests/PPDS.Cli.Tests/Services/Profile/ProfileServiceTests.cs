@@ -391,6 +391,66 @@ public class ProfileServiceTests : IDisposable
 
     #endregion
 
+    #region DetermineAuthMethod Tests
+
+    [Fact]
+    public void DetermineAuthMethod_WithExplicitAuthMethod_ReturnsExplicitValue()
+    {
+        var request = new ProfileCreateRequest { AuthMethod = AuthMethod.InteractiveBrowser };
+
+        var result = ProfileService.DetermineAuthMethod(request);
+
+        Assert.Equal(AuthMethod.InteractiveBrowser, result);
+    }
+
+    [Fact]
+    public void DetermineAuthMethod_WithExplicitDeviceCode_ReturnsDeviceCode()
+    {
+        var request = new ProfileCreateRequest { AuthMethod = AuthMethod.DeviceCode };
+
+        var result = ProfileService.DetermineAuthMethod(request);
+
+        Assert.Equal(AuthMethod.DeviceCode, result);
+    }
+
+    [Fact]
+    public void DetermineAuthMethod_WithUseDeviceCodeFlag_ReturnsDeviceCode()
+    {
+        // Backward compat: CLI-style request without explicit AuthMethod
+        var request = new ProfileCreateRequest { UseDeviceCode = true };
+
+        var result = ProfileService.DetermineAuthMethod(request);
+
+        Assert.Equal(AuthMethod.DeviceCode, result);
+    }
+
+    [Fact]
+    public void DetermineAuthMethod_WithClientSecret_ReturnsClientSecret()
+    {
+        var request = new ProfileCreateRequest { ClientSecret = "secret" };
+
+        var result = ProfileService.DetermineAuthMethod(request);
+
+        Assert.Equal(AuthMethod.ClientSecret, result);
+    }
+
+    [Fact]
+    public void DetermineAuthMethod_ExplicitAuthMethod_TakesPriorityOverFlags()
+    {
+        // Explicit AuthMethod should win even if UseDeviceCode is also set
+        var request = new ProfileCreateRequest
+        {
+            AuthMethod = AuthMethod.InteractiveBrowser,
+            UseDeviceCode = true
+        };
+
+        var result = ProfileService.DetermineAuthMethod(request);
+
+        Assert.Equal(AuthMethod.InteractiveBrowser, result);
+    }
+
+    #endregion
+
     #region ProfileCreateRequest AuthMethod Tests
 
     [Fact]
