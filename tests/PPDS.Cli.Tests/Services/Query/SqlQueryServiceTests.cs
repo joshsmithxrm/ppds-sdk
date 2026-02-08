@@ -225,7 +225,8 @@ public class SqlQueryServiceTests
         await _service.ExecuteAsync(request);
 
         Assert.NotNull(capturedFetchXml);
-        Assert.Contains("top=\"5\"", capturedFetchXml);
+        // Task 16: FetchXmlScanNode converts top to count for Dataverse paging compatibility
+        Assert.Contains("count=\"5\"", capturedFetchXml);
     }
 
     [Fact]

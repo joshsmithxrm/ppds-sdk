@@ -457,6 +457,26 @@ public class QueryPlannerTests
         Assert.IsType<FetchXmlScanNode>(result.RootNode);
     }
 
+    [Fact]
+    public void Plan_AvgAggregate_PartitionFetchXmlIncludesCompanionCount()
+    {
+        var stmt = SqlParser.Parse("SELECT AVG(revenue) AS avg_rev FROM account");
+        var options = MakePartitioningOptions(100_000);
+
+        var result = _planner.Plan(stmt, options);
+
+        var mergeNode = Assert.IsType<MergeAggregateNode>(result.RootNode);
+        var parallelNode = Assert.IsType<ParallelPartitionNode>(mergeNode.Input);
+
+        // Each partition's FetchXML should contain the companion countcolumn
+        foreach (var partition in parallelNode.Partitions)
+        {
+            var scanNode = Assert.IsType<FetchXmlScanNode>(partition);
+            Assert.Contains("avg_rev_count", scanNode.FetchXml);
+            Assert.Contains("aggregate=\"countcolumn\"", scanNode.FetchXml);
+        }
+    }
+
     #endregion
 
     #region ShouldPartitionAggregate Tests
@@ -540,6 +560,76 @@ public class QueryPlannerTests
         var stmt = (SqlSelectStatement)SqlParser.Parse("SELECT SUM(revenue) FROM account");
 
         Assert.False(QueryPlanner.ContainsCountDistinct(stmt));
+    }
+
+    #endregion
+
+    #region DmlRowCap Tests
+
+    [Fact]
+    public void Plan_DeleteWithRowCap_PassesCapToDmlNode()
+    {
+        var stmt = SqlParser.ParseSql("DELETE FROM account WHERE statecode = 1");
+        var options = new QueryPlanOptions { DmlRowCap = 100 };
+
+        var result = _planner.Plan(stmt, options);
+
+        var dmlNode = Assert.IsType<DmlExecuteNode>(result.RootNode);
+        Assert.Equal(100, dmlNode.RowCap);
+    }
+
+    [Fact]
+    public void Plan_DeleteWithoutRowCap_UsesMaxValue()
+    {
+        var stmt = SqlParser.ParseSql("DELETE FROM account WHERE statecode = 1");
+        var options = new QueryPlanOptions();
+
+        var result = _planner.Plan(stmt, options);
+
+        var dmlNode = Assert.IsType<DmlExecuteNode>(result.RootNode);
+        Assert.Equal(int.MaxValue, dmlNode.RowCap);
+    }
+
+    [Fact]
+    public void Plan_InsertSelect_MapsSourceColumnsOrdinallyWhenNamesDiffer()
+    {
+        var stmt = SqlParser.ParseSql(
+            "INSERT INTO account (name) SELECT fullname FROM contact");
+
+        var result = _planner.Plan(stmt);
+
+        var dmlNode = Assert.IsType<DmlExecuteNode>(result.RootNode);
+        Assert.Equal(DmlOperation.Insert, dmlNode.Operation);
+        Assert.Equal("account", dmlNode.EntityLogicalName);
+
+        // Insert column is "name", but source SELECT column is "fullname"
+        Assert.NotNull(dmlNode.InsertColumns);
+        Assert.Single(dmlNode.InsertColumns!);
+        Assert.Equal("name", dmlNode.InsertColumns![0]);
+
+        // SourceColumns should capture the SELECT column names for ordinal mapping
+        Assert.NotNull(dmlNode.SourceColumns);
+        Assert.Single(dmlNode.SourceColumns!);
+        Assert.Equal("fullname", dmlNode.SourceColumns![0]);
+    }
+
+    [Fact]
+    public void Plan_InsertSelectMultipleColumns_MapsSourceColumnsByOrdinal()
+    {
+        var stmt = SqlParser.ParseSql(
+            "INSERT INTO account (name, description) SELECT fullname, emailaddress1 FROM contact");
+
+        var result = _planner.Plan(stmt);
+
+        var dmlNode = Assert.IsType<DmlExecuteNode>(result.RootNode);
+
+        Assert.Equal(2, dmlNode.InsertColumns!.Count);
+        Assert.Equal("name", dmlNode.InsertColumns[0]);
+        Assert.Equal("description", dmlNode.InsertColumns[1]);
+
+        Assert.Equal(2, dmlNode.SourceColumns!.Count);
+        Assert.Equal("fullname", dmlNode.SourceColumns[0]);
+        Assert.Equal("emailaddress1", dmlNode.SourceColumns[1]);
     }
 
     #endregion
@@ -648,6 +738,47 @@ public class QueryPlannerTests
         Assert.Single(columns);
         // COUNT(*) with no alias defaults to "count"
         Assert.Equal("count", columns[0].Alias);
+    }
+
+    #endregion
+
+    #region PrefetchScanNode Integration Tests
+
+    [Fact]
+    public void Plan_NonAggregateSelect_WrapsPrefetchScanNode()
+    {
+        var stmt = SqlParser.Parse("SELECT name FROM account");
+        var options = new QueryPlanOptions { EnablePrefetch = true };
+
+        var result = _planner.Plan(stmt, options);
+
+        // Root should be PrefetchScanNode wrapping FetchXmlScanNode
+        var prefetchNode = Assert.IsType<PrefetchScanNode>(result.RootNode);
+        Assert.IsType<FetchXmlScanNode>(prefetchNode.Source);
+    }
+
+    [Fact]
+    public void Plan_AggregateSelect_NoPrefetchScanNode()
+    {
+        // Aggregate queries should NOT get prefetch (returns few rows)
+        var stmt = SqlParser.Parse("SELECT COUNT(*) AS cnt FROM account WHERE statecode = 0");
+        var options = new QueryPlanOptions { EnablePrefetch = true };
+
+        var result = _planner.Plan(stmt, options);
+
+        // Should be FetchXmlScanNode directly, not wrapped
+        Assert.IsNotType<PrefetchScanNode>(result.RootNode);
+    }
+
+    [Fact]
+    public void Plan_PrefetchDisabled_NoPrefetchScanNode()
+    {
+        var stmt = SqlParser.Parse("SELECT name FROM account");
+        var options = new QueryPlanOptions { EnablePrefetch = false };
+
+        var result = _planner.Plan(stmt, options);
+
+        Assert.IsType<FetchXmlScanNode>(result.RootNode);
     }
 
     #endregion

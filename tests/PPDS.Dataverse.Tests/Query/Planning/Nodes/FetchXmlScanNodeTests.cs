@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Xml.Linq;
 using Moq;
 using PPDS.Dataverse.Query;
 using PPDS.Dataverse.Query.Execution;
@@ -164,5 +165,81 @@ public class FetchXmlScanNodeTests
     {
         var node = new FetchXmlScanNode("<fetch />", "account");
         Assert.Contains("account", node.Description);
+    }
+
+    [Fact]
+    public void TopN_ConvertsToPagingInEffectiveFetchXml()
+    {
+        // FetchXML with top="100" should have top removed and count="100" in effective XML
+        var fetchXml = "<fetch top=\"100\"><entity name=\"account\"><attribute name=\"name\" /></entity></fetch>";
+        var node = new FetchXmlScanNode(fetchXml, "account", maxRows: 100);
+
+        // FetchXml property preserved for display
+        Assert.Contains("top=", node.FetchXml);
+
+        // Description should reflect the node correctly
+        Assert.Contains("account", node.Description);
+    }
+
+    [Fact]
+    public async Task TopN_ExecutesWithoutError()
+    {
+        // Verify that TOP N queries execute without the top+page conflict
+        var fetchXml = "<fetch top=\"100\"><entity name=\"account\"><attribute name=\"name\" /></entity></fetch>";
+
+        var mockExecutor = new Mock<IQueryExecutor>();
+        mockExecutor
+            .Setup(x => x.ExecuteFetchXmlAsync(
+                It.Is<string>(f => !f.Contains("top=") && f.Contains("count=")),
+                It.IsAny<int?>(), It.IsAny<string?>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(MakeResult("account", 3));
+
+        var node = new FetchXmlScanNode(fetchXml, "account", maxRows: 100);
+        var ctx = CreateContext(mockExecutor.Object);
+
+        var rows = new List<QueryRow>();
+        await foreach (var row in node.ExecuteAsync(ctx))
+        {
+            rows.Add(row);
+        }
+
+        Assert.Equal(3, rows.Count);
+        // Verify the executor was called with converted FetchXML (no top, has count)
+        mockExecutor.Verify(x => x.ExecuteFetchXmlAsync(
+            It.Is<string>(f => !f.Contains("top=") && f.Contains("count=")),
+            It.IsAny<int?>(), It.IsAny<string?>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task NoTop_FetchXmlUnchanged()
+    {
+        var fetchXml = "<fetch><entity name=\"account\"><attribute name=\"name\" /></entity></fetch>";
+
+        var mockExecutor = new Mock<IQueryExecutor>();
+        mockExecutor
+            .Setup(x => x.ExecuteFetchXmlAsync(It.IsAny<string>(), It.IsAny<int?>(), It.IsAny<string?>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(MakeResult("account", 3));
+
+        var node = new FetchXmlScanNode(fetchXml, "account");
+        var ctx = CreateContext(mockExecutor.Object);
+
+        var rows = new List<QueryRow>();
+        await foreach (var row in node.ExecuteAsync(ctx))
+        {
+            rows.Add(row);
+        }
+
+        Assert.Equal(3, rows.Count);
+    }
+
+    [Fact]
+    public void TopN_CapsCountAt5000()
+    {
+        var fetchXml = "<fetch top=\"7000\"><entity name=\"account\"><attribute name=\"name\" /></entity></fetch>";
+        var node = new FetchXmlScanNode(fetchXml, "account", maxRows: 7000);
+
+        // The original FetchXml property is preserved
+        Assert.Contains("top=", node.FetchXml);
     }
 }

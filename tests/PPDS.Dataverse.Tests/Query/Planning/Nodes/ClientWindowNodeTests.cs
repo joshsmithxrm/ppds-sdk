@@ -472,4 +472,201 @@ public class ClientWindowNodeTests
     }
 
     #endregion
+
+    #region Memory Bounds Tests
+
+    [Fact]
+    public async Task ExecuteAsync_ExceedsRowLimit_Throws()
+    {
+        // Arrange: create 100 rows, set limit to 50
+        var rows = new List<QueryRow>();
+        for (var i = 0; i < 100; i++)
+        {
+            rows.Add(MakeRow(("name", $"Row{i}"), ("value", i)));
+        }
+
+        var input = new MockPlanNode(rows);
+
+        var windowExpr = new SqlWindowExpression(
+            "ROW_NUMBER",
+            null,
+            null,
+            new[] { new SqlOrderByItem(SqlColumnRef.Simple("value"), SqlSortDirection.Ascending) });
+
+        var windowNode = new ClientWindowNode(input, new[]
+        {
+            new WindowDefinition("rn", windowExpr)
+        }, maxMaterializationRows: 50);
+
+        var ctx = CreateContext();
+
+        // Act & Assert
+        var ex = await Assert.ThrowsAsync<QueryExecutionException>(
+            () => ExecuteToListAsync(windowNode, ctx));
+
+        Assert.Equal(QueryErrorCode.MemoryLimitExceeded, ex.ErrorCode);
+        Assert.Contains("51", ex.Message); // row count in message
+        Assert.Contains("50", ex.Message); // limit in message
+        Assert.Contains("WHERE or TOP", ex.Message);
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_UnderRowLimit_Succeeds()
+    {
+        // Arrange: create 10 rows, set limit to 50
+        var rows = new List<QueryRow>();
+        for (var i = 0; i < 10; i++)
+        {
+            rows.Add(MakeRow(("name", $"Row{i}"), ("value", i)));
+        }
+
+        var input = new MockPlanNode(rows);
+
+        var windowExpr = new SqlWindowExpression(
+            "ROW_NUMBER",
+            null,
+            null,
+            new[] { new SqlOrderByItem(SqlColumnRef.Simple("value"), SqlSortDirection.Ascending) });
+
+        var windowNode = new ClientWindowNode(input, new[]
+        {
+            new WindowDefinition("rn", windowExpr)
+        }, maxMaterializationRows: 50);
+
+        var ctx = CreateContext();
+
+        // Act
+        var result = await ExecuteToListAsync(windowNode, ctx);
+
+        // Assert
+        Assert.Equal(10, result.Count);
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_ZeroLimit_Unlimited()
+    {
+        // Arrange: create 100 rows, set limit to 0 (unlimited)
+        var rows = new List<QueryRow>();
+        for (var i = 0; i < 100; i++)
+        {
+            rows.Add(MakeRow(("name", $"Row{i}"), ("value", i)));
+        }
+
+        var input = new MockPlanNode(rows);
+
+        var windowExpr = new SqlWindowExpression(
+            "ROW_NUMBER",
+            null,
+            null,
+            new[] { new SqlOrderByItem(SqlColumnRef.Simple("value"), SqlSortDirection.Ascending) });
+
+        var windowNode = new ClientWindowNode(input, new[]
+        {
+            new WindowDefinition("rn", windowExpr)
+        }, maxMaterializationRows: 0);
+
+        var ctx = CreateContext();
+
+        // Act
+        var result = await ExecuteToListAsync(windowNode, ctx);
+
+        // Assert - should succeed with all 100 rows
+        Assert.Equal(100, result.Count);
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_CancellationDuringMaterialization_Throws()
+    {
+        // Arrange: create rows and cancel after a few
+        var rows = new List<QueryRow>();
+        for (var i = 0; i < 100; i++)
+        {
+            rows.Add(MakeRow(("name", $"Row{i}"), ("value", i)));
+        }
+
+        var cts = new CancellationTokenSource();
+        var cancellingInput = new CancellingMockPlanNode(rows, cts, cancelAfter: 5);
+
+        var windowExpr = new SqlWindowExpression(
+            "ROW_NUMBER",
+            null,
+            null,
+            new[] { new SqlOrderByItem(SqlColumnRef.Simple("value"), SqlSortDirection.Ascending) });
+
+        var windowNode = new ClientWindowNode(cancellingInput, new[]
+        {
+            new WindowDefinition("rn", windowExpr)
+        });
+
+        var ctx = CreateContext();
+
+        // Act & Assert
+        await Assert.ThrowsAsync<OperationCanceledException>(async () =>
+        {
+            var result = new List<QueryRow>();
+            await foreach (var row in windowNode.ExecuteAsync(ctx, cts.Token))
+            {
+                result.Add(row);
+            }
+        });
+    }
+
+    [Fact]
+    public void MaxMaterializationRows_DefaultValue_Is500000()
+    {
+        var input = new MockPlanNode(Array.Empty<QueryRow>());
+        var windowExpr = new SqlWindowExpression(
+            "ROW_NUMBER",
+            null,
+            null,
+            new[] { new SqlOrderByItem(SqlColumnRef.Simple("name"), SqlSortDirection.Ascending) });
+
+        var windowNode = new ClientWindowNode(input, new[]
+        {
+            new WindowDefinition("rn", windowExpr)
+        });
+
+        Assert.Equal(500_000, windowNode.MaxMaterializationRows);
+    }
+
+    /// <summary>
+    /// A mock plan node that cancels the token after yielding a specified number of rows.
+    /// </summary>
+    private sealed class CancellingMockPlanNode : IQueryPlanNode
+    {
+        private readonly IReadOnlyList<QueryRow> _rows;
+        private readonly CancellationTokenSource _cts;
+        private readonly int _cancelAfter;
+
+        public CancellingMockPlanNode(IReadOnlyList<QueryRow> rows, CancellationTokenSource cts, int cancelAfter)
+        {
+            _rows = rows;
+            _cts = cts;
+            _cancelAfter = cancelAfter;
+        }
+
+        public string Description => "CancellingMockScan";
+        public long EstimatedRows => _rows.Count;
+        public IReadOnlyList<IQueryPlanNode> Children => Array.Empty<IQueryPlanNode>();
+
+        public async IAsyncEnumerable<QueryRow> ExecuteAsync(
+            QueryPlanContext context,
+            [EnumeratorCancellation] CancellationToken cancellationToken = default)
+        {
+            var count = 0;
+            foreach (var row in _rows)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                yield return row;
+                count++;
+                if (count >= _cancelAfter)
+                {
+                    _cts.Cancel();
+                }
+            }
+            await Task.CompletedTask;
+        }
+    }
+
+    #endregion
 }

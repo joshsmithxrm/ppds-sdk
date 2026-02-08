@@ -101,6 +101,40 @@ public class DmlExecuteNodeTests
         Assert.Equal(100, node.RowCap);
     }
 
+    [Fact]
+    public void InsertSelect_WithSourceColumns_StoresOrdinalMapping()
+    {
+        var mockSource = new MockPlanNode();
+        var insertColumns = new[] { "name", "revenue" };
+        var sourceColumns = new[] { "fullname", "totalrevenue" };
+
+        var node = DmlExecuteNode.InsertSelect(
+            "account",
+            insertColumns,
+            mockSource,
+            sourceColumns: sourceColumns);
+
+        Assert.NotNull(node.SourceColumns);
+        Assert.Equal(2, node.SourceColumns!.Count);
+        Assert.Equal("fullname", node.SourceColumns[0]);
+        Assert.Equal("totalrevenue", node.SourceColumns[1]);
+        Assert.Equal(2, node.InsertColumns!.Count);
+        Assert.Equal("name", node.InsertColumns[0]);
+        Assert.Equal("revenue", node.InsertColumns[1]);
+    }
+
+    [Fact]
+    public void InsertSelect_WithoutSourceColumns_HasNullSourceColumns()
+    {
+        var mockSource = new MockPlanNode();
+        var node = DmlExecuteNode.InsertSelect(
+            "account",
+            new[] { "name" },
+            mockSource);
+
+        Assert.Null(node.SourceColumns);
+    }
+
     /// <summary>
     /// Minimal mock plan node for testing DmlExecuteNode structure.
     /// </summary>

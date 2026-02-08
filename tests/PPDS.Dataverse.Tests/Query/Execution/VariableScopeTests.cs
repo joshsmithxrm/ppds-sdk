@@ -42,7 +42,8 @@ public class VariableScopeTests
     {
         var scope = new VariableScope();
 
-        var ex = Assert.Throws<InvalidOperationException>(() => scope.Get("@missing"));
+        var ex = Assert.Throws<QueryExecutionException>(() => scope.Get("@missing"));
+        Assert.Equal(QueryErrorCode.ExecutionFailed, ex.ErrorCode);
         Assert.Contains("@missing", ex.Message);
         Assert.Contains("not been declared", ex.Message);
     }
@@ -52,7 +53,8 @@ public class VariableScopeTests
     {
         var scope = new VariableScope();
 
-        var ex = Assert.Throws<InvalidOperationException>(() => scope.Set("@missing", 42));
+        var ex = Assert.Throws<QueryExecutionException>(() => scope.Set("@missing", 42));
+        Assert.Equal(QueryErrorCode.ExecutionFailed, ex.ErrorCode);
         Assert.Contains("@missing", ex.Message);
         Assert.Contains("not been declared", ex.Message);
     }

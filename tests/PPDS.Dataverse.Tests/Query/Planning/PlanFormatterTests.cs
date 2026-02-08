@@ -452,6 +452,54 @@ public class PlanFormatterTests
     }
 
     [Fact]
+    public void Format_WithPoolMetadata_ShowsFooter()
+    {
+        var plan = new QueryPlanDescription
+        {
+            NodeType = "TestNode",
+            Description = "Test",
+            PoolCapacity = 48,
+            EffectiveParallelism = 5
+        };
+
+        var output = PlanFormatter.Format(plan);
+
+        Assert.Contains("Pool capacity: 48", output);
+        Assert.Contains("Effective parallelism: 5", output);
+    }
+
+    [Fact]
+    public void Format_WithoutPoolMetadata_OmitsFooter()
+    {
+        var plan = new QueryPlanDescription
+        {
+            NodeType = "TestNode",
+            Description = "Test"
+        };
+
+        var output = PlanFormatter.Format(plan);
+
+        Assert.DoesNotContain("Pool capacity", output);
+        Assert.DoesNotContain("Effective parallelism", output);
+    }
+
+    [Fact]
+    public void Format_WithOnlyPoolCapacity_ShowsPoolCapacityOnly()
+    {
+        var plan = new QueryPlanDescription
+        {
+            NodeType = "TestNode",
+            Description = "Test",
+            PoolCapacity = 24
+        };
+
+        var output = PlanFormatter.Format(plan);
+
+        Assert.Contains("Pool capacity: 24", output);
+        Assert.DoesNotContain("Effective parallelism", output);
+    }
+
+    [Fact]
     public void QueryPlanDescription_FromNode_CountOptimized_IncludesFallback()
     {
         var fallbackScan = new FetchXmlScanNode(
