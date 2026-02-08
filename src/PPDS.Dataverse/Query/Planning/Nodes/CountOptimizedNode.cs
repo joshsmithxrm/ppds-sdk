@@ -53,6 +53,10 @@ public sealed class CountOptimizedNode : IQueryPlanNode
             count = await context.QueryExecutor.GetTotalRecordCountAsync(
                 EntityLogicalName, cancellationToken).ConfigureAwait(false);
         }
+        catch (OperationCanceledException)
+        {
+            throw; // Respect cancellation
+        }
         catch
         {
             // Swallow: some entities don't support RetrieveTotalRecordCountRequest.
