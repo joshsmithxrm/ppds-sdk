@@ -130,6 +130,23 @@ public class CredentialProviderFactoryTests
             .Where(ex => ex.Message.Contains("CreateAsync"));
     }
 
+    [Fact]
+    public void Create_DeviceCode_ReturnsDeviceCodeProvider()
+    {
+        // When a user explicitly selects AuthMethod.DeviceCode, the factory
+        // must return DeviceCodeCredentialProvider, not InteractiveBrowserCredentialProvider.
+        // The current implementation routes DeviceCode through CreateInteractiveProvider()
+        // which returns InteractiveBrowserCredentialProvider when a browser is available,
+        // ignoring the user's explicit choice.
+        var profile = new AuthProfile { AuthMethod = AuthMethod.DeviceCode };
+
+        var provider = CredentialProviderFactory.Create(profile);
+
+        provider.Should().BeOfType<DeviceCodeCredentialProvider>(
+            because: "when user explicitly selects DeviceCode, their choice must be respected");
+        provider.Dispose();
+    }
+
     [Theory]
     [InlineData(AuthMethod.InteractiveBrowser)]
     [InlineData(AuthMethod.DeviceCode)]
