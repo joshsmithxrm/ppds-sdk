@@ -217,6 +217,7 @@ public sealed class ProfileService : IProfileService
     public async Task<ProfileSummary> CreateProfileAsync(
         ProfileCreateRequest request,
         Action<DeviceCodeInfo>? deviceCodeCallback = null,
+        Func<Action<DeviceCodeInfo>?, PreAuthDialogResult>? beforeInteractiveAuth = null,
         CancellationToken cancellationToken = default)
     {
         // Validate request
@@ -317,7 +318,7 @@ public sealed class ProfileService : IProfileService
             }
 
             // Create credential provider
-            using ICredentialProvider provider = CreateCredentialProvider(request, authMethod, cloud, deviceCodeCallback);
+            using ICredentialProvider provider = CreateCredentialProvider(request, authMethod, cloud, deviceCodeCallback, beforeInteractiveAuth);
 
             try
             {
@@ -485,11 +486,13 @@ public sealed class ProfileService : IProfileService
         ProfileCreateRequest request,
         AuthMethod authMethod,
         CloudEnvironment cloud,
-        Action<DeviceCodeInfo>? deviceCodeCallback)
+        Action<DeviceCodeInfo>? deviceCodeCallback,
+        Func<Action<DeviceCodeInfo>?, PreAuthDialogResult>? beforeInteractiveAuth)
     {
         return authMethod switch
         {
-            AuthMethod.InteractiveBrowser => new InteractiveBrowserCredentialProvider(cloud, request.TenantId),
+            AuthMethod.InteractiveBrowser => new InteractiveBrowserCredentialProvider(
+                cloud, request.TenantId, deviceCodeCallback: deviceCodeCallback, beforeInteractiveAuth: beforeInteractiveAuth),
             AuthMethod.DeviceCode => new DeviceCodeCredentialProvider(cloud, request.TenantId, deviceCodeCallback: deviceCodeCallback),
             AuthMethod.ClientSecret => new ClientSecretCredentialProvider(
                 request.ApplicationId!, request.ClientSecret!, request.TenantId!, cloud),

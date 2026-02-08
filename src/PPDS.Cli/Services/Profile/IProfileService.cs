@@ -40,6 +40,7 @@ public interface IProfileService
     /// </summary>
     /// <param name="request">Profile creation parameters.</param>
     /// <param name="deviceCodeCallback">Callback for device code display (required for device code auth).</param>
+    /// <param name="beforeInteractiveAuth">Callback shown before browser auth to let the user choose Browser/DeviceCode/Cancel.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>The created profile.</returns>
     /// <exception cref="PpdsException">If profile creation fails.</exception>
@@ -48,6 +49,7 @@ public interface IProfileService
     Task<ProfileSummary> CreateProfileAsync(
         ProfileCreateRequest request,
         Action<DeviceCodeInfo>? deviceCodeCallback = null,
+        Func<Action<DeviceCodeInfo>?, PreAuthDialogResult>? beforeInteractiveAuth = null,
         CancellationToken cancellationToken = default);
 
     /// <summary>

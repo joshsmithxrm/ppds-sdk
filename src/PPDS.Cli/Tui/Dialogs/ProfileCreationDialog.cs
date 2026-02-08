@@ -522,7 +522,7 @@ internal sealed class ProfileCreationDialog : TuiDialog, ITuiStateCapture<Profil
     {
         try
         {
-            var profile = await _profileService.CreateProfileAsync(request, deviceCodeCallback, _cts.Token);
+            var profile = await _profileService.CreateProfileAsync(request, deviceCodeCallback, beforeInteractiveAuth: null, _cts.Token);
             Application.MainLoop?.Invoke(() =>
             {
                 _createdProfile = profile;
