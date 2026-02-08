@@ -88,7 +88,8 @@ internal sealed class PpdsApplication : IDisposable
 
         // Start warming the connection pool in the background
         // This runs while Terminal.Gui initializes, so connection is ready faster
-        _session.GetErrorService().FireAndForget(_session.InitializeAsync(cancellationToken), "SessionInit");
+        var initTask = _session.InitializeAsync(cancellationToken);
+        _session.GetErrorService().FireAndForget(initTask, "SessionInit");
 
         // Register cancellation to request stop
         using var registration = cancellationToken.Register(() => Application.RequestStop());
@@ -99,6 +100,9 @@ internal sealed class PpdsApplication : IDisposable
 
         // Enable auth debug logging - redirect to TuiDebugLog for diagnostics
         AuthDebugLog.Writer = msg => TuiDebugLog.Log($"[Auth] {msg}");
+
+        // Override terminal's 16-color palette for consistent appearance across terminals
+        TuiTerminalPalette.Apply();
 
         // Set block cursor for better visibility in text fields (DECSCUSR)
         // \x1b[2 q = steady block cursor
@@ -118,7 +122,7 @@ internal sealed class PpdsApplication : IDisposable
 
         try
         {
-            var shell = new TuiShell(_profileName, _deviceCodeCallback, _session);
+            var shell = new TuiShell(_profileName, _deviceCodeCallback, _session, initTask);
             Application.Top.Add(shell);
 
             // Global exception handler - catches exceptions from MainLoop.Invoke callbacks
@@ -139,6 +143,9 @@ internal sealed class PpdsApplication : IDisposable
             // \x1b]112\x07 = restore default cursor color (OSC 112)
             Console.Out.Write("\x1b[0 q\x1b]112\x07");
             Console.Out.Flush();
+
+            // Restore terminal's default 16-color palette
+            TuiTerminalPalette.Restore();
 
             Application.Shutdown();
             AuthDebugLog.Reset();  // Clean up auth debug logging

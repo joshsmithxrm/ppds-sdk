@@ -32,17 +32,20 @@ internal sealed class TuiShell : Window, ITuiStateCapture<TuiShellState>
     private readonly TabBar _tabBar;
     private MenuBar? _menuBar;
 
+    private readonly Task _initializationTask;
+
     private ITuiScreen? _currentScreen;
     private View? _mainMenuContent;
     private SplashView? _splashView;
     private DateTime _lastMenuClickTime = DateTime.MinValue;
     private const int MenuClickDebounceMs = 150;
 
-    public TuiShell(string? profileName, Action<DeviceCodeInfo>? deviceCodeCallback, InteractiveSession session)
+    public TuiShell(string? profileName, Action<DeviceCodeInfo>? deviceCodeCallback, InteractiveSession session, Task initializationTask)
     {
         _profileName = profileName;
         _deviceCodeCallback = deviceCodeCallback;
         _session = session;
+        _initializationTask = initializationTask;
         _themeService = session.GetThemeService();
         _errorService = session.GetErrorService();
         _hotkeyRegistry = session.GetHotkeyRegistry();
@@ -96,6 +99,9 @@ internal sealed class TuiShell : Window, ITuiStateCapture<TuiShellState>
 
         // Load initial profile info
         LoadProfileInfoAsync();
+
+        // Wire session initialization to splash → main menu transition
+        WireInitializationToSplash();
     }
 
     /// <summary>
@@ -609,6 +615,53 @@ internal sealed class TuiShell : Window, ITuiStateCapture<TuiShellState>
         Application.MainLoop?.Invoke(() =>
         {
             _statusBar.Refresh();
+        });
+    }
+
+    /// <summary>
+    /// Wires the session initialization task to splash screen state transitions.
+    /// When initialization completes, marks splash as ready, then transitions to main menu.
+    /// </summary>
+    private void WireInitializationToSplash()
+    {
+        _errorService.FireAndForget(WireInitializationToSplashAsync(), "SplashTransition");
+    }
+
+    private async Task WireInitializationToSplashAsync()
+    {
+        try
+        {
+            await _initializationTask.ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            // Initialization failed — update splash with error but still transition
+            TuiDebugLog.Log($"Session initialization failed: {ex.Message}");
+            Application.MainLoop?.Invoke(() =>
+            {
+                _splashView?.SetStatus($"Init error: {ex.Message}");
+            });
+            // Brief pause so user can see the error
+            await Task.Delay(2000).ConfigureAwait(false);
+        }
+
+        // Mark splash as ready (on UI thread)
+        Application.MainLoop?.Invoke(() =>
+        {
+            _splashView?.SetReady();
+        });
+
+        // Brief delay so user sees the branded splash before transitioning
+        await Task.Delay(1000).ConfigureAwait(false);
+
+        // Transition to main menu (on UI thread)
+        Application.MainLoop?.Invoke(() =>
+        {
+            // Only transition if splash is still showing (user may have already navigated)
+            if (_splashView != null)
+            {
+                ShowMainMenu();
+            }
         });
     }
 

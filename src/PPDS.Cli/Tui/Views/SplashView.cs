@@ -97,6 +97,7 @@ internal sealed class SplashView : View, ITuiStateCapture<SplashViewState>
     /// </summary>
     public void SetStatus(string message)
     {
+        if (_isReady) return; // Don't update status after ready
         _statusMessage = message;
         // Only touch UI if Application is initialized
         if (Application.Driver != null)
