@@ -209,6 +209,12 @@ public sealed record ProfileCreateRequest
     public bool UseDeviceCode { get; init; }
 
     /// <summary>
+    /// Explicit auth method selection. When set, takes priority over UseDeviceCode and field-based inference.
+    /// Used by TUI to pass the user's radio button selection directly.
+    /// </summary>
+    public AuthMethod? AuthMethod { get; init; }
+
+    /// <summary>
     /// Application ID for SPN auth.
     /// </summary>
     public string? ApplicationId { get; init; }

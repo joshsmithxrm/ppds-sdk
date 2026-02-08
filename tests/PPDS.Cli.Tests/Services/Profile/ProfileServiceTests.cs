@@ -390,4 +390,27 @@ public class ProfileServiceTests : IDisposable
     }
 
     #endregion
+
+    #region ProfileCreateRequest AuthMethod Tests
+
+    [Fact]
+    public void ProfileCreateRequest_AuthMethod_CanBeSetExplicitly()
+    {
+        var request = new ProfileCreateRequest
+        {
+            AuthMethod = AuthMethod.DeviceCode
+        };
+
+        Assert.Equal(AuthMethod.DeviceCode, request.AuthMethod);
+    }
+
+    [Fact]
+    public void ProfileCreateRequest_AuthMethod_DefaultsToNull()
+    {
+        var request = new ProfileCreateRequest();
+
+        Assert.Null(request.AuthMethod);
+    }
+
+    #endregion
 }
