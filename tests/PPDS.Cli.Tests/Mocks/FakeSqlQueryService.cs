@@ -32,6 +32,12 @@ public sealed class FakeSqlQueryService : ISqlQueryService
     /// </summary>
     public Exception? ExceptionToThrow { get; set; }
 
+    /// <summary>
+    /// Gets or sets the plan description to return from ExplainAsync.
+    /// When null, a default mock plan is returned.
+    /// </summary>
+    public QueryPlanDescription? NextExplainResult { get; set; }
+
     /// <inheritdoc />
     public string TranspileSql(string sql, int? topOverride = null)
     {
@@ -59,11 +65,18 @@ public sealed class FakeSqlQueryService : ISqlQueryService
     /// <inheritdoc />
     public Task<QueryPlanDescription> ExplainAsync(string sql, CancellationToken cancellationToken = default)
     {
-        return Task.FromResult(new QueryPlanDescription
+        if (ExceptionToThrow != null)
+        {
+            throw ExceptionToThrow;
+        }
+
+        var plan = NextExplainResult ?? new QueryPlanDescription
         {
             NodeType = "FetchXmlScanNode",
             Description = "Mock plan"
-        });
+        };
+
+        return Task.FromResult(plan);
     }
 
     /// <inheritdoc />
@@ -102,6 +115,7 @@ public sealed class FakeSqlQueryService : ISqlQueryService
         NextResult = CreateEmptyResult();
         NextFetchXml = "<fetch><entity name='account'/></fetch>";
         ExceptionToThrow = null;
+        NextExplainResult = null;
     }
 
     private static SqlQueryResult CreateEmptyResult()
