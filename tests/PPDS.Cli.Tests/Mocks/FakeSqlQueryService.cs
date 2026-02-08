@@ -1,5 +1,6 @@
 using PPDS.Cli.Services.Query;
 using PPDS.Dataverse.Query;
+using PPDS.Dataverse.Query.Planning;
 
 namespace PPDS.Cli.Tests.Mocks;
 
@@ -52,6 +53,16 @@ public sealed class FakeSqlQueryService : ISqlQueryService
         }
 
         return Task.FromResult(NextResult);
+    }
+
+    /// <inheritdoc />
+    public Task<QueryPlanDescription> ExplainAsync(string sql, CancellationToken cancellationToken = default)
+    {
+        return Task.FromResult(new QueryPlanDescription
+        {
+            NodeType = "FetchXmlScanNode",
+            Description = "Mock plan"
+        });
     }
 
     /// <summary>

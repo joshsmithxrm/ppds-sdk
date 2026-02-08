@@ -1,3 +1,5 @@
+using PPDS.Dataverse.Query.Planning;
+
 namespace PPDS.Cli.Services.Query;
 
 /// <summary>
@@ -29,4 +31,13 @@ public interface ISqlQueryService
     Task<SqlQueryResult> ExecuteAsync(
         SqlQueryRequest request,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Returns the execution plan for a SQL query without executing it.
+    /// </summary>
+    /// <param name="sql">The SQL query to explain.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>Description of the execution plan.</returns>
+    /// <exception cref="PPDS.Dataverse.Sql.Parsing.SqlParseException">If SQL parsing fails.</exception>
+    Task<QueryPlanDescription> ExplainAsync(string sql, CancellationToken cancellationToken = default);
 }

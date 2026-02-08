@@ -1,4 +1,6 @@
 using PPDS.Dataverse.Query;
+using PPDS.Dataverse.Query.Planning;
+using PPDS.Dataverse.Sql.Ast;
 using PPDS.Dataverse.Sql.Parsing;
 using PPDS.Dataverse.Sql.Transpilation;
 
@@ -11,6 +13,7 @@ namespace PPDS.Cli.Services.Query;
 public sealed class SqlQueryService : ISqlQueryService
 {
     private readonly IQueryExecutor _queryExecutor;
+    private readonly QueryPlanner _planner;
 
     /// <summary>
     /// Creates a new instance of <see cref="SqlQueryService"/>.
@@ -19,6 +22,7 @@ public sealed class SqlQueryService : ISqlQueryService
     public SqlQueryService(IQueryExecutor queryExecutor)
     {
         _queryExecutor = queryExecutor ?? throw new ArgumentNullException(nameof(queryExecutor));
+        _planner = new QueryPlanner();
     }
 
     /// <inheritdoc />
@@ -77,5 +81,19 @@ public sealed class SqlQueryService : ISqlQueryService
             TranspiledFetchXml = transpileResult.FetchXml,
             Result = expandedResult
         };
+    }
+
+    /// <inheritdoc />
+    public Task<QueryPlanDescription> ExplainAsync(string sql, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(sql);
+
+        var parser = new SqlParser(sql);
+        var statement = parser.ParseStatement();
+
+        var planResult = _planner.Plan(statement);
+        var description = QueryPlanDescription.FromNode(planResult.RootNode);
+
+        return Task.FromResult(description);
     }
 }
