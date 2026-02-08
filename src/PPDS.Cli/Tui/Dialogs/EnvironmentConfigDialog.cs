@@ -13,6 +13,7 @@ internal sealed class EnvironmentConfigDialog : TuiDialog, ITuiStateCapture<Envi
 {
     private readonly InteractiveSession _session;
     private readonly string _environmentUrl;
+    private readonly string? _suggestedType;
     private readonly TextField _labelField;
     private readonly TextField _typeField;
     private readonly ListView _colorList;
@@ -23,13 +24,19 @@ internal sealed class EnvironmentConfigDialog : TuiDialog, ITuiStateCapture<Envi
     /// </summary>
     public bool ConfigChanged { get; private set; }
 
+    /// <param name="session">The interactive session.</param>
+    /// <param name="environmentUrl">The environment URL to configure.</param>
+    /// <param name="currentDisplayName">Optional display name for the URL header.</param>
+    /// <param name="suggestedType">Optional type to pre-fill when no existing config exists (e.g., from Discovery API).</param>
     public EnvironmentConfigDialog(
         InteractiveSession session,
         string environmentUrl,
-        string? currentDisplayName = null) : base("Configure Environment", session)
+        string? currentDisplayName = null,
+        string? suggestedType = null) : base("Configure Environment", session)
     {
         _session = session ?? throw new ArgumentNullException(nameof(session));
         _environmentUrl = environmentUrl ?? throw new ArgumentNullException(nameof(environmentUrl));
+        _suggestedType = suggestedType;
 
         Width = 60;
         Height = 18;
@@ -154,6 +161,11 @@ internal sealed class EnvironmentConfigDialog : TuiDialog, ITuiStateCapture<Envi
                         _colorList.SelectedItem = idx;
                 }
             }
+            else if (_suggestedType != null)
+            {
+                // Pre-fill type from Discovery API when no existing config
+                _typeField.Text = NormalizeDiscoveryType(_suggestedType);
+            }
         }
         catch
         {
@@ -199,6 +211,18 @@ internal sealed class EnvironmentConfigDialog : TuiDialog, ITuiStateCapture<Envi
 
         Application.RequestStop();
     }
+
+    /// <summary>
+    /// Maps Discovery API type names to canonical type names.
+    /// </summary>
+    private static string NormalizeDiscoveryType(string discoveryType) => discoveryType.ToLowerInvariant() switch
+    {
+        "developer" => "Development",
+        "sandbox" => "Sandbox",
+        "production" => "Production",
+        "trial" => "Trial",
+        _ => discoveryType
+    };
 
     /// <inheritdoc />
     public EnvironmentConfigDialogState CaptureState()

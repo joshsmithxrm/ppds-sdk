@@ -26,15 +26,19 @@ public sealed class EnvironmentConfigStore : IDisposable
     private EnvironmentConfigCollection? _cached;
     private bool _disposed;
 
+    /// <summary>Creates a store using the default environments file path.</summary>
     public EnvironmentConfigStore() : this(ProfilePaths.EnvironmentsFile) { }
 
+    /// <summary>Creates a store using a custom file path.</summary>
     public EnvironmentConfigStore(string filePath)
     {
         _filePath = filePath ?? throw new ArgumentNullException(nameof(filePath));
     }
 
+    /// <summary>Gets the file path used for persistent storage.</summary>
     public string FilePath => _filePath;
 
+    /// <summary>Loads the environment config collection, using cache if available.</summary>
     public async Task<EnvironmentConfigCollection> LoadAsync(CancellationToken ct = default)
     {
         await _lock.WaitAsync(ct).ConfigureAwait(false);
@@ -59,6 +63,7 @@ public sealed class EnvironmentConfigStore : IDisposable
         }
     }
 
+    /// <summary>Persists the environment config collection to disk.</summary>
     public async Task SaveAsync(EnvironmentConfigCollection collection, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(collection);
@@ -142,6 +147,7 @@ public sealed class EnvironmentConfigStore : IDisposable
         return false;
     }
 
+    /// <summary>Clears the in-memory cache, forcing a reload from disk on next access.</summary>
     public void ClearCache()
     {
         _lock.Wait();
@@ -149,6 +155,7 @@ public sealed class EnvironmentConfigStore : IDisposable
         finally { _lock.Release(); }
     }
 
+    /// <inheritdoc />
     public void Dispose()
     {
         if (_disposed) return;

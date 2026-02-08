@@ -1,3 +1,4 @@
+using PPDS.Auth.Profiles;
 using PPDS.Auth.Credentials;
 using PPDS.Cli.Infrastructure.Errors;
 using PPDS.Cli.Services.Environment;
@@ -24,6 +25,11 @@ internal sealed class EnvironmentSelectorDialog : TuiDialog, ITuiStateCapture<En
     private readonly TuiSpinner _spinner;
     private readonly TextField _urlField;
     private readonly Button _selectButton;
+    private readonly Label _previewUrl;
+    private readonly Label _previewType;
+    private readonly Label _previewColor;
+    private readonly Label _previewStatus;
+    private readonly IEnvironmentConfigService? _configService;
 
     private IReadOnlyList<EnvironmentSummary> _allEnvironments = Array.Empty<EnvironmentSummary>();
     private IReadOnlyList<EnvironmentSummary> _filteredEnvironments = Array.Empty<EnvironmentSummary>();
@@ -61,9 +67,10 @@ internal sealed class EnvironmentSelectorDialog : TuiDialog, ITuiStateCapture<En
         _deviceCodeCallback = deviceCodeCallback;
         _session = session;
         _errorService = session?.GetErrorService();
+        _configService = session?.EnvironmentConfigService;
 
-        Width = 70;
-        Height = 22;
+        Width = 72;
+        Height = 28;
 
         // Filter field
         var filterLabel = new Label("Filter:")
@@ -103,18 +110,53 @@ internal sealed class EnvironmentSelectorDialog : TuiDialog, ITuiStateCapture<En
         _listView.OpenSelectedItem += OnItemActivated;
         listFrame.Add(_listView);
 
+        // Preview panel (shows details of selected environment)
+        var previewFrame = new FrameView("Environment Details")
+        {
+            X = 1,
+            Y = Pos.Bottom(listFrame),
+            Width = Dim.Fill() - 2,
+            Height = 5
+        };
+
+        _previewUrl = new Label("Select an environment to see details")
+        {
+            X = 0,
+            Y = 0,
+            Width = Dim.Fill()
+        };
+        _previewType = new Label(string.Empty)
+        {
+            X = 0,
+            Y = 1,
+            Width = Dim.Fill()
+        };
+        _previewColor = new Label(string.Empty)
+        {
+            X = 0,
+            Y = 2,
+            Width = Dim.Fill()
+        };
+        _previewStatus = new Label(string.Empty)
+        {
+            X = 0,
+            Y = 3,
+            Width = Dim.Fill()
+        };
+        previewFrame.Add(_previewUrl, _previewType, _previewColor, _previewStatus);
+
         // Manual URL entry
         var urlLabel = new Label("Or enter URL directly:")
         {
             X = 1,
-            Y = Pos.Bottom(listFrame) + 1,
+            Y = Pos.Bottom(previewFrame) + 1,
             Width = 22
         };
 
         _urlField = new TextField
         {
             X = Pos.Right(urlLabel) + 1,
-            Y = Pos.Bottom(listFrame) + 1,
+            Y = Pos.Bottom(previewFrame) + 1,
             Width = Dim.Fill() - 3,
             Text = string.Empty,
             ColorScheme = TuiColorPalette.TextInput
@@ -179,7 +221,7 @@ internal sealed class EnvironmentSelectorDialog : TuiDialog, ITuiStateCapture<En
         };
         cancelButton.Clicked += () => { Application.RequestStop(); };
 
-        Add(filterLabel, _filterField, listFrame, urlLabel, _urlField, _spinner, _statusLabel, _selectButton, detailsButton, configButton, cancelButton);
+        Add(filterLabel, _filterField, listFrame, previewFrame, urlLabel, _urlField, _spinner, _statusLabel, _selectButton, detailsButton, configButton, cancelButton);
 
         // Defer loading until dialog is visible to ensure spinner renders
         Loaded += () =>
@@ -251,7 +293,8 @@ internal sealed class EnvironmentSelectorDialog : TuiDialog, ITuiStateCapture<En
 
             foreach (var env in _filteredEnvironments)
             {
-                var typeText = env.Type != null ? $"[{env.Type}]" : "";
+                var resolvedType = ResolveDisplayType(env);
+                var typeText = resolvedType != null ? $"[{resolvedType}]" : "";
                 var regionText = env.Region != null ? $"({env.Region})" : "";
                 items.Add($"{env.DisplayName} {typeText} {regionText}");
             }
@@ -276,13 +319,16 @@ internal sealed class EnvironmentSelectorDialog : TuiDialog, ITuiStateCapture<En
 
     private void OnSelectedItemChanged(ListViewItemEventArgs args)
     {
-        // Show URL of selected environment (only if not typing a manual URL)
-        if (_listView.SelectedItem >= 0
-            && _listView.SelectedItem < _filteredEnvironments.Count
-            && string.IsNullOrEmpty(_urlField.Text?.ToString()))
+        if (_listView.SelectedItem >= 0 && _listView.SelectedItem < _filteredEnvironments.Count)
         {
             var env = _filteredEnvironments[_listView.SelectedItem];
-            _statusLabel.Text = env.Url;
+            UpdatePreviewPanel(env);
+
+            // Also update status label if not typing a manual URL
+            if (string.IsNullOrEmpty(_urlField.Text?.ToString()))
+            {
+                _statusLabel.Text = env.Url;
+            }
         }
     }
 
@@ -398,6 +444,13 @@ internal sealed class EnvironmentSelectorDialog : TuiDialog, ITuiStateCapture<En
         if (dialog.ConfigChanged)
         {
             _session.NotifyConfigChanged();
+            // Refresh list to show updated resolved labels
+            UpdateListView();
+            // Refresh preview for current selection
+            if (_listView.SelectedItem >= 0 && _listView.SelectedItem < _filteredEnvironments.Count)
+            {
+                UpdatePreviewPanel(_filteredEnvironments[_listView.SelectedItem]);
+            }
         }
     }
 
@@ -421,6 +474,62 @@ internal sealed class EnvironmentSelectorDialog : TuiDialog, ITuiStateCapture<En
             IsLoading: _spinner.Visible,
             HasDetailsButton: _session != null,
             ErrorMessage: null);
+    }
+
+    private void UpdatePreviewPanel(EnvironmentSummary env)
+    {
+        _previewUrl.Text = env.Url ?? "(unknown URL)";
+
+        if (_configService != null && env.Url != null)
+        {
+            try
+            {
+#pragma warning disable PPDS012 // Sync-over-async: Terminal.Gui event handler (cached store)
+                var config = _configService.GetConfigAsync(env.Url).GetAwaiter().GetResult();
+                var resolvedType = _configService.ResolveTypeAsync(env.Url, env.Type).GetAwaiter().GetResult();
+                var resolvedColor = _configService.ResolveColorAsync(env.Url).GetAwaiter().GetResult();
+                var resolvedLabel = _configService.ResolveLabelAsync(env.Url).GetAwaiter().GetResult();
+#pragma warning restore PPDS012
+
+                var labelText = !string.IsNullOrWhiteSpace(resolvedLabel) ? resolvedLabel : "(not set)";
+                _previewType.Text = $"Type: {resolvedType ?? "(not set)"}  |  Label: {labelText}";
+                _previewColor.Text = $"Color: {resolvedColor}  |  Region: {env.Region ?? "(unknown)"}";
+                _previewStatus.Text = config != null ? "Configured" : "Not configured \u2014 use Configure to set up";
+            }
+            catch
+            {
+                _previewType.Text = $"Type: {env.Type ?? "(unknown)"}";
+                _previewColor.Text = $"Region: {env.Region ?? "(unknown)"}";
+                _previewStatus.Text = string.Empty;
+            }
+        }
+        else
+        {
+            _previewType.Text = $"Type: {env.Type ?? "(unknown)"}";
+            _previewColor.Text = $"Region: {env.Region ?? "(unknown)"}";
+            _previewStatus.Text = string.Empty;
+        }
+    }
+
+    /// <summary>
+    /// Resolves the display type for an environment using config service if available,
+    /// falling back to the Discovery API type.
+    /// </summary>
+    private string? ResolveDisplayType(EnvironmentSummary env)
+    {
+        if (_configService == null || env.Url == null)
+            return env.Type;
+
+        try
+        {
+#pragma warning disable PPDS012 // Sync-over-async: Terminal.Gui event handler (cached store)
+            return _configService.ResolveTypeAsync(env.Url, env.Type).GetAwaiter().GetResult();
+#pragma warning restore PPDS012
+        }
+        catch
+        {
+            return env.Type;
+        }
     }
 
     private static EnvironmentType DetectEnvironmentType(string? type)

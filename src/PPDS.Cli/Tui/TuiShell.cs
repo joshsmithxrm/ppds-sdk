@@ -80,6 +80,7 @@ internal sealed class TuiShell : Window, ITuiStateCapture<TuiShellState>
         _statusBar = new TuiStatusBar(_session);
         _statusBar.ProfileClicked += OnStatusBarProfileClicked;
         _statusBar.EnvironmentClicked += OnStatusBarEnvironmentClicked;
+        _statusBar.EnvironmentConfigureRequested += OnStatusBarEnvironmentConfigureRequested;
 
         // Subscribe to error events
         _errorService.ErrorOccurred += OnErrorOccurred;
@@ -315,9 +316,12 @@ internal sealed class TuiShell : Window, ITuiStateCapture<TuiShellState>
         }
 
         // Tools menu (always present) - contains all workspaces/tools
+        var hasEnvironment = _session.CurrentEnvironmentUrl != null;
         menuItems.Add(new MenuBarItem("_Tools", new MenuItem[]
         {
             new("SQL Query", "Run SQL queries against Dataverse", () => NavigateToSqlQuery()),
+            new("Configure Environment...", "Configure label, type, and color",
+                hasEnvironment ? () => ShowEnvironmentConfig() : (Action?)null),
         }));
 
         // Help menu (always present)
@@ -565,9 +569,13 @@ internal sealed class TuiShell : Window, ITuiStateCapture<TuiShellState>
         {
             var url = dialog.UseManualUrl ? dialog.ManualUrl : dialog.SelectedEnvironment?.Url;
             var name = dialog.UseManualUrl ? dialog.ManualUrl : dialog.SelectedEnvironment?.DisplayName;
+            var discoveredType = dialog.SelectedEnvironment?.Type;
 
             if (url != null)
             {
+                // Prompt to configure if this environment is new/unconfigured
+                PromptToConfigureIfNeeded(url, name, discoveredType);
+
                 // Persist selection as profile default
                 _errorService.FireAndForget(SetEnvironmentAsync(url, name), "SetEnvironment");
 
@@ -581,6 +589,66 @@ internal sealed class TuiShell : Window, ITuiStateCapture<TuiShellState>
                 {
                     NavigateToSqlQueryOnEnvironment(url, name);
                 }
+            }
+        }
+    }
+
+    private void OnStatusBarEnvironmentConfigureRequested()
+    {
+        ShowEnvironmentConfig();
+    }
+
+    private void ShowEnvironmentConfig()
+    {
+        var url = _session.CurrentEnvironmentUrl;
+        if (string.IsNullOrEmpty(url))
+        {
+            MessageBox.ErrorQuery("No Environment", "Please connect to an environment first.", "OK");
+            return;
+        }
+
+        var displayName = _session.CurrentEnvironmentDisplayName;
+        using var dialog = new EnvironmentConfigDialog(_session, url, displayName);
+        Application.Run(dialog);
+
+        if (dialog.ConfigChanged)
+        {
+            _session.NotifyConfigChanged();
+        }
+    }
+
+    /// <summary>
+    /// Prompts the user to configure an environment if it has no saved configuration.
+    /// </summary>
+    private void PromptToConfigureIfNeeded(string url, string? displayName, string? discoveredType)
+    {
+        try
+        {
+#pragma warning disable PPDS012 // Sync-over-async: Terminal.Gui event handler (cached store)
+            var config = _session.EnvironmentConfigService
+                .GetConfigAsync(url).GetAwaiter().GetResult();
+#pragma warning restore PPDS012
+
+            if (config != null) return; // Already configured
+        }
+        catch
+        {
+            return; // Can't check — don't nag
+        }
+
+        var result = MessageBox.Query(
+            "Configure Environment",
+            "This environment isn't configured yet.\nSet a label and color for easy identification?",
+            "Yes", "Skip");
+
+        if (result == 0)
+        {
+            using var dialog = new EnvironmentConfigDialog(_session, url, displayName, discoveredType);
+            Application.Run(dialog);
+
+            if (dialog.ConfigChanged)
+            {
+                _session.NotifyConfigChanged();
             }
         }
     }
@@ -600,6 +668,12 @@ internal sealed class TuiShell : Window, ITuiStateCapture<TuiShellState>
 
             var envUrl = dialog.SelectedEnvironmentUrl ?? dialog.CreatedProfile.EnvironmentUrl;
             var envName = dialog.SelectedEnvironmentName ?? dialog.CreatedProfile.EnvironmentName;
+
+            // Prompt to configure the environment if unconfigured
+            if (envUrl != null)
+            {
+                PromptToConfigureIfNeeded(envUrl, envName, discoveredType: null);
+            }
 
             _errorService.FireAndForget(
                 SetActiveProfileWithEnvironmentAsync(dialog.CreatedProfile, envUrl, envName),
