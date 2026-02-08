@@ -590,7 +590,7 @@ internal sealed class TuiShell : Window, ITuiStateCapture<TuiShellState>
         var profileService = _session.GetProfileService();
         var envService = _session.GetEnvironmentService();
 
-        using var dialog = new ProfileCreationDialog(profileService, envService, _deviceCodeCallback);
+        using var dialog = new ProfileCreationDialog(profileService, envService, _deviceCodeCallback, _session);
         Application.Run(dialog);
 
         if (dialog.CreatedProfile != null)

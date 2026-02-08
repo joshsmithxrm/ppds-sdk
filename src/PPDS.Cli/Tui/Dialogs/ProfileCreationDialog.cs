@@ -514,9 +514,13 @@ internal sealed class ProfileCreationDialog : TuiDialog, ITuiStateCapture<Profil
         {
             beforeAuth = (dcCallback) =>
             {
+                // Terminal.Gui not initialized — default to opening browser directly
+                if (Application.MainLoop == null)
+                    return PreAuthDialogResult.OpenBrowser;
+
                 var result = PreAuthDialogResult.Cancel;
                 using var waitHandle = new ManualResetEventSlim(false);
-                Application.MainLoop?.Invoke(() =>
+                Application.MainLoop.Invoke(() =>
                 {
                     try
                     {
@@ -538,7 +542,11 @@ internal sealed class ProfileCreationDialog : TuiDialog, ITuiStateCapture<Profil
         _statusLabel.Text = "Authenticating...";
         Application.Refresh();
 
-        _errorService?.FireAndForget(CreateProfileAndHandleResultAsync(request, deviceCallback, beforeAuth), "CreateProfile");
+        var authTask = CreateProfileAndHandleResultAsync(request, deviceCallback, beforeAuth);
+        if (_errorService != null)
+            _errorService.FireAndForget(authTask, "CreateProfile");
+        else
+            _ = authTask.ContinueWith(t => { /* unobserved — no error service available */ }, TaskContinuationOptions.OnlyOnFaulted);
     }
 
     private async Task CreateProfileAndHandleResultAsync(
