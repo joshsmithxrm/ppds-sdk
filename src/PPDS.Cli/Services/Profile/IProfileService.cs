@@ -234,6 +234,16 @@ public sealed record ProfileCreateRequest
     public string? CertificateThumbprint { get; init; }
 
     /// <summary>
+    /// Username for ROPC authentication.
+    /// </summary>
+    public string? Username { get; init; }
+
+    /// <summary>
+    /// Password for ROPC authentication.
+    /// </summary>
+    public string? Password { get; init; }
+
+    /// <summary>
     /// Use managed identity.
     /// </summary>
     public bool UseManagedIdentity { get; init; }

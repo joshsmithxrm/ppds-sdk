@@ -277,6 +277,16 @@ public sealed class ProfileService : IProfileService
                     await credentialStore.StoreAsync(storedCredential, cancellationToken);
                     storedCredentialKey = request.ApplicationId;
                 }
+                else if (!string.IsNullOrWhiteSpace(request.Username) && !string.IsNullOrWhiteSpace(request.Password))
+                {
+                    var storedCredential = new StoredCredential
+                    {
+                        ApplicationId = request.Username,
+                        Password = request.Password
+                    };
+                    await credentialStore.StoreAsync(storedCredential, cancellationToken);
+                    storedCredentialKey = request.Username;
+                }
             }
 
             // Determine target URL for authentication
@@ -398,6 +408,9 @@ public sealed class ProfileService : IProfileService
         if (!string.IsNullOrWhiteSpace(request.ClientSecret))
             return AuthMethod.ClientSecret;
 
+        if (!string.IsNullOrWhiteSpace(request.Username) && !string.IsNullOrWhiteSpace(request.Password))
+            return AuthMethod.UsernamePassword;
+
         if (request.UseDeviceCode)
             return AuthMethod.DeviceCode;
 
@@ -443,6 +456,13 @@ public sealed class ProfileService : IProfileService
                     errors.Add(new ValidationError("certificateThumbprint", "Certificate store authentication is only supported on Windows."));
                 break;
 
+            case AuthMethod.UsernamePassword:
+                if (string.IsNullOrWhiteSpace(request.Username))
+                    errors.Add(new ValidationError("username", "Username is required for username/password authentication."));
+                if (string.IsNullOrWhiteSpace(request.Password))
+                    errors.Add(new ValidationError("password", "Password is required for username/password authentication."));
+                break;
+
             case AuthMethod.GitHubFederated:
             case AuthMethod.AzureDevOpsFederated:
                 if (string.IsNullOrWhiteSpace(request.ApplicationId))
@@ -479,6 +499,8 @@ public sealed class ProfileService : IProfileService
                 request.ApplicationId!, request.TenantId!, cloud),
             AuthMethod.AzureDevOpsFederated => new AzureDevOpsFederatedCredentialProvider(
                 request.ApplicationId!, request.TenantId!, cloud),
+            AuthMethod.UsernamePassword => new UsernamePasswordCredentialProvider(
+                request.Username!, request.Password!, cloud, request.TenantId),
             _ => throw new PpdsException(ErrorCodes.Operation.NotSupported, $"Auth method {authMethod} is not supported for profile creation.")
         };
     }
