@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using PPDS.Dataverse.Query;
+using PPDS.Dataverse.Query.Execution;
 using PPDS.Dataverse.Query.Planning.Nodes;
 using PPDS.Dataverse.Query.Planning.Partitioning;
 using PPDS.Dataverse.Query.Planning.Rewrites;
@@ -123,6 +124,16 @@ public sealed class QueryPlanner
             statement = ExistsToJoinRewrite.TryRewrite(statement);
         }
 
+        // Phase 7.2: Variable substitution. Replaces @variable references in WHERE
+        // conditions with their literal values so they can be pushed to FetchXML.
+        // Must run before transpilation because FetchXML doesn't understand variables.
+        if (options.VariableScope != null && statement.Where != null
+            && ContainsVariableExpression(statement.Where))
+        {
+            var newWhere = SubstituteVariables(statement.Where, options.VariableScope);
+            statement = ReplaceWhere(statement, newWhere);
+        }
+
         // Phase 0: transpile to FetchXML and create a simple scan node.
         //
         // NOTE: Virtual column expansion (e.g., owneridname from FormattedValues) stays
@@ -170,6 +181,13 @@ public sealed class QueryPlanner
         if (statement.Having != null)
         {
             rootNode = new ClientFilterNode(rootNode, statement.Having);
+        }
+
+        // Window functions: add ClientWindowNode to compute window values client-side.
+        // Must run before ProjectNode because window columns need to be materialized first.
+        if (HasWindowFunctions(statement))
+        {
+            rootNode = BuildWindowNode(rootNode, statement.Columns);
         }
 
         // Computed columns (CASE/IIF expressions): add ProjectNode to evaluate
@@ -592,6 +610,139 @@ public sealed class QueryPlanner
     }
 
     /// <summary>
+    /// Recursively checks if a condition tree contains any SqlVariableExpression nodes
+    /// (inside comparison conditions or expression conditions).
+    /// </summary>
+    private static bool ContainsVariableExpression(ISqlCondition? condition)
+    {
+        return condition switch
+        {
+            null => false,
+            SqlComparisonCondition => false, // Literal right side, no variable possible
+            SqlExpressionCondition exprCond =>
+                ContainsVariableInExpression(exprCond.Left) || ContainsVariableInExpression(exprCond.Right),
+            SqlLogicalCondition logical => logical.Conditions.Any(ContainsVariableExpression),
+            _ => false
+        };
+    }
+
+    /// <summary>
+    /// Recursively checks if an expression tree contains any SqlVariableExpression nodes.
+    /// </summary>
+    private static bool ContainsVariableInExpression(ISqlExpression expression)
+    {
+        return expression switch
+        {
+            SqlVariableExpression => true,
+            SqlBinaryExpression bin =>
+                ContainsVariableInExpression(bin.Left) || ContainsVariableInExpression(bin.Right),
+            SqlUnaryExpression unary => ContainsVariableInExpression(unary.Operand),
+            SqlFunctionExpression func => func.Arguments.Any(ContainsVariableInExpression),
+            _ => false
+        };
+    }
+
+    /// <summary>
+    /// Substitutes @variable references in a condition tree with their literal values
+    /// from the VariableScope. This enables FetchXML pushdown for conditions that
+    /// reference declared variables.
+    /// </summary>
+    private static ISqlCondition SubstituteVariables(ISqlCondition condition, VariableScope scope)
+    {
+        return condition switch
+        {
+            SqlExpressionCondition exprCond => SubstituteExpressionConditionVariables(exprCond, scope),
+            SqlLogicalCondition logical => new SqlLogicalCondition(
+                logical.Operator,
+                logical.Conditions.Select(c => SubstituteVariables(c, scope)).ToList()),
+            _ => condition
+        };
+    }
+
+    /// <summary>
+    /// Substitutes variables in an expression condition. If both sides resolve to literals
+    /// after substitution, produces a SqlComparisonCondition for FetchXML pushdown.
+    /// </summary>
+    private static ISqlCondition SubstituteExpressionConditionVariables(
+        SqlExpressionCondition exprCond, VariableScope scope)
+    {
+        var newLeft = SubstituteExpressionVariables(exprCond.Left, scope);
+        var newRight = SubstituteExpressionVariables(exprCond.Right, scope);
+
+        // If left is a column and right resolved to a literal, produce SqlComparisonCondition
+        // for FetchXML pushdown compatibility
+        if (newLeft is SqlColumnExpression colExpr && newRight is SqlLiteralExpression litExpr)
+        {
+            return new SqlComparisonCondition(colExpr.Column, exprCond.Operator, litExpr.Value);
+        }
+
+        return new SqlExpressionCondition(newLeft, exprCond.Operator, newRight);
+    }
+
+    /// <summary>
+    /// Substitutes @variable references in an expression with literal values.
+    /// </summary>
+    private static ISqlExpression SubstituteExpressionVariables(ISqlExpression expression, VariableScope scope)
+    {
+        return expression switch
+        {
+            SqlVariableExpression varExpr => VariableValueToLiteral(scope.Get(varExpr.VariableName)),
+            SqlBinaryExpression bin => new SqlBinaryExpression(
+                SubstituteExpressionVariables(bin.Left, scope),
+                bin.Operator,
+                SubstituteExpressionVariables(bin.Right, scope)),
+            SqlUnaryExpression unary => new SqlUnaryExpression(
+                unary.Operator,
+                SubstituteExpressionVariables(unary.Operand, scope)),
+            _ => expression
+        };
+    }
+
+    /// <summary>
+    /// Converts a variable value to a SqlLiteralExpression for AST substitution.
+    /// </summary>
+    private static SqlLiteralExpression VariableValueToLiteral(object? value)
+    {
+        if (value is null)
+        {
+            return new SqlLiteralExpression(SqlLiteral.Null());
+        }
+
+        return value switch
+        {
+            string s => new SqlLiteralExpression(SqlLiteral.String(s)),
+            int i => new SqlLiteralExpression(SqlLiteral.Number(i.ToString(CultureInfo.InvariantCulture))),
+            long l => new SqlLiteralExpression(SqlLiteral.Number(l.ToString(CultureInfo.InvariantCulture))),
+            decimal d => new SqlLiteralExpression(SqlLiteral.Number(d.ToString(CultureInfo.InvariantCulture))),
+            double d => new SqlLiteralExpression(SqlLiteral.Number(d.ToString(CultureInfo.InvariantCulture))),
+            float f => new SqlLiteralExpression(SqlLiteral.Number(f.ToString(CultureInfo.InvariantCulture))),
+            _ => new SqlLiteralExpression(SqlLiteral.String(
+                Convert.ToString(value, CultureInfo.InvariantCulture) ?? ""))
+        };
+    }
+
+    /// <summary>
+    /// Creates a new SELECT statement with a replaced WHERE clause.
+    /// </summary>
+    private static SqlSelectStatement ReplaceWhere(SqlSelectStatement statement, ISqlCondition? newWhere)
+    {
+        var newStatement = new SqlSelectStatement(
+            statement.Columns,
+            statement.From,
+            statement.Joins,
+            newWhere,
+            statement.OrderBy,
+            statement.Top,
+            statement.Distinct,
+            statement.GroupBy,
+            statement.Having,
+            statement.SourcePosition,
+            statement.GroupByExpressions);
+        newStatement.LeadingComments.AddRange(statement.LeadingComments);
+        return newStatement;
+    }
+
+    /// <summary>
     /// Creates a new statement with the IN subquery condition removed from WHERE.
     /// The removed condition is returned via the rewrite result for client-side fallback.
     /// </summary>
@@ -651,15 +802,46 @@ public sealed class QueryPlanner
     }
 
     /// <summary>
-    /// Checks whether the SELECT list contains any computed columns (CASE/IIF expressions).
+    /// Checks whether the SELECT list contains any computed columns (CASE/IIF expressions),
+    /// excluding window function expressions which are handled by ClientWindowNode.
     /// </summary>
     private static bool HasComputedColumns(SqlSelectStatement statement)
     {
-        return statement.Columns.Any(col => col is SqlComputedColumn);
+        return statement.Columns.Any(col =>
+            col is SqlComputedColumn computed && computed.Expression is not SqlWindowExpression);
+    }
+
+    /// <summary>
+    /// Checks whether the SELECT list contains any window function expressions.
+    /// </summary>
+    private static bool HasWindowFunctions(SqlSelectStatement statement)
+    {
+        return statement.Columns.Any(col =>
+            col is SqlComputedColumn computed && computed.Expression is SqlWindowExpression);
+    }
+
+    /// <summary>
+    /// Builds a ClientWindowNode that computes window function values for all matching rows.
+    /// </summary>
+    private static ClientWindowNode BuildWindowNode(IQueryPlanNode input, IReadOnlyList<ISqlSelectColumn> columns)
+    {
+        var windows = new List<WindowDefinition>();
+
+        foreach (var column in columns)
+        {
+            if (column is SqlComputedColumn { Expression: SqlWindowExpression windowExpr } computed)
+            {
+                var outputName = computed.Alias ?? "window_" + windows.Count;
+                windows.Add(new WindowDefinition(outputName, windowExpr));
+            }
+        }
+
+        return new ClientWindowNode(input, windows);
     }
 
     /// <summary>
     /// Builds a ProjectNode that passes through regular columns and evaluates computed columns.
+    /// Window function columns are passed through (already computed by ClientWindowNode).
     /// </summary>
     private static ProjectNode BuildProjectNode(IQueryPlanNode input, IReadOnlyList<ISqlSelectColumn> columns)
     {
@@ -681,6 +863,11 @@ public sealed class QueryPlanner
                 case SqlAggregateColumn agg:
                     var aggOutput = agg.Alias ?? agg.GetColumnName() ?? "count";
                     projections.Add(ProjectColumn.PassThrough(aggOutput));
+                    break;
+                case SqlComputedColumn computed when computed.Expression is SqlWindowExpression:
+                    // Window columns already computed by ClientWindowNode; pass through
+                    var windowAlias = computed.Alias ?? "window";
+                    projections.Add(ProjectColumn.PassThrough(windowAlias));
                     break;
                 case SqlComputedColumn computed:
                     var compAlias = computed.Alias ?? "computed";

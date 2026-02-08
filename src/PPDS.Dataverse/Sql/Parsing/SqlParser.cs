@@ -75,6 +75,28 @@ public sealed class SqlParser
         _comments = result.Comments;
 
         // Dispatch based on the first keyword
+        if (Check(SqlTokenType.Declare))
+        {
+            var stmt = ParseDeclareStatement();
+            if (!IsAtEnd())
+            {
+                throw Error($"Unexpected token: {Peek().Value}");
+            }
+            return stmt;
+        }
+
+        // SET @variable = expression (variable assignment)
+        // Note: SET without @ is handled by UPDATE parsing (UPDATE ... SET col = expr)
+        if (Check(SqlTokenType.Set) && PeekAt(_position + 1).Type == SqlTokenType.Variable)
+        {
+            var stmt = ParseSetVariableStatement();
+            if (!IsAtEnd())
+            {
+                throw Error($"Unexpected token: {Peek().Value}");
+            }
+            return stmt;
+        }
+
         if (Check(SqlTokenType.Insert))
         {
             var stmt = ParseInsertStatement();
@@ -581,6 +603,50 @@ public sealed class SqlParser
 
     #endregion
 
+    #region Variable Statement Parsing
+
+    /// <summary>
+    /// Parses a DECLARE statement:
+    ///   DECLARE @name TYPE [= expression]
+    /// </summary>
+    private SqlDeclareStatement ParseDeclareStatement()
+    {
+        var sourcePosition = Peek().Position;
+        Expect(SqlTokenType.Declare);
+
+        var varToken = Expect(SqlTokenType.Variable);
+        var variableName = varToken.Value;
+
+        var typeName = ParseTypeName();
+
+        ISqlExpression? initialValue = null;
+        if (Match(SqlTokenType.Equals))
+        {
+            initialValue = ParseExpression();
+        }
+
+        return new SqlDeclareStatement(variableName, typeName, initialValue, sourcePosition);
+    }
+
+    /// <summary>
+    /// Parses a SET @variable = expression statement.
+    /// </summary>
+    private SqlSetVariableStatement ParseSetVariableStatement()
+    {
+        var sourcePosition = Peek().Position;
+        Expect(SqlTokenType.Set);
+
+        var varToken = Expect(SqlTokenType.Variable);
+        var variableName = varToken.Value;
+
+        Expect(SqlTokenType.Equals);
+        var value = ParseExpression();
+
+        return new SqlSetVariableStatement(variableName, value, sourcePosition);
+    }
+
+    #endregion
+
     #region DML Parsing
 
     /// <summary>
@@ -809,12 +875,24 @@ public sealed class SqlParser
     }
 
     /// <summary>
-    /// Parses a single SELECT column (regular column, aggregate function, or computed expression).
+    /// Parses a single SELECT column (regular column, aggregate function, window function, or computed expression).
     /// </summary>
     private ISqlSelectColumn ParseSelectColumn()
     {
+        // Window ranking functions: ROW_NUMBER() OVER(...), RANK() OVER(...), DENSE_RANK() OVER(...)
+        if (IsWindowRankingFunction())
+        {
+            return ParseWindowRankingColumn();
+        }
+
         if (IsAggregateFunction())
         {
+            // Look ahead: if aggregate is followed by '(' args ')' OVER, it's a window aggregate
+            if (IsAggregateWindowFunction())
+            {
+                return ParseAggregateWindowColumn();
+            }
+
             return ParseAggregateColumn();
         }
 
@@ -900,6 +978,157 @@ public sealed class SqlParser
                Check(SqlTokenType.Avg) ||
                Check(SqlTokenType.Min) ||
                Check(SqlTokenType.Max);
+    }
+
+    /// <summary>
+    /// Checks if current token is a window ranking function (ROW_NUMBER, RANK, DENSE_RANK).
+    /// </summary>
+    private bool IsWindowRankingFunction()
+    {
+        return Check(SqlTokenType.RowNumber) ||
+               Check(SqlTokenType.Rank) ||
+               Check(SqlTokenType.DenseRank);
+    }
+
+    /// <summary>
+    /// Checks if the current aggregate function is followed by OVER (making it a window aggregate).
+    /// Scans ahead: aggregate '(' ... ')' OVER.
+    /// </summary>
+    private bool IsAggregateWindowFunction()
+    {
+        // We know current token is an aggregate function token.
+        // Look ahead to find the matching ')' after '(' and check if OVER follows.
+        var scanPos = _position + 1; // skip the aggregate token
+        if (scanPos >= _tokens.Count || _tokens[scanPos].Type != SqlTokenType.LeftParen)
+        {
+            return false;
+        }
+
+        // Find matching right paren
+        var depth = 0;
+        for (var i = scanPos; i < _tokens.Count; i++)
+        {
+            if (_tokens[i].Type == SqlTokenType.LeftParen)
+            {
+                depth++;
+            }
+            else if (_tokens[i].Type == SqlTokenType.RightParen)
+            {
+                depth--;
+                if (depth == 0)
+                {
+                    // Check if the token after ')' is OVER
+                    var afterParen = i + 1;
+                    return afterParen < _tokens.Count && _tokens[afterParen].Type == SqlTokenType.Over;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Parses a window ranking function: ROW_NUMBER() OVER (...), RANK() OVER (...), DENSE_RANK() OVER (...).
+    /// </summary>
+    private SqlComputedColumn ParseWindowRankingColumn()
+    {
+        var funcToken = Advance(); // consume ROW_NUMBER, RANK, or DENSE_RANK
+        var functionName = funcToken.Type switch
+        {
+            SqlTokenType.RowNumber => "ROW_NUMBER",
+            SqlTokenType.Rank => "RANK",
+            SqlTokenType.DenseRank => "DENSE_RANK",
+            _ => throw Error($"Unexpected window function: {funcToken.Type}")
+        };
+
+        Expect(SqlTokenType.LeftParen);
+        Expect(SqlTokenType.RightParen);
+
+        var (partitionBy, orderBy) = ParseOverClause();
+
+        var windowExpr = new SqlWindowExpression(functionName, null, partitionBy, orderBy);
+        var alias = ParseOptionalAlias();
+        return new SqlComputedColumn(windowExpr, alias);
+    }
+
+    /// <summary>
+    /// Parses an aggregate window function: SUM(revenue) OVER (...), COUNT(*) OVER (...), etc.
+    /// The aggregate token is at current position and we already verified OVER follows the closing paren.
+    /// </summary>
+    private SqlComputedColumn ParseAggregateWindowColumn()
+    {
+        var funcToken = Advance(); // consume aggregate keyword
+        var functionName = funcToken.Value.ToUpperInvariant();
+
+        Expect(SqlTokenType.LeftParen);
+
+        ISqlExpression? operand = null;
+        var isCountStar = false;
+
+        if (funcToken.Type == SqlTokenType.Count && Check(SqlTokenType.Star))
+        {
+            Advance(); // consume *
+            isCountStar = true;
+        }
+        else if (!Check(SqlTokenType.RightParen))
+        {
+            operand = ParseExpression();
+        }
+
+        Expect(SqlTokenType.RightParen);
+
+        var (partitionBy, orderBy) = ParseOverClause();
+
+        var windowExpr = new SqlWindowExpression(functionName, operand, partitionBy, orderBy, isCountStar);
+        var alias = ParseOptionalAlias();
+        return new SqlComputedColumn(windowExpr, alias);
+    }
+
+    /// <summary>
+    /// Parses OVER ([PARTITION BY expr, ...] [ORDER BY col [ASC|DESC], ...]).
+    /// The OVER keyword is expected at the current position.
+    /// </summary>
+    private (IReadOnlyList<ISqlExpression>? partitionBy, IReadOnlyList<SqlOrderByItem>? orderBy) ParseOverClause()
+    {
+        Expect(SqlTokenType.Over);
+        Expect(SqlTokenType.LeftParen);
+
+        List<ISqlExpression>? partitionBy = null;
+        List<SqlOrderByItem>? orderBy = null;
+
+        // PARTITION BY
+        if (Check(SqlTokenType.Partition))
+        {
+            Advance(); // consume PARTITION
+            Expect(SqlTokenType.By);
+
+            partitionBy = new List<ISqlExpression>();
+            partitionBy.Add(ParseExpression());
+
+            while (Match(SqlTokenType.Comma))
+            {
+                partitionBy.Add(ParseExpression());
+            }
+        }
+
+        // ORDER BY
+        if (Check(SqlTokenType.Order))
+        {
+            Advance(); // consume ORDER
+            Expect(SqlTokenType.By);
+
+            orderBy = new List<SqlOrderByItem>();
+            orderBy.Add(ParseOrderByItem());
+
+            while (Match(SqlTokenType.Comma))
+            {
+                orderBy.Add(ParseOrderByItem());
+            }
+        }
+
+        Expect(SqlTokenType.RightParen);
+
+        return (partitionBy, orderBy);
     }
 
     /// <summary>
@@ -1220,6 +1449,13 @@ public sealed class SqlParser
         {
             Advance();
             return new SqlLiteralExpression(SqlLiteral.Null());
+        }
+
+        // Variable reference: @name
+        if (Check(SqlTokenType.Variable))
+        {
+            var varToken = Advance();
+            return new SqlVariableExpression(varToken.Value);
         }
 
         // Column reference or function call (identifier, possibly table.column or func(...))

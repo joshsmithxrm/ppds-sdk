@@ -98,6 +98,18 @@ public enum SqlTokenType
     Delete,
     /// <summary>BETWEEN keyword.</summary>
     Between,
+    /// <summary>OVER keyword (window functions).</summary>
+    Over,
+    /// <summary>PARTITION keyword (window functions).</summary>
+    Partition,
+    /// <summary>ROW_NUMBER window function.</summary>
+    RowNumber,
+    /// <summary>RANK window function.</summary>
+    Rank,
+    /// <summary>DENSE_RANK window function.</summary>
+    DenseRank,
+    /// <summary>DECLARE keyword.</summary>
+    Declare,
 
     #endregion
 
@@ -164,6 +176,8 @@ public enum SqlTokenType
     String,
     /// <summary>Numeric literal.</summary>
     Number,
+    /// <summary>Variable reference (@name).</summary>
+    Variable,
 
     #endregion
 
@@ -226,6 +240,12 @@ public static class SqlTokenTypeExtensions
         SqlTokenType.Set,
         SqlTokenType.Delete,
         SqlTokenType.Between,
+        SqlTokenType.Over,
+        SqlTokenType.Partition,
+        SqlTokenType.RowNumber,
+        SqlTokenType.Rank,
+        SqlTokenType.DenseRank,
+        SqlTokenType.Declare,
         SqlTokenType.Count,
         SqlTokenType.Sum,
         SqlTokenType.Avg,
@@ -330,6 +350,12 @@ public static class SqlTokenTypeExtensions
         ["SET"] = SqlTokenType.Set,
         ["DELETE"] = SqlTokenType.Delete,
         ["BETWEEN"] = SqlTokenType.Between,
+        ["OVER"] = SqlTokenType.Over,
+        ["PARTITION"] = SqlTokenType.Partition,
+        ["ROW_NUMBER"] = SqlTokenType.RowNumber,
+        ["RANK"] = SqlTokenType.Rank,
+        ["DENSE_RANK"] = SqlTokenType.DenseRank,
+        ["DECLARE"] = SqlTokenType.Declare,
         ["COUNT"] = SqlTokenType.Count,
         ["SUM"] = SqlTokenType.Sum,
         ["AVG"] = SqlTokenType.Avg,
