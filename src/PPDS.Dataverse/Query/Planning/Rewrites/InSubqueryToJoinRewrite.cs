@@ -82,7 +82,8 @@ public static class InSubqueryToJoinRewrite
             distinct: true, // DISTINCT to prevent row multiplication from JOIN
             statement.GroupBy,
             statement.Having,
-            statement.SourcePosition);
+            statement.SourcePosition,
+            statement.GroupByExpressions);
         newStatement.LeadingComments.AddRange(statement.LeadingComments);
 
         return RewriteResult.Rewritten(newStatement);

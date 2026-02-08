@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Text;
 using System.Threading;
@@ -57,7 +58,7 @@ public sealed class DistinctNode : IQueryPlanNode
         var sb = new StringBuilder();
         var first = true;
 
-        foreach (var kvp in row.Values)
+        foreach (var kvp in row.Values.OrderBy(k => k.Key, StringComparer.Ordinal))
         {
             if (!first) sb.Append('\x1F'); // Unit Separator
             first = false;

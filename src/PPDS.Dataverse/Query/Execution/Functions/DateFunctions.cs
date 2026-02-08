@@ -222,7 +222,7 @@ public static class DateFunctions
                 "hour" => (int)(end.Value - start.Value).TotalHours,
                 "minute" => (int)(end.Value - start.Value).TotalMinutes,
                 "second" => (int)(end.Value - start.Value).TotalSeconds,
-                "millisecond" => (int)(end.Value - start.Value).TotalMilliseconds,
+                "millisecond" => checked((int)(end.Value - start.Value).TotalMilliseconds),
                 _ => throw new NotSupportedException($"DATEDIFF does not support datepart '{datepart}'.")
             };
         }

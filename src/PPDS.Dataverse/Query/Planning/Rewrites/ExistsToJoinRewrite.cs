@@ -49,6 +49,11 @@ public static class ExistsToJoinRewrite
         var allJoins = new List<SqlJoin>(statement.Joins);
         allJoins.AddRange(joins);
 
+        // DISTINCT is only needed for EXISTS (INNER JOIN) to prevent row multiplication.
+        // NOT EXISTS (LEFT JOIN + IS NULL) doesn't multiply rows, so skip DISTINCT for pure NOT EXISTS.
+        var hasExistsJoins = joins.Count > isNullConditions.Count;
+        var needsDistinct = statement.Distinct || hasExistsJoins;
+
         var newStatement = new SqlSelectStatement(
             statement.Columns,
             statement.From,
@@ -56,10 +61,11 @@ public static class ExistsToJoinRewrite
             finalWhere,
             statement.OrderBy,
             statement.Top,
-            distinct: true, // DISTINCT to prevent row multiplication from JOIN
+            needsDistinct,
             statement.GroupBy,
             statement.Having,
-            statement.SourcePosition);
+            statement.SourcePosition,
+            statement.GroupByExpressions);
         newStatement.LeadingComments.AddRange(statement.LeadingComments);
 
         return newStatement;

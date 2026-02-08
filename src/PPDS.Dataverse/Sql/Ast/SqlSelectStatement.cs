@@ -167,7 +167,8 @@ public sealed class SqlSelectStatement : ISqlStatement
             Distinct,
             GroupBy,
             Having,
-            SourcePosition);
+            SourcePosition,
+            GroupByExpressions);
         newStatement.LeadingComments.AddRange(LeadingComments);
         return newStatement;
     }
@@ -197,7 +198,8 @@ public sealed class SqlSelectStatement : ISqlStatement
             Distinct,
             GroupBy,
             Having,
-            SourcePosition);
+            SourcePosition,
+            GroupByExpressions);
         newStatement.LeadingComments.AddRange(LeadingComments);
         return newStatement;
     }
@@ -254,7 +256,8 @@ public sealed class SqlSelectStatement : ISqlStatement
             Distinct,
             GroupBy,
             Having,
-            SourcePosition);
+            SourcePosition,
+            GroupByExpressions);
         newStatement.LeadingComments.AddRange(LeadingComments);
         return newStatement;
     }

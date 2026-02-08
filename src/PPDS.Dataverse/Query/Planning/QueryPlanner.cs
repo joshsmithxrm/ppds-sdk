@@ -422,7 +422,8 @@ public sealed class QueryPlanner
             statement.Distinct,
             statement.GroupBy,
             statement.Having,
-            statement.SourcePosition);
+            statement.SourcePosition,
+            statement.GroupByExpressions);
         newStatement.LeadingComments.AddRange(statement.LeadingComments);
         return newStatement;
     }
