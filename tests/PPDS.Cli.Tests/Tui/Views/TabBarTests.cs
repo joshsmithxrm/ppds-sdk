@@ -22,7 +22,7 @@ public sealed class TabBarTests : IDisposable
         _tempStore = new TempProfileStore();
         _session = new InteractiveSession(null, _tempStore.Store, new MockServiceProviderFactory());
         _tabManager = new TabManager(new TuiThemeService());
-        _tabBar = new TabBar(_tabManager);
+        _tabBar = new TabBar(_tabManager, new TuiThemeService());
     }
 
     public void Dispose()

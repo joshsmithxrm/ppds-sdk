@@ -57,7 +57,7 @@ internal sealed class TuiShell : Window, ITuiStateCapture<TuiShellState>
 
         // Tab manager and tab bar
         _tabManager = new TabManager(_themeService);
-        _tabBar = new TabBar(_tabManager);
+        _tabBar = new TabBar(_tabManager, _themeService);
 
         // Content area where screens are displayed
         _contentArea = new FrameView("Main Menu")

@@ -1,4 +1,3 @@
-using PPDS.Auth.Profiles;
 using PPDS.Cli.Tui.Infrastructure;
 using PPDS.Cli.Tui.Testing;
 using PPDS.Cli.Tui.Testing.States;
@@ -13,6 +12,7 @@ namespace PPDS.Cli.Tui.Views;
 internal sealed class TabBar : View, ITuiStateCapture<TabBarState>
 {
     private readonly TabManager _tabManager;
+    private readonly ITuiThemeService _themeService;
     private readonly List<Label> _tabLabels = new();
     private Label? _addButton;
     private bool _isVisible;
@@ -20,9 +20,10 @@ internal sealed class TabBar : View, ITuiStateCapture<TabBarState>
     /// <summary>Raised when the [+] button is clicked to request a new tab.</summary>
     public event Action? NewTabClicked;
 
-    public TabBar(TabManager tabManager)
+    public TabBar(TabManager tabManager, ITuiThemeService themeService)
     {
         _tabManager = tabManager ?? throw new ArgumentNullException(nameof(tabManager));
+        _themeService = themeService ?? throw new ArgumentNullException(nameof(themeService));
 
         X = 0;
         Y = 1; // Below menu bar
@@ -61,7 +62,7 @@ internal sealed class TabBar : View, ITuiStateCapture<TabBarState>
             {
                 var tab = _tabManager.Tabs[i];
                 var index = i; // Capture for closure
-                var envLabel = GetEnvironmentLabel(tab.EnvironmentType);
+                var envLabel = _themeService.GetEnvironmentLabelForUrl(tab.EnvironmentUrl);
                 var text = string.IsNullOrEmpty(envLabel)
                     ? $" {i + 1}: {tab.Screen.Title} "
                     : $" {i + 1}: {tab.Screen.Title} [{envLabel}] ";
@@ -128,15 +129,6 @@ internal sealed class TabBar : View, ITuiStateCapture<TabBarState>
             TabLabels: labels,
             IsVisible: _isVisible);
     }
-
-    private static string GetEnvironmentLabel(EnvironmentType envType) => envType switch
-    {
-        EnvironmentType.Production => "PROD",
-        EnvironmentType.Sandbox => "SANDBOX",
-        EnvironmentType.Development => "DEV",
-        EnvironmentType.Trial => "TRIAL",
-        _ => ""
-    };
 
     protected override void Dispose(bool disposing)
     {
