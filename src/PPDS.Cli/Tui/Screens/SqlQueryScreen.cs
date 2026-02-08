@@ -19,6 +19,12 @@ namespace PPDS.Cli.Tui.Screens;
 /// </summary>
 internal sealed class SqlQueryScreen : TuiScreenBase, ITuiStateCapture<SqlQueryScreenState>
 {
+    /// <summary>
+    /// Number of rows per streaming chunk. Results appear incrementally in batches
+    /// of this size, providing visual feedback while loading continues in the background.
+    /// </summary>
+    private const int StreamingChunkSize = 100;
+
     private readonly Action<DeviceCodeInfo>? _deviceCodeCallback;
 
     private readonly FrameView _queryFrame;
@@ -336,7 +342,7 @@ internal sealed class SqlQueryScreen : TuiScreenBase, ITuiStateCapture<SqlQueryS
             return;
         }
 
-        TuiDebugLog.Log($"Starting query execution for: {EnvironmentUrl}");
+        TuiDebugLog.Log($"Starting streaming query execution for: {EnvironmentUrl}");
 
         _isExecuting = true;
         _lastErrorMessage = null;
@@ -345,12 +351,14 @@ internal sealed class SqlQueryScreen : TuiScreenBase, ITuiStateCapture<SqlQueryS
         _statusLabel.Visible = false;
         _statusSpinner.Start("Executing query...");
 
+        var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+
         try
         {
             TuiDebugLog.Log($"Getting SQL query service for URL: {EnvironmentUrl}");
 
             var service = await Session.GetSqlQueryServiceAsync(EnvironmentUrl, ScreenCancellation);
-            TuiDebugLog.Log("Got service, executing query...");
+            TuiDebugLog.Log("Got service, executing streaming query...");
 
             var request = new SqlQueryRequest
             {
@@ -359,32 +367,82 @@ internal sealed class SqlQueryScreen : TuiScreenBase, ITuiStateCapture<SqlQueryS
                 PagingCookie = null
             };
 
-            var result = await service.ExecuteAsync(request, ScreenCancellation);
-            TuiDebugLog.Log($"Query complete: {result.Result.Count} rows in {result.Result.ExecutionTimeMs}ms");
+            IReadOnlyList<Dataverse.Query.QueryColumn>? columns = null;
+            var totalRows = 0;
+            var isFirstChunk = true;
+
+            await foreach (var chunk in service.ExecuteStreamingAsync(request, StreamingChunkSize, ScreenCancellation))
+            {
+                // Capture column metadata from first chunk
+                if (isFirstChunk && chunk.Columns != null)
+                {
+                    columns = chunk.Columns;
+                }
+
+                totalRows = chunk.TotalRowsSoFar;
+
+                // Marshal UI updates to the main thread
+                var chunkCapture = chunk;
+                var columnsCapture = columns;
+                var isFirst = isFirstChunk;
+
+                Application.MainLoop?.Invoke(() =>
+                {
+                    try
+                    {
+                        if (isFirst && columnsCapture != null)
+                        {
+                            _resultsTable.InitializeStreamingColumns(
+                                columnsCapture,
+                                chunkCapture.EntityLogicalName ?? "unknown");
+                            NotifyMenuChanged();
+                        }
+
+                        if (chunkCapture.Rows.Count > 0 && columnsCapture != null)
+                        {
+                            _resultsTable.AppendStreamingRows(chunkCapture.Rows, columnsCapture);
+                        }
+
+                        // Update spinner with progress
+                        if (!chunkCapture.IsComplete)
+                        {
+                            _statusSpinner.Message = $"Loading... {chunkCapture.TotalRowsSoFar:N0} rows";
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        ErrorService.ReportError("Failed to display streaming results", ex, "ExecuteQuery.StreamChunk");
+                        TuiDebugLog.Log($"Error in streaming chunk callback: {ex}");
+                    }
+                });
+
+                isFirstChunk = false;
+            }
+
+            stopwatch.Stop();
+            var elapsedMs = stopwatch.ElapsedMilliseconds;
+
+            TuiDebugLog.Log($"Streaming query complete: {totalRows} rows in {elapsedMs}ms");
 
             Application.MainLoop?.Invoke(() =>
             {
                 try
                 {
-                    _resultsTable.LoadResults(result.Result);
-                    NotifyMenuChanged(); // Notify shell to enable File > Export menu
                     _lastSql = sql;
-                    _lastPagingCookie = result.Result.PagingCookie;
-                    _lastPageNumber = result.Result.PageNumber;
+                    _lastPageNumber = 1;
+                    _lastPagingCookie = null;
 
-                    var moreText = result.Result.MoreRecords ? " (more available)" : "";
-                    _statusText = $"Returned {result.Result.Count} rows in {result.Result.ExecutionTimeMs}ms{moreText}";
+                    _statusText = $"Returned {totalRows:N0} rows in {elapsedMs}ms";
                 }
                 catch (Exception ex)
                 {
-                    ErrorService.ReportError("Failed to display query results", ex, "ExecuteQuery.LoadResults");
+                    ErrorService.ReportError("Failed to finalize query results", ex, "ExecuteQuery.Finalize");
                     _lastErrorMessage = ex.Message;
-                    _statusText = $"Error displaying results: {ex.Message}";
-                    TuiDebugLog.Log($"Error in ExecuteQuery callback: {ex}");
+                    _statusText = $"Error finalizing results: {ex.Message}";
+                    TuiDebugLog.Log($"Error in ExecuteQuery finalize callback: {ex}");
                 }
                 finally
                 {
-                    // Always cleanup: stop spinner, show status, reset executing flag
                     _statusSpinner.Stop();
                     _statusLabel.Text = _statusText;
                     _statusLabel.Visible = true;
@@ -394,7 +452,7 @@ internal sealed class SqlQueryScreen : TuiScreenBase, ITuiStateCapture<SqlQueryS
 
             // Save to history (fire-and-forget)
             ErrorService.FireAndForget(
-                SaveToHistoryAsync(sql, result.Result.Count, result.Result.ExecutionTimeMs),
+                SaveToHistoryAsync(sql, totalRows, stopwatch.ElapsedMilliseconds),
                 "SaveHistory");
         }
         catch (DataverseAuthenticationException authEx) when (authEx.RequiresReauthentication)

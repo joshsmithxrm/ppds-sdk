@@ -186,6 +186,86 @@ internal sealed class QueryResultsTableView : FrameView
     }
 
     /// <summary>
+    /// Initializes the table with column metadata for streaming results.
+    /// Call this before <see cref="AppendStreamingRows"/> to set up column headers.
+    /// </summary>
+    /// <param name="columns">The column metadata from the first streaming chunk.</param>
+    /// <param name="entityLogicalName">The entity logical name for building record URLs.</param>
+    public void InitializeStreamingColumns(IReadOnlyList<QueryColumn> columns, string entityLogicalName)
+    {
+        _unfilteredDataTable = null;
+        _currentFilter = null;
+
+        var table = new DataTable();
+        var columnTypes = new Dictionary<string, QueryColumnType>();
+        var usedNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var column in columns)
+        {
+            var name = column.LogicalName;
+            var uniqueName = name;
+            var counter = 1;
+            while (!usedNames.Add(uniqueName))
+            {
+                uniqueName = $"{name}_{counter++}";
+            }
+            table.Columns.Add(uniqueName, typeof(string));
+            columnTypes[uniqueName] = column.DataType;
+        }
+
+        _dataTable = table;
+        _columnTypes = columnTypes;
+        _tableView.Table = _dataTable;
+
+        // Store a synthetic last result for URL building
+        _lastResult = new QueryResult
+        {
+            EntityLogicalName = entityLogicalName,
+            Columns = columns,
+            Records = Array.Empty<IReadOnlyDictionary<string, QueryValue>>(),
+            Count = 0
+        };
+
+        _emptyStateLabel.Visible = false;
+    }
+
+    /// <summary>
+    /// Appends a batch of rows from a streaming chunk.
+    /// Call <see cref="InitializeStreamingColumns"/> first to set up column headers.
+    /// </summary>
+    /// <param name="rows">The row data to append.</param>
+    /// <param name="columns">The column metadata (used for column name ordering).</param>
+    public void AppendStreamingRows(
+        IReadOnlyList<IReadOnlyDictionary<string, QueryValue>> rows,
+        IReadOnlyList<QueryColumn> columns)
+    {
+        var isFirstBatch = _dataTable.Rows.Count == 0;
+
+        foreach (var record in rows)
+        {
+            var row = _dataTable.NewRow();
+            for (int i = 0; i < columns.Count && i < _dataTable.Columns.Count; i++)
+            {
+                var column = columns[i];
+                if (record.TryGetValue(column.LogicalName, out var value))
+                {
+                    row[i] = QueryResultConverter.FormatValue(value);
+                }
+            }
+            _dataTable.Rows.Add(row);
+        }
+
+        // Only apply column sizing on the first batch (expensive operation)
+        if (isFirstBatch)
+        {
+            ApplyColumnSizing();
+        }
+
+        _tableView.SetNeedsDisplay();
+        UpdateStatus();
+    }
+
+    /// <summary>
     /// Clears all results from the table.
     /// </summary>
     public void ClearData()

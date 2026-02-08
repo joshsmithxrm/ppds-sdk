@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using PPDS.Cli.Infrastructure.Errors;
 using PPDS.Dataverse.Query;
 using PPDS.Dataverse.Query.Execution;
@@ -152,5 +153,105 @@ public sealed class SqlQueryService : ISqlQueryService
         var description = QueryPlanDescription.FromNode(planResult.RootNode);
 
         return Task.FromResult(description);
+    }
+
+    /// <inheritdoc />
+    public async IAsyncEnumerable<SqlQueryStreamChunk> ExecuteStreamingAsync(
+        SqlQueryRequest request,
+        int chunkSize = 100,
+        [EnumeratorCancellation] CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        ArgumentException.ThrowIfNullOrWhiteSpace(request.Sql);
+
+        if (chunkSize <= 0) chunkSize = 100;
+
+        // Parse SQL into AST
+        var parser = new SqlParser(request.Sql);
+        var statement = parser.ParseStatement();
+
+        // Apply TopOverride if the statement is a SELECT
+        if (request.TopOverride.HasValue && statement is SqlSelectStatement selectStmt)
+        {
+            statement = selectStmt.WithTop(request.TopOverride.Value);
+        }
+
+        // Build execution plan via QueryPlanner
+        var planOptions = new QueryPlanOptions
+        {
+            MaxRows = request.TopOverride,
+            PageNumber = request.PageNumber,
+            PagingCookie = request.PagingCookie,
+            IncludeCount = request.IncludeCount,
+            UseTdsEndpoint = request.UseTdsEndpoint,
+            OriginalSql = request.Sql,
+            TdsQueryExecutor = _tdsQueryExecutor
+        };
+
+        var planResult = _planner.Plan(statement, planOptions);
+
+        // Execute the plan with streaming
+        var context = new QueryPlanContext(
+            _queryExecutor,
+            _expressionEvaluator,
+            cancellationToken);
+
+        var chunkRows = new List<IReadOnlyDictionary<string, QueryValue>>(chunkSize);
+        IReadOnlyList<QueryColumn>? columns = null;
+        var totalRows = 0;
+        var isFirstChunk = true;
+
+        await foreach (var row in _planExecutor.ExecuteStreamingAsync(planResult, context, cancellationToken))
+        {
+            // Infer columns from first row
+            if (columns == null)
+            {
+                columns = InferColumnsFromRow(row);
+            }
+
+            chunkRows.Add(row.Values);
+            totalRows++;
+
+            if (chunkRows.Count >= chunkSize)
+            {
+                yield return new SqlQueryStreamChunk
+                {
+                    Rows = chunkRows.ToList(),
+                    Columns = isFirstChunk ? columns : null,
+                    EntityLogicalName = isFirstChunk ? planResult.EntityLogicalName : null,
+                    TotalRowsSoFar = totalRows,
+                    IsComplete = false,
+                    TranspiledFetchXml = isFirstChunk ? planResult.FetchXml : null
+                };
+
+                isFirstChunk = false;
+                chunkRows.Clear();
+            }
+        }
+
+        // Yield final chunk with any remaining rows
+        yield return new SqlQueryStreamChunk
+        {
+            Rows = chunkRows.ToList(),
+            Columns = isFirstChunk ? (columns ?? Array.Empty<QueryColumn>()) : null,
+            EntityLogicalName = isFirstChunk ? planResult.EntityLogicalName : null,
+            TotalRowsSoFar = totalRows,
+            IsComplete = true,
+            TranspiledFetchXml = isFirstChunk ? planResult.FetchXml : null
+        };
+    }
+
+    private static IReadOnlyList<QueryColumn> InferColumnsFromRow(QueryRow row)
+    {
+        var columns = new List<QueryColumn>();
+        foreach (var key in row.Values.Keys)
+        {
+            columns.Add(new QueryColumn
+            {
+                LogicalName = key,
+                DataType = QueryColumnType.Unknown
+            });
+        }
+        return columns;
     }
 }

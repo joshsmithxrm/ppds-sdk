@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using PPDS.Cli.Services.Query;
 using PPDS.Dataverse.Query;
 using PPDS.Dataverse.Query.Planning;
@@ -63,6 +64,33 @@ public sealed class FakeSqlQueryService : ISqlQueryService
             NodeType = "FetchXmlScanNode",
             Description = "Mock plan"
         });
+    }
+
+    /// <inheritdoc />
+    public async IAsyncEnumerable<SqlQueryStreamChunk> ExecuteStreamingAsync(
+        SqlQueryRequest request,
+        int chunkSize = 100,
+        [EnumeratorCancellation] CancellationToken cancellationToken = default)
+    {
+        _executedQueries.Add(request);
+
+        if (ExceptionToThrow != null)
+        {
+            throw ExceptionToThrow;
+        }
+
+        // Yield a single chunk with all rows from NextResult
+        yield return new SqlQueryStreamChunk
+        {
+            Rows = NextResult.Result.Records,
+            Columns = NextResult.Result.Columns,
+            EntityLogicalName = NextResult.Result.EntityLogicalName,
+            TotalRowsSoFar = NextResult.Result.Count,
+            IsComplete = true,
+            TranspiledFetchXml = NextResult.TranspiledFetchXml
+        };
+
+        await Task.CompletedTask;
     }
 
     /// <summary>

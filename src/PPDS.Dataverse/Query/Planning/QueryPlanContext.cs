@@ -35,6 +35,9 @@ public sealed class QueryPlanContext
     /// <summary>Optional bulk operation executor for DML operations (INSERT, UPDATE, DELETE).</summary>
     public IBulkOperationExecutor? BulkOperationExecutor { get; }
 
+    /// <summary>Optional variable scope for resolving @variable references in expressions.</summary>
+    public VariableScope? VariableScope { get; }
+
     public QueryPlanContext(
         IQueryExecutor queryExecutor,
         IExpressionEvaluator expressionEvaluator,
@@ -43,7 +46,8 @@ public sealed class QueryPlanContext
         IQueryProgressReporter? progressReporter = null,
         ITdsQueryExecutor? tdsQueryExecutor = null,
         IMetadataQueryExecutor? metadataQueryExecutor = null,
-        IBulkOperationExecutor? bulkOperationExecutor = null)
+        IBulkOperationExecutor? bulkOperationExecutor = null,
+        VariableScope? variableScope = null)
     {
         QueryExecutor = queryExecutor ?? throw new ArgumentNullException(nameof(queryExecutor));
         ExpressionEvaluator = expressionEvaluator ?? throw new ArgumentNullException(nameof(expressionEvaluator));
@@ -53,5 +57,6 @@ public sealed class QueryPlanContext
         TdsQueryExecutor = tdsQueryExecutor;
         MetadataQueryExecutor = metadataQueryExecutor;
         BulkOperationExecutor = bulkOperationExecutor;
+        VariableScope = variableScope;
     }
 }

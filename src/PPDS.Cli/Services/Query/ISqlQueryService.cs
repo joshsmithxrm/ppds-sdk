@@ -40,4 +40,18 @@ public interface ISqlQueryService
     /// <returns>Description of the execution plan.</returns>
     /// <exception cref="PPDS.Dataverse.Sql.Parsing.SqlParseException">If SQL parsing fails.</exception>
     Task<QueryPlanDescription> ExplainAsync(string sql, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Executes a SQL query and streams results back in chunks as they become available.
+    /// The first chunk includes column metadata; subsequent chunks carry only rows.
+    /// </summary>
+    /// <param name="request">The query request parameters.</param>
+    /// <param name="chunkSize">Number of rows per chunk (default 100).</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>An async stream of result chunks.</returns>
+    /// <exception cref="PPDS.Dataverse.Sql.Parsing.SqlParseException">If SQL parsing fails.</exception>
+    IAsyncEnumerable<SqlQueryStreamChunk> ExecuteStreamingAsync(
+        SqlQueryRequest request,
+        int chunkSize = 100,
+        CancellationToken cancellationToken = default);
 }

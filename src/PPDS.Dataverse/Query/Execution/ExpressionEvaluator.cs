@@ -14,6 +14,11 @@ public sealed class ExpressionEvaluator : IExpressionEvaluator
     private readonly FunctionRegistry _functionRegistry;
 
     /// <summary>
+    /// Optional variable scope for resolving @variable references.
+    /// </summary>
+    public VariableScope? VariableScope { get; set; }
+
+    /// <summary>
     /// Creates an evaluator with the default function registry (all built-in functions).
     /// </summary>
     public ExpressionEvaluator()
@@ -35,6 +40,7 @@ public sealed class ExpressionEvaluator : IExpressionEvaluator
         {
             SqlLiteralExpression lit => EvaluateLiteral(lit),
             SqlColumnExpression col => EvaluateColumn(col, row),
+            SqlVariableExpression var => EvaluateVariable(var),
             SqlBinaryExpression bin => EvaluateBinary(bin, row),
             SqlUnaryExpression unary => EvaluateUnary(unary, row),
             SqlCaseExpression caseExpr => EvaluateCase(caseExpr, row),
@@ -91,6 +97,17 @@ public sealed class ExpressionEvaluator : IExpressionEvaluator
         }
 
         return null;
+    }
+
+    private object? EvaluateVariable(SqlVariableExpression varExpr)
+    {
+        if (VariableScope == null)
+        {
+            throw new InvalidOperationException(
+                $"Variable {varExpr.VariableName} cannot be resolved: no VariableScope is configured.");
+        }
+
+        return VariableScope.Get(varExpr.VariableName);
     }
 
     private object? EvaluateBinary(SqlBinaryExpression bin, IReadOnlyDictionary<string, QueryValue> row)

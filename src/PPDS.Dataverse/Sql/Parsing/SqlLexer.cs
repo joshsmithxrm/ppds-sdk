@@ -163,6 +163,12 @@ public sealed class SqlLexer
             return ReadQuotedIdentifier();
         }
 
+        // Variable references: @name
+        if (ch == '@')
+        {
+            return ReadVariable();
+        }
+
         // Numbers
         if (IsDigit(ch))
         {
@@ -318,6 +324,32 @@ public sealed class SqlLexer
         }
 
         return new SqlToken(SqlTokenType.Identifier, valueStr, startPosition);
+    }
+
+    /// <summary>
+    /// Reads a variable reference: @name.
+    /// The @ prefix is included in the token value.
+    /// </summary>
+    private SqlToken ReadVariable()
+    {
+        var startPosition = _position;
+        Advance(); // consume @
+
+        var value = new System.Text.StringBuilder();
+        value.Append('@');
+
+        if (IsAtEnd() || !IsIdentifierStart(Peek()))
+        {
+            throw SqlParseException.AtPosition("Expected variable name after @", startPosition, _sql);
+        }
+
+        while (!IsAtEnd() && IsIdentifierChar(Peek()))
+        {
+            value.Append(Peek());
+            Advance();
+        }
+
+        return new SqlToken(SqlTokenType.Variable, value.ToString(), startPosition);
     }
 
     /// <summary>

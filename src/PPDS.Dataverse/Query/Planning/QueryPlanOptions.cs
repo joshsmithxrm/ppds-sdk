@@ -1,5 +1,6 @@
 using System;
 using PPDS.Dataverse.Query;
+using PPDS.Dataverse.Query.Execution;
 
 namespace PPDS.Dataverse.Query.Planning;
 
@@ -76,4 +77,10 @@ public sealed class QueryPlanOptions
     /// Maximum records per partition. Default is 40,000 to provide headroom below the 50K limit.
     /// </summary>
     public int MaxRecordsPerPartition { get; init; } = 40_000;
+
+    /// <summary>
+    /// Optional variable scope for substituting @variable references in WHERE conditions
+    /// with literal values before FetchXML transpilation.
+    /// </summary>
+    public VariableScope? VariableScope { get; init; }
 }

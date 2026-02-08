@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
 using PPDS.Dataverse.Query.Planning;
@@ -61,6 +62,27 @@ public sealed class PlanExecutor
             ExecutionTimeMs = stopwatch.ElapsedMilliseconds,
             ExecutedFetchXml = planResult.FetchXml
         };
+    }
+
+    /// <summary>
+    /// Executes a query plan and yields rows one-at-a-time as an IAsyncEnumerable,
+    /// enabling progressive streaming to the caller without buffering all rows in memory.
+    /// </summary>
+    /// <param name="planResult">The plan to execute.</param>
+    /// <param name="context">The execution context.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>An async stream of query rows.</returns>
+    public async IAsyncEnumerable<QueryRow> ExecuteStreamingAsync(
+        QueryPlanResult planResult,
+        QueryPlanContext context,
+        [EnumeratorCancellation] CancellationToken cancellationToken = default)
+    {
+        await foreach (var row in planResult.RootNode.ExecuteAsync(context, cancellationToken))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            context.Statistics.IncrementRowsOutput();
+            yield return row;
+        }
     }
 
     private static List<QueryColumn> InferColumnsFromRow(QueryRow row)
