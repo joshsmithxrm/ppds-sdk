@@ -61,6 +61,18 @@ public class QueryExecutor : IQueryExecutor
         // Extract column metadata before execution
         var columns = ExtractColumns(entityElement, entityLogicalName, isAggregate);
 
+        // Resolve top/page conflict: Dataverse rejects FetchXML with both top and page attributes.
+        // If top is present and we're about to add paging, convert top to count.
+        var topAttr = fetchElement.Attribute("top");
+        if (topAttr != null && (pageNumber.HasValue || !string.IsNullOrEmpty(pagingCookie)))
+        {
+            if (int.TryParse(topAttr.Value, out var topInt))
+            {
+                topAttr.Remove();
+                fetchElement.SetAttributeValue("count", Math.Min(topInt, 5000).ToString());
+            }
+        }
+
         // Apply paging if specified
         var effectivePageNumber = pageNumber ?? 1;
         if (pageNumber.HasValue || !string.IsNullOrEmpty(pagingCookie))

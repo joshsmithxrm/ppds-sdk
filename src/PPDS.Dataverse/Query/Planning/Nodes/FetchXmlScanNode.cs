@@ -2,6 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 using System.Threading;
+using System.Xml.Linq;
+using PPDS.Dataverse.Query.Execution;
 
 namespace PPDS.Dataverse.Query.Planning.Nodes;
 
@@ -37,6 +39,9 @@ public sealed class FetchXmlScanNode : IQueryPlanNode
     /// <summary>Whether to request total record count from Dataverse.</summary>
     public bool IncludeCount { get; }
 
+    /// <summary>The prepared FetchXML for execution (top converted to count for paging compatibility).</summary>
+    private readonly string _effectiveFetchXml;
+
     /// <inheritdoc />
     public string Description => $"FetchXmlScan: {EntityLogicalName}" +
         (AutoPage ? " (all pages)" : " (single page)") +
@@ -64,6 +69,7 @@ public sealed class FetchXmlScanNode : IQueryPlanNode
         InitialPageNumber = initialPageNumber;
         InitialPagingCookie = initialPagingCookie;
         IncludeCount = includeCount;
+        _effectiveFetchXml = PrepareFetchXmlForExecution(fetchXml);
     }
 
     /// <inheritdoc />
@@ -79,12 +85,28 @@ public sealed class FetchXmlScanNode : IQueryPlanNode
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            var result = await context.QueryExecutor.ExecuteFetchXmlAsync(
-                FetchXml,
-                pageNumber,
-                pagingCookie,
-                includeCount: IncludeCount,
-                cancellationToken).ConfigureAwait(false);
+            QueryResult result;
+            try
+            {
+                result = await context.QueryExecutor.ExecuteFetchXmlAsync(
+                    _effectiveFetchXml,
+                    pageNumber,
+                    pagingCookie,
+                    includeCount: IncludeCount,
+                    cancellationToken).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+                throw; // Respect cancellation
+            }
+            catch (Exception ex) when (IsAggregateLimitExceeded(ex))
+            {
+                throw new QueryExecutionException(
+                    QueryErrorCode.AggregateLimitExceeded,
+                    "Aggregate query exceeded the Dataverse 50,000 record limit. " +
+                    "Consider adding more restrictive filters or partitioning by date range.",
+                    ex);
+            }
 
             context.Statistics.IncrementPagesFetched();
 
@@ -113,6 +135,60 @@ public sealed class FetchXmlScanNode : IQueryPlanNode
 
             pagingCookie = result.PagingCookie;
             pageNumber++;
+        }
+    }
+
+    /// <summary>
+    /// Detects Dataverse AggregateQueryRecordLimit errors from exception messages.
+    /// </summary>
+    private static bool IsAggregateLimitExceeded(Exception ex)
+    {
+        var current = ex;
+        while (current != null)
+        {
+            if (current.Message.Contains("AggregateQueryRecordLimit", StringComparison.OrdinalIgnoreCase)
+                || current.Message.Contains("aggregate operation exceeded", StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+            current = current.InnerException;
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// Prepares FetchXML for execution by resolving the top/page attribute conflict.
+    /// Dataverse rejects FetchXML with both 'top' and 'page' attributes.
+    /// When 'top' is present, converts it to 'count' (page size) so paging works.
+    /// Client-side MaxRows limiting handles the actual row cap.
+    /// </summary>
+    private static string PrepareFetchXmlForExecution(string fetchXml)
+    {
+        // Quick check to avoid XML parsing overhead for non-top queries
+        if (!fetchXml.Contains("top=", StringComparison.OrdinalIgnoreCase))
+            return fetchXml;
+
+        try
+        {
+            var doc = XDocument.Parse(fetchXml);
+            var fetchElement = doc.Root;
+            if (fetchElement == null) return fetchXml;
+
+            var topAttr = fetchElement.Attribute("top");
+            if (topAttr == null) return fetchXml;
+
+            if (int.TryParse(topAttr.Value, out var topValue))
+            {
+                topAttr.Remove();
+                // Use the top value as count (page size), capped at 5000 (Dataverse max page size)
+                fetchElement.SetAttributeValue("count", Math.Min(topValue, 5000).ToString());
+            }
+
+            return doc.ToString(SaveOptions.DisableFormatting);
+        }
+        catch
+        {
+            return fetchXml; // If parsing fails, return original
         }
     }
 }
