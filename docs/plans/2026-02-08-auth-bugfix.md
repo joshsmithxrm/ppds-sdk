@@ -1,282 +1,460 @@
-# Fix Interactive & Device Code Auth Bugs - Implementation Plan
+# Fix Interactive & Device Code Auth in TUI Profile Creation - Implementation Plan
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
-**Goal:** Fix two auth bugs: token cache scope mismatch in DeviceCodeCredentialProvider, and CredentialProviderFactory ignoring user's explicit DeviceCode choice.
+**Goal:** Fix the TUI profile creation flow so the user's explicit auth method selection is respected and all interactive callbacks (pre-auth dialog, device code display) work for both Browser and Device Code auth.
 
-**Architecture:** Port the `_cachedResultUrl` pattern from `InteractiveBrowserCredentialProvider` (PR #515) to `DeviceCodeCredentialProvider`. Fix `CredentialProviderFactory` to map `AuthMethod.DeviceCode` directly to `DeviceCodeCredentialProvider` instead of routing through `CreateInteractiveProvider()`.
+**Architecture:** The profile creation flow (TUI → `ProfileService`) bypasses `CredentialProviderFactory` entirely, using its own `CreateCredentialProvider` and `DetermineAuthMethod`. The fix threads the user's explicit `AuthMethod` selection and callbacks through this code path. Previous commit `983d916` fixed the factory/provider layer (ongoing connections); this plan fixes the profile creation layer.
 
-**Tech Stack:** C# / .NET 8+, MSAL, xUnit, FluentAssertions
+**Tech Stack:** C# / .NET 8+, Terminal.Gui 1.19+, MSAL, xUnit, FluentAssertions, Moq
 
 ---
 
-## Bug Analysis
+## Context for Engineers
 
-### Bug 1: Token cache scope mismatch in DeviceCodeCredentialProvider
+### Code paths for creating credential providers
 
-**Introduced:** Commit `3e1289b` (Dec 29, 2025), PR #28 — 41 days ago
-**Partially fixed (browser only):** Commit `82ebfc7` (Feb 7, 2026), PR #515
+| Path | When | Factory used? | Pre-auth dialog? |
+|------|------|---------------|-------------------|
+| `InteractiveSession` → `ProfileServiceFactory` → `CredentialProviderFactory` | Ongoing connections from stored profiles | Yes | Yes (via `PpdsApplication.beforeInteractiveAuth`) |
+| `ProfileCreationDialog` → `ProfileService.CreateProfileAsync` → `CreateCredentialProvider` | TUI profile creation | **No** | **No (bug)** |
+| `AuthCommandGroup.ExecuteCreateAsync` | CLI `ppds auth create` | No (inline) | No (CLI, not needed) |
 
-**Root cause:** `DeviceCodeCredentialProvider.GetTokenAsync()` caches tokens in `_cachedResult` but does not track which environment URL the token was obtained for. During profile creation, the initial auth against `globaldisco` caches a token, and the subsequent environment validation reuses that globaldisco-scoped token for the target environment URL, causing "Server Error, no error report generated from server".
+### What's broken in the profile creation path
 
-**Evidence:** `InteractiveBrowserCredentialProvider` was fixed with `_cachedResultUrl` in PR #515, but `DeviceCodeCredentialProvider` was not updated.
+1. `ProfileCreateRequest` has no `AuthMethod` field — TUI encodes selection as `UseDeviceCode` bool, service guesses via `DetermineAuthMethod()` fallback
+2. `ProfileCreationDialog.OnAuthenticateClicked` only creates `deviceCodeCallback` when `method == DeviceCode` — Browser auth gets null callback
+3. `ProfileService.CreateCredentialProvider` creates `InteractiveBrowserCredentialProvider` without `deviceCodeCallback` or `beforeInteractiveAuth` — no pre-auth dialog, no device code fallback
+4. `IProfileService.CreateProfileAsync` doesn't accept `beforeInteractiveAuth` parameter
 
-### Bug 2: CredentialProviderFactory ignores user's explicit DeviceCode choice
+### Reference: How the working path wires callbacks
 
-**Introduced:** Commit `3e1289b` (Dec 29, 2025), PR #28 — 41 days ago
+`PpdsApplication.cs:50-84` creates a `beforeInteractiveAuth` callback that:
+- Marshals to UI thread via `Application.MainLoop.Invoke`
+- Runs `PreAuthenticationDialog` (Open Browser / Use Device Code / Cancel)
+- Uses `ManualResetEventSlim` for cross-thread synchronization
+- Returns `PreAuthDialogResult` to the calling auth provider
 
-**Root cause:** `CredentialProviderFactory` maps `AuthMethod.DeviceCode` to `CreateInteractiveProvider()`, which checks `InteractiveBrowserCredentialProvider.IsAvailable()` and returns `InteractiveBrowserCredentialProvider` when a browser is available. This overrides the user's explicit selection of Device Code auth.
-
-**Evidence:**
-```csharp
-// CredentialProviderFactory.cs - BEFORE fix
-AuthMethod.DeviceCode => CreateInteractiveProvider(profile, deviceCodeCallback, beforeInteractiveAuth),
-// CreateInteractiveProvider returns InteractiveBrowserCredentialProvider when browser available
-```
+Profile creation must replicate this pattern.
 
 ---
 
 ## Tasks
 
-### Task 1: Write failing test for DeviceCodeCredentialProvider token cache URL tracking
+### Task 1: Write failing test — explicit AuthMethod in ProfileCreateRequest
 
 **Files:**
-- Create: `tests/PPDS.Auth.Tests/Credentials/DeviceCodeCredentialProviderTests.cs`
+- Test: `tests/PPDS.Cli.Tests/Services/Profile/ProfileServiceTests.cs`
+
+**Step 1: Write the failing test**
+
+`ProfileCreateRequest` must accept an explicit `AuthMethod?` property. This is a compilation test — the property doesn't exist yet.
+
+```csharp
+// Add to ProfileServiceTests.cs — new region at the end
+
+#region ProfileCreateRequest AuthMethod Tests
+
+[Fact]
+public void ProfileCreateRequest_AuthMethod_CanBeSetExplicitly()
+{
+    var request = new ProfileCreateRequest
+    {
+        AuthMethod = AuthMethod.DeviceCode
+    };
+
+    Assert.Equal(AuthMethod.DeviceCode, request.AuthMethod);
+}
+
+[Fact]
+public void ProfileCreateRequest_AuthMethod_DefaultsToNull()
+{
+    var request = new ProfileCreateRequest();
+
+    Assert.Null(request.AuthMethod);
+}
+
+#endregion
+```
+
+**Step 2: Run test to verify it fails**
+
+Run: `dotnet test tests/PPDS.Cli.Tests --filter "FullyQualifiedName~ProfileServiceTests.ProfileCreateRequest_AuthMethod" --framework net9.0`
+Expected: BUILD FAIL — `ProfileCreateRequest` does not contain a definition for `AuthMethod`
+
+**Step 3: Add `AuthMethod?` property to ProfileCreateRequest**
+
+Modify: `src/PPDS.Cli/Services/Profile/IProfileService.cs:209` — add after `UseDeviceCode`:
+
+```csharp
+/// <summary>
+/// Explicit auth method selection. When set, takes priority over UseDeviceCode and field-based inference.
+/// Used by TUI to pass the user's radio button selection directly.
+/// </summary>
+public AuthMethod? AuthMethod { get; init; }
+```
+
+Add the using at top of file:
+```csharp
+using PPDS.Auth.Profiles;  // Already present — AuthMethod enum is in this namespace
+```
+
+**Step 4: Run test to verify it passes**
+
+Run: `dotnet test tests/PPDS.Cli.Tests --filter "FullyQualifiedName~ProfileServiceTests.ProfileCreateRequest_AuthMethod" --framework net9.0`
+Expected: PASS
+
+**Step 5: Commit**
+
+```
+git add src/PPDS.Cli/Services/Profile/IProfileService.cs tests/PPDS.Cli.Tests/Services/Profile/ProfileServiceTests.cs
+git commit -m "feat(auth): add explicit AuthMethod property to ProfileCreateRequest"
+```
+
+---
+
+### Task 2: Write failing test — DetermineAuthMethod prefers explicit AuthMethod
+
+`DetermineAuthMethod` is `private static` in `ProfileService`. Test indirectly: when `AuthMethod` is set on the request, the profile created by `CreateProfileAsync` should have that method. However, `CreateProfileAsync` triggers real auth which we can't do in unit tests.
+
+Instead, test that `BuildCreateRequest` in the TUI sets the `AuthMethod` field. But that's a TUI test. Since `DetermineAuthMethod` is a pure function, the cleanest approach is to make it `internal` so tests can call it directly.
+
+**Files:**
+- Modify: `src/PPDS.Cli/Services/Profile/ProfileService.cs:391`
+- Test: `tests/PPDS.Cli.Tests/Services/Profile/ProfileServiceTests.cs`
 
 **Step 1: Write the failing test**
 
 ```csharp
-// tests/PPDS.Auth.Tests/Credentials/DeviceCodeCredentialProviderTests.cs
-using FluentAssertions;
-using PPDS.Auth.Cloud;
-using PPDS.Auth.Credentials;
-using PPDS.Auth.Profiles;
-using Xunit;
+// Add to ProfileServiceTests.cs
 
-namespace PPDS.Auth.Tests.Credentials;
+#region DetermineAuthMethod Tests
 
-public class DeviceCodeCredentialProviderTests
-{
-    [Fact]
-    public void Constructor_WithDefaults_DoesNotThrow()
-    {
-        using var provider = new DeviceCodeCredentialProvider();
-        provider.Should().NotBeNull();
-        provider.AuthMethod.Should().Be(AuthMethod.DeviceCode);
-    }
-
-    [Fact]
-    public void Constructor_WithAllParameters_DoesNotThrow()
-    {
-        using var provider = new DeviceCodeCredentialProvider(
-            cloud: CloudEnvironment.Public,
-            tenantId: "test-tenant",
-            username: "user@example.com",
-            homeAccountId: "account-id",
-            deviceCodeCallback: _ => { });
-        provider.Should().NotBeNull();
-    }
-
-    [Fact]
-    public void FromProfile_CreatesProviderWithProfileSettings()
-    {
-        var profile = new AuthProfile
-        {
-            AuthMethod = AuthMethod.DeviceCode,
-            Cloud = CloudEnvironment.UsGov,
-            TenantId = "gov-tenant",
-            Username = "gov-user@example.com",
-            HomeAccountId = "gov-account-id"
-        };
-        using var provider = DeviceCodeCredentialProvider.FromProfile(profile);
-        provider.Should().NotBeNull();
-        provider.AuthMethod.Should().Be(AuthMethod.DeviceCode);
-    }
-
-    [Fact]
-    public void HasCachedResultUrlField_ForTokenScopeMismatchPrevention()
-    {
-        var field = typeof(DeviceCodeCredentialProvider)
-            .GetField("_cachedResultUrl",
-                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-        field.Should().NotBeNull(
-            because: "DeviceCodeCredentialProvider must track the URL associated with cached tokens " +
-                     "to prevent token scope mismatch (same fix as InteractiveBrowserCredentialProvider PR #515)");
-    }
-}
-```
-
-**Step 2: Run test to verify it fails**
-
-Run: `dotnet test tests/PPDS.Auth.Tests --filter "FullyQualifiedName~DeviceCodeCredentialProviderTests.HasCachedResultUrlField" --framework net9.0`
-Expected: FAIL — `_cachedResultUrl` field does not exist
-
-### Task 2: Write failing test for CredentialProviderFactory DeviceCode mapping
-
-**Files:**
-- Modify: `tests/PPDS.Auth.Tests/Credentials/CredentialProviderFactoryTests.cs`
-
-**Step 1: Add the failing test**
-
-```csharp
-// Add to CredentialProviderFactoryTests.cs, before the IsSupported_ValidAuthMethod_ReturnsTrue test
 [Fact]
-public void Create_DeviceCode_ReturnsDeviceCodeProvider()
+public void DetermineAuthMethod_WithExplicitAuthMethod_ReturnsExplicitValue()
 {
-    var profile = new AuthProfile { AuthMethod = AuthMethod.DeviceCode };
+    var request = new ProfileCreateRequest { AuthMethod = AuthMethod.InteractiveBrowser };
 
-    var provider = CredentialProviderFactory.Create(profile);
+    var result = ProfileService.DetermineAuthMethod(request);
 
-    provider.Should().BeOfType<DeviceCodeCredentialProvider>(
-        because: "when user explicitly selects DeviceCode, their choice must be respected");
-    provider.Dispose();
+    Assert.Equal(AuthMethod.InteractiveBrowser, result);
 }
+
+[Fact]
+public void DetermineAuthMethod_WithExplicitDeviceCode_ReturnsDeviceCode()
+{
+    var request = new ProfileCreateRequest { AuthMethod = AuthMethod.DeviceCode };
+
+    var result = ProfileService.DetermineAuthMethod(request);
+
+    Assert.Equal(AuthMethod.DeviceCode, result);
+}
+
+[Fact]
+public void DetermineAuthMethod_WithUseDeviceCodeFlag_ReturnsDeviceCode()
+{
+    // Backward compat: CLI-style request without explicit AuthMethod
+    var request = new ProfileCreateRequest { UseDeviceCode = true };
+
+    var result = ProfileService.DetermineAuthMethod(request);
+
+    Assert.Equal(AuthMethod.DeviceCode, result);
+}
+
+[Fact]
+public void DetermineAuthMethod_WithClientSecret_ReturnsClientSecret()
+{
+    var request = new ProfileCreateRequest { ClientSecret = "secret" };
+
+    var result = ProfileService.DetermineAuthMethod(request);
+
+    Assert.Equal(AuthMethod.ClientSecret, result);
+}
+
+[Fact]
+public void DetermineAuthMethod_ExplicitAuthMethod_TakesPriorityOverFlags()
+{
+    // Explicit AuthMethod should win even if UseDeviceCode is also set
+    var request = new ProfileCreateRequest
+    {
+        AuthMethod = AuthMethod.InteractiveBrowser,
+        UseDeviceCode = true
+    };
+
+    var result = ProfileService.DetermineAuthMethod(request);
+
+    Assert.Equal(AuthMethod.InteractiveBrowser, result);
+}
+
+#endregion
 ```
 
 **Step 2: Run test to verify it fails**
 
-Run: `dotnet test tests/PPDS.Auth.Tests --filter "FullyQualifiedName~CredentialProviderFactoryTests.Create_DeviceCode_ReturnsDeviceCodeProvider" --framework net9.0`
-Expected: FAIL — "Expected type to be DeviceCodeCredentialProvider but found InteractiveBrowserCredentialProvider"
+Run: `dotnet test tests/PPDS.Cli.Tests --filter "FullyQualifiedName~ProfileServiceTests.DetermineAuthMethod" --framework net9.0`
+Expected: BUILD FAIL — `ProfileService.DetermineAuthMethod` is inaccessible due to its protection level
 
-### Task 3: Fix DeviceCodeCredentialProvider — add `_cachedResultUrl` tracking
+**Step 3: Change DetermineAuthMethod from private to internal, add early return**
+
+Modify: `src/PPDS.Cli/Services/Profile/ProfileService.cs:391`
+
+Change:
+```csharp
+private static AuthMethod DetermineAuthMethod(ProfileCreateRequest request)
+{
+```
+To:
+```csharp
+internal static AuthMethod DetermineAuthMethod(ProfileCreateRequest request)
+{
+    if (request.AuthMethod.HasValue)
+        return request.AuthMethod.Value;
+```
+
+**Step 4: Run test to verify it passes**
+
+Run: `dotnet test tests/PPDS.Cli.Tests --filter "FullyQualifiedName~ProfileServiceTests.DetermineAuthMethod" --framework net9.0`
+Expected: PASS — all 5 tests pass
+
+**Step 5: Commit**
+
+```
+git add src/PPDS.Cli/Services/Profile/ProfileService.cs tests/PPDS.Cli.Tests/Services/Profile/ProfileServiceTests.cs
+git commit -m "feat(auth): DetermineAuthMethod prefers explicit AuthMethod over inference"
+```
+
+---
+
+### Task 3: Add beforeInteractiveAuth parameter to CreateProfileAsync
 
 **Files:**
-- Modify: `src/PPDS.Auth/Credentials/DeviceCodeCredentialProvider.cs:29-30` (add field)
-- Modify: `src/PPDS.Auth/Credentials/DeviceCodeCredentialProvider.cs:165-168` (check URL on cache hit)
-- Modify: `src/PPDS.Auth/Credentials/DeviceCodeCredentialProvider.cs:184-188` (track URL on silent acquisition)
-- Modify: `src/PPDS.Auth/Credentials/DeviceCodeCredentialProvider.cs:230-232` (track URL on device code acquisition)
-- Modify: `src/PPDS.Auth/Credentials/DeviceCodeCredentialProvider.cs:277-279` (check URL in GetCachedTokenInfoAsync)
-- Modify: `src/PPDS.Auth/Credentials/DeviceCodeCredentialProvider.cs:303-305` (track URL in GetCachedTokenInfoAsync)
+- Modify: `src/PPDS.Cli/Services/Profile/IProfileService.cs:48-51`
+- Modify: `src/PPDS.Cli/Services/Profile/ProfileService.cs:217-220`
 
-**Step 1: Add `_cachedResultUrl` field**
+**Step 1: Update the interface**
 
-After line 29 (`private AuthenticationResult? _cachedResult;`), add:
+Change `IProfileService.CreateProfileAsync` signature:
+
 ```csharp
-private string? _cachedResultUrl;
+Task<ProfileSummary> CreateProfileAsync(
+    ProfileCreateRequest request,
+    Action<DeviceCodeInfo>? deviceCodeCallback = null,
+    Func<Action<DeviceCodeInfo>?, PreAuthDialogResult>? beforeInteractiveAuth = null,
+    CancellationToken cancellationToken = default);
 ```
 
-**Step 2: Update `GetTokenAsync` in-memory cache check to validate URL**
+**Step 2: Update the implementation signature**
 
-Change the cache check from:
-```csharp
-if (_cachedResult != null && _cachedResult.ExpiresOn > DateTimeOffset.UtcNow.AddMinutes(5))
-```
-To:
-```csharp
-if (_cachedResult != null
-    && _cachedResult.ExpiresOn > DateTimeOffset.UtcNow.AddMinutes(5)
-    && string.Equals(_cachedResultUrl, environmentUrl, StringComparison.OrdinalIgnoreCase))
-```
+Change `ProfileService.CreateProfileAsync`:
 
-**Step 3: Track URL after silent acquisition**
-
-After `_cachedResult = await _msalClient!.AcquireTokenSilent(...)`, add:
 ```csharp
-_cachedResultUrl = environmentUrl;
+public async Task<ProfileSummary> CreateProfileAsync(
+    ProfileCreateRequest request,
+    Action<DeviceCodeInfo>? deviceCodeCallback = null,
+    Func<Action<DeviceCodeInfo>?, PreAuthDialogResult>? beforeInteractiveAuth = null,
+    CancellationToken cancellationToken = default)
 ```
 
-**Step 4: Track URL after device code acquisition**
+**Step 3: Pass beforeInteractiveAuth to CreateCredentialProvider**
 
-After `.ExecuteAsync(cancellationToken).ConfigureAwait(false);` in the device code flow, add:
+Change the call at `ProfileService.cs:320`:
+
 ```csharp
-_cachedResultUrl = environmentUrl;
+using ICredentialProvider provider = CreateCredentialProvider(request, authMethod, cloud, deviceCodeCallback, beforeInteractiveAuth);
 ```
 
-**Step 5: Update `GetCachedTokenInfoAsync` in-memory cache check**
+**Step 4: Update CreateCredentialProvider to accept and pass callbacks**
 
-Change from:
+Change `ProfileService.cs:481-506`:
+
 ```csharp
-if (_cachedResult != null)
-```
-To:
-```csharp
-if (_cachedResult != null
-    && string.Equals(_cachedResultUrl, environmentUrl, StringComparison.OrdinalIgnoreCase))
-```
-
-**Step 6: Track URL in `GetCachedTokenInfoAsync` after silent acquisition**
-
-After `_cachedResult = result;`, add:
-```csharp
-_cachedResultUrl = environmentUrl;
-```
-
-**Step 7: Run test to verify it passes**
-
-Run: `dotnet test tests/PPDS.Auth.Tests --filter "FullyQualifiedName~DeviceCodeCredentialProviderTests" --framework net9.0`
-Expected: PASS — all 4 tests pass
-
-### Task 4: Fix CredentialProviderFactory — map DeviceCode directly
-
-**Files:**
-- Modify: `src/PPDS.Auth/Credentials/CredentialProviderFactory.cs:65` (CreateAsync)
-- Modify: `src/PPDS.Auth/Credentials/CredentialProviderFactory.cs:109` (Create)
-- Modify: `src/PPDS.Auth/Credentials/CredentialProviderFactory.cs:215-228` (remove dead CreateInteractiveProvider)
-
-**Step 1: Fix both `CreateAsync` and `Create` switch arms**
-
-Change both from:
-```csharp
-AuthMethod.DeviceCode => CreateInteractiveProvider(profile, deviceCodeCallback, beforeInteractiveAuth),
-```
-To:
-```csharp
-AuthMethod.DeviceCode => DeviceCodeCredentialProvider.FromProfile(profile, deviceCodeCallback),
-```
-
-**Step 2: Remove dead `CreateInteractiveProvider` method**
-
-Delete the entire method (was at lines 212-228):
-```csharp
-// DELETE THIS:
-private static ICredentialProvider CreateInteractiveProvider(
-    AuthProfile profile,
+private static ICredentialProvider CreateCredentialProvider(
+    ProfileCreateRequest request,
+    AuthMethod authMethod,
+    CloudEnvironment cloud,
     Action<DeviceCodeInfo>? deviceCodeCallback,
     Func<Action<DeviceCodeInfo>?, PreAuthDialogResult>? beforeInteractiveAuth)
 {
-    if (InteractiveBrowserCredentialProvider.IsAvailable())
+    return authMethod switch
     {
-        return InteractiveBrowserCredentialProvider.FromProfile(profile, deviceCodeCallback, beforeInteractiveAuth);
-    }
-    else
-    {
-        return DeviceCodeCredentialProvider.FromProfile(profile, deviceCodeCallback);
-    }
+        AuthMethod.InteractiveBrowser => new InteractiveBrowserCredentialProvider(
+            cloud, request.TenantId, deviceCodeCallback: deviceCodeCallback, beforeInteractiveAuth: beforeInteractiveAuth),
+        AuthMethod.DeviceCode => new DeviceCodeCredentialProvider(cloud, request.TenantId, deviceCodeCallback: deviceCodeCallback),
+        // ... all other cases unchanged
+    };
 }
 ```
 
-**Step 3: Run test to verify it passes**
+**Step 5: Verify build succeeds**
 
-Run: `dotnet test tests/PPDS.Auth.Tests --filter "FullyQualifiedName~CredentialProviderFactoryTests.Create_DeviceCode_ReturnsDeviceCodeProvider" --framework net9.0`
-Expected: PASS
+Run: `dotnet build src/PPDS.Cli --framework net9.0`
+Expected: Build succeeded
 
-### Task 5: Run full test suite
+**Step 6: Run existing tests to verify no regressions**
 
-**Step 1: Run all auth tests**
+Run: `dotnet test tests/PPDS.Cli.Tests --framework net9.0 -v q`
+Expected: All tests pass
 
-Run: `dotnet test tests/PPDS.Auth.Tests --framework net9.0`
-Expected: All 398 tests pass
+**Step 7: Commit**
 
-**Step 2: Run full unit test suite**
+```
+git add src/PPDS.Cli/Services/Profile/IProfileService.cs src/PPDS.Cli/Services/Profile/ProfileService.cs
+git commit -m "feat(auth): pass beforeInteractiveAuth through profile creation flow"
+```
 
-Run: `dotnet test --filter "Category!=Integration" --framework net9.0`
-Expected: All ~4,261 tests pass, 0 failures
+---
 
-### Task 6: Commit
+### Task 4: Fix ProfileCreationDialog — always create callbacks, pass AuthMethod
 
-```bash
-git add src/PPDS.Auth/Credentials/DeviceCodeCredentialProvider.cs src/PPDS.Auth/Credentials/CredentialProviderFactory.cs tests/PPDS.Auth.Tests/Credentials/DeviceCodeCredentialProviderTests.cs tests/PPDS.Auth.Tests/Credentials/CredentialProviderFactoryTests.cs
-git commit -m "fix(auth): token cache scope mismatch in device code and factory mapping bug
+**Files:**
+- Modify: `src/PPDS.Cli/Tui/Dialogs/ProfileCreationDialog.cs`
 
-Port _cachedResultUrl fix from InteractiveBrowserCredentialProvider (PR #515)
-to DeviceCodeCredentialProvider. Without URL tracking, a token obtained for
-globaldisco was incorrectly reused for the target environment URL.
+**Step 1: Update BuildCreateRequest to pass explicit AuthMethod**
 
-Fix CredentialProviderFactory to map AuthMethod.DeviceCode directly to
-DeviceCodeCredentialProvider instead of routing through CreateInteractiveProvider
-which overrode the user's explicit choice with InteractiveBrowserCredentialProvider.
+At `ProfileCreationDialog.cs:580-600`, add `AuthMethod = method`:
 
-Both bugs introduced in 3e1289b (Dec 29, 2025), PR #28.
+```csharp
+private ProfileCreateRequest BuildCreateRequest()
+{
+    var method = GetSelectedMethod();
 
-Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>"
+    return new ProfileCreateRequest
+    {
+        Name = string.IsNullOrWhiteSpace(_nameField.Text?.ToString()) ? null : _nameField.Text.ToString()?.Trim(),
+        Environment = string.IsNullOrWhiteSpace(_environmentUrlField.Text?.ToString()) ? null : _environmentUrlField.Text.ToString()?.Trim(),
+        AuthMethod = method,
+        UseDeviceCode = method == AuthMethod.DeviceCode,
+        // SPN fields
+        ApplicationId = _appIdField.Text?.ToString()?.Trim(),
+        TenantId = _tenantIdField.Text?.ToString()?.Trim(),
+        ClientSecret = method == AuthMethod.ClientSecret ? _clientSecretField.Text?.ToString() : null,
+        CertificatePath = method == AuthMethod.CertificateFile ? _certPathField.Text?.ToString()?.Trim() : null,
+        CertificatePassword = method == AuthMethod.CertificateFile ? _certPasswordField.Text?.ToString() : null,
+        CertificateThumbprint = method == AuthMethod.CertificateStore ? _thumbprintField.Text?.ToString()?.Trim() : null,
+        // Username/Password fields
+        Username = method == AuthMethod.UsernamePassword ? _usernameField.Text?.ToString()?.Trim() : null,
+        Password = method == AuthMethod.UsernamePassword ? _passwordField.Text?.ToString() : null,
+    };
+}
+```
+
+**Step 2: Always create deviceCodeCallback, create beforeInteractiveAuth for Browser**
+
+Replace the callback creation block in `OnAuthenticateClicked` (`ProfileCreationDialog.cs:493-518`):
+
+```csharp
+// Always provide device code callback (needed for Browser's device code fallback too)
+var deviceCallback = _deviceCodeCallback ?? (info =>
+{
+    Application.MainLoop?.Invoke(() =>
+    {
+        // Auto-copy code to clipboard for convenience
+        var copied = ClipboardHelper.CopyToClipboard(info.UserCode) ? " (copied!)" : "";
+
+        // MessageBox is safe from MainLoop.Invoke - doesn't start nested event loop
+        MessageBox.Query(
+            "Authentication Required",
+            $"Visit: {info.VerificationUrl}\n\n" +
+            $"Enter code: {info.UserCode}{copied}\n\n" +
+            "Complete authentication in browser, then press OK.",
+            "OK");
+    });
+});
+
+// Pre-auth dialog for Browser auth (matches PpdsApplication.cs pattern)
+Func<Action<DeviceCodeInfo>?, PreAuthDialogResult>? beforeAuth = null;
+if (method == AuthMethod.InteractiveBrowser)
+{
+    beforeAuth = (dcCallback) =>
+    {
+        var result = PreAuthDialogResult.Cancel;
+        using var waitHandle = new ManualResetEventSlim(false);
+        Application.MainLoop?.Invoke(() =>
+        {
+            try
+            {
+                Application.Refresh();
+                var dialog = new PreAuthenticationDialog(dcCallback);
+                Application.Run(dialog);
+                result = dialog.Result;
+            }
+            finally
+            {
+                waitHandle.Set();
+            }
+        });
+        waitHandle.Wait();
+        return result;
+    };
+}
+
+_statusLabel.Text = "Authenticating...";
+Application.Refresh();
+
+_errorService?.FireAndForget(CreateProfileAndHandleResultAsync(request, deviceCallback, beforeAuth), "CreateProfile");
+```
+
+**Step 3: Update CreateProfileAndHandleResultAsync signature and call**
+
+Change `ProfileCreationDialog.cs:521`:
+
+```csharp
+private async Task CreateProfileAndHandleResultAsync(
+    ProfileCreateRequest request,
+    Action<DeviceCodeInfo>? deviceCodeCallback,
+    Func<Action<DeviceCodeInfo>?, PreAuthDialogResult>? beforeInteractiveAuth)
+{
+    try
+    {
+        var profile = await _profileService.CreateProfileAsync(request, deviceCodeCallback, beforeInteractiveAuth, _cts.Token);
+```
+
+**Step 4: Verify build succeeds**
+
+Run: `dotnet build src/PPDS.Cli --framework net9.0`
+Expected: Build succeeded
+
+**Step 5: Run all tests**
+
+Run: `dotnet test --filter "Category!=Integration" --framework net9.0 -v q`
+Expected: All tests pass
+
+**Step 6: Commit**
+
+```
+git add src/PPDS.Cli/Tui/Dialogs/ProfileCreationDialog.cs
+git commit -m "fix(auth): wire callbacks and explicit AuthMethod through TUI profile creation
+
+ProfileCreationDialog now:
+- Passes explicit AuthMethod in ProfileCreateRequest
+- Always creates deviceCodeCallback (not just for DeviceCode)
+- Creates beforeInteractiveAuth for Browser auth showing PreAuthenticationDialog
+- Passes both callbacks through to ProfileService.CreateProfileAsync
+
+This enables the pre-auth dialog (Open Browser / Use Device Code / Cancel)
+during profile creation, matching the behavior of ongoing connections."
+```
+
+---
+
+### Task 5: Write test for ProfileCreationDialog.BuildCreateRequest setting AuthMethod
+
+The TUI dialog requires `Application.Init()` for complex views. Use the `CaptureState()` pattern established in the codebase — but `BuildCreateRequest` is private. Test indirectly via the `CaptureState` output or by verifying the `AuthMethod` field exists on the request type (already covered in Task 1). The functional integration is covered by manual testing.
+
+**Skip** — sufficient coverage from Task 1 (request accepts AuthMethod) and Task 2 (DetermineAuthMethod prefers it). The wiring in Task 4 is a mechanical pass-through.
+
+---
+
+### Task 6: Full regression test suite
+
+**Step 1: Run all unit tests**
+
+Run: `dotnet test --filter "Category!=Integration" --framework net9.0 -v q`
+Expected: All tests pass, 0 failures
+
+**Step 2: Commit plan update**
+
+```
+git add docs/plans/2026-02-08-auth-bugfix.md
+git commit -m "docs: update auth bugfix plan with TUI profile creation fixes"
 ```
