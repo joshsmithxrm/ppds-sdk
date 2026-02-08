@@ -153,26 +153,33 @@ internal sealed class EnvironmentSelectorDialog : TuiDialog, ITuiStateCapture<En
         // Buttons
         _selectButton = new Button("_Select")
         {
-            X = Pos.Center() - 20,
+            X = Pos.Center() - 25,
             Y = Pos.AnchorEnd(1)
         };
         _selectButton.Clicked += OnSelectClicked;
 
         var detailsButton = new Button("De_tails")
         {
-            X = Pos.Center() - 5,
+            X = Pos.Center() - 10,
             Y = Pos.AnchorEnd(1)
         };
         detailsButton.Clicked += OnDetailsClicked;
 
+        var configButton = new Button("Con_figure")
+        {
+            X = Pos.Center() + 5,
+            Y = Pos.AnchorEnd(1)
+        };
+        configButton.Clicked += OnConfigureClicked;
+
         var cancelButton = new Button("_Cancel")
         {
-            X = Pos.Center() + 10,
+            X = Pos.Center() + 18,
             Y = Pos.AnchorEnd(1)
         };
         cancelButton.Clicked += () => { Application.RequestStop(); };
 
-        Add(filterLabel, _filterField, listFrame, urlLabel, _urlField, _spinner, _statusLabel, _selectButton, detailsButton, cancelButton);
+        Add(filterLabel, _filterField, listFrame, urlLabel, _urlField, _spinner, _statusLabel, _selectButton, detailsButton, configButton, cancelButton);
 
         // Defer loading until dialog is visible to ensure spinner renders
         Loaded += () =>
@@ -353,6 +360,39 @@ internal sealed class EnvironmentSelectorDialog : TuiDialog, ITuiStateCapture<En
         }
 
         using var dialog = new EnvironmentDetailsDialog(_session, url, displayName);
+        Application.Run(dialog);
+    }
+
+    private void OnConfigureClicked()
+    {
+        if (_session == null)
+        {
+            MessageBox.Query("Configure", "Configuration requires session context.", "OK");
+            return;
+        }
+
+        string? url = null;
+        string? displayName = null;
+
+        var manualUrl = _urlField.Text?.ToString()?.Trim();
+        if (!string.IsNullOrWhiteSpace(manualUrl))
+        {
+            url = manualUrl;
+        }
+        else if (_listView.SelectedItem >= 0 && _listView.SelectedItem < _filteredEnvironments.Count)
+        {
+            var env = _filteredEnvironments[_listView.SelectedItem];
+            url = env.Url;
+            displayName = env.DisplayName;
+        }
+
+        if (string.IsNullOrWhiteSpace(url))
+        {
+            MessageBox.Query("No Environment", "Please select an environment or enter a URL first.", "OK");
+            return;
+        }
+
+        using var dialog = new EnvironmentConfigDialog(_session, url, displayName);
         Application.Run(dialog);
     }
 
