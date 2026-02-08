@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 using System.Threading;
 using PPDS.Dataverse.BulkOperations;
+using PPDS.Dataverse.Progress;
+using PPDS.Dataverse.Query.Execution;
 using PPDS.Dataverse.Sql.Ast;
 
 namespace PPDS.Dataverse.Query.Planning.Nodes;
@@ -30,6 +32,9 @@ public sealed class DmlExecuteNode : IQueryPlanNode
 
     /// <summary>SET clauses for UPDATE statements.</summary>
     public IReadOnlyList<SqlSetClause>? SetClauses { get; }
+
+    /// <summary>Source column names for INSERT...SELECT ordinal mapping.</summary>
+    public IReadOnlyList<string>? SourceColumns { get; }
 
     /// <summary>Row cap from DML safety guard.</summary>
     public int RowCap { get; }
@@ -79,6 +84,7 @@ public sealed class DmlExecuteNode : IQueryPlanNode
         string entityLogicalName,
         IReadOnlyList<string> columns,
         IQueryPlanNode sourceNode,
+        IReadOnlyList<string>? sourceColumns = null,
         int rowCap = int.MaxValue)
     {
         return new DmlExecuteNode(
@@ -86,6 +92,7 @@ public sealed class DmlExecuteNode : IQueryPlanNode
             entityLogicalName,
             sourceNode: sourceNode,
             insertColumns: columns,
+            sourceColumns: sourceColumns,
             rowCap: rowCap);
     }
 
@@ -128,6 +135,7 @@ public sealed class DmlExecuteNode : IQueryPlanNode
         IReadOnlyList<string>? insertColumns = null,
         IReadOnlyList<IReadOnlyList<ISqlExpression>>? insertValueRows = null,
         IReadOnlyList<SqlSetClause>? setClauses = null,
+        IReadOnlyList<string>? sourceColumns = null,
         int rowCap = int.MaxValue)
     {
         Operation = operation;
@@ -136,6 +144,7 @@ public sealed class DmlExecuteNode : IQueryPlanNode
         InsertColumns = insertColumns;
         InsertValueRows = insertValueRows;
         SetClauses = setClauses;
+        SourceColumns = sourceColumns;
         RowCap = rowCap;
     }
 
@@ -146,7 +155,8 @@ public sealed class DmlExecuteNode : IQueryPlanNode
     {
         if (context.BulkOperationExecutor == null)
         {
-            throw new InvalidOperationException(
+            throw new QueryExecutionException(
+                QueryErrorCode.ExecutionFailed,
                 "BulkOperationExecutor is required for DML operations. " +
                 "Provide it via QueryPlanContext.");
         }
@@ -176,7 +186,9 @@ public sealed class DmlExecuteNode : IQueryPlanNode
                 break;
 
             default:
-                throw new InvalidOperationException($"Unsupported DML operation: {Operation}");
+                throw new QueryExecutionException(
+                    QueryErrorCode.ExecutionFailed,
+                    $"Unsupported DML operation: {Operation}");
         }
 
         // Return a single row with the affected count
@@ -207,9 +219,11 @@ public sealed class DmlExecuteNode : IQueryPlanNode
             entities.Add(entity);
         }
 
+        var progress = CreateProgressAdapter(context);
         var result = await context.BulkOperationExecutor!.CreateMultipleAsync(
             EntityLogicalName,
             entities,
+            progress: progress,
             cancellationToken: cancellationToken).ConfigureAwait(false);
 
         return result.SuccessCount;
@@ -229,22 +243,42 @@ public sealed class DmlExecuteNode : IQueryPlanNode
             }
 
             var entity = new Microsoft.Xrm.Sdk.Entity(EntityLogicalName);
-            for (var i = 0; i < InsertColumns!.Count; i++)
+
+            if (SourceColumns != null && SourceColumns.Count == InsertColumns!.Count)
             {
-                var columnName = InsertColumns[i];
-                if (row.Values.TryGetValue(columnName, out var qv))
+                // Ordinal mapping: map source column[i] value to insert column[i]
+                for (var i = 0; i < InsertColumns.Count; i++)
                 {
-                    entity[columnName] = qv.Value;
+                    var sourceKey = SourceColumns[i];
+                    if (row.Values.TryGetValue(sourceKey, out var qv))
+                    {
+                        entity[InsertColumns[i]] = qv.Value;
+                    }
                 }
             }
+            else
+            {
+                // Fallback: try matching by INSERT column name (same-name case)
+                for (var i = 0; i < InsertColumns!.Count; i++)
+                {
+                    var columnName = InsertColumns[i];
+                    if (row.Values.TryGetValue(columnName, out var qv))
+                    {
+                        entity[columnName] = qv.Value;
+                    }
+                }
+            }
+
             entities.Add(entity);
         }
 
         if (entities.Count == 0) return 0;
 
+        var progress = CreateProgressAdapter(context);
         var result = await context.BulkOperationExecutor!.CreateMultipleAsync(
             EntityLogicalName,
             entities,
+            progress: progress,
             cancellationToken: cancellationToken).ConfigureAwait(false);
 
         return result.SuccessCount;
@@ -285,9 +319,11 @@ public sealed class DmlExecuteNode : IQueryPlanNode
 
         if (entities.Count == 0) return 0;
 
+        var progress = CreateProgressAdapter(context);
         var result = await context.BulkOperationExecutor!.UpdateMultipleAsync(
             EntityLogicalName,
             entities,
+            progress: progress,
             cancellationToken: cancellationToken).ConfigureAwait(false);
 
         return result.SuccessCount;
@@ -318,12 +354,30 @@ public sealed class DmlExecuteNode : IQueryPlanNode
 
         if (ids.Count == 0) return 0;
 
+        var progress = CreateProgressAdapter(context);
         var result = await context.BulkOperationExecutor!.DeleteMultipleAsync(
             EntityLogicalName,
             ids,
+            progress: progress,
             cancellationToken: cancellationToken).ConfigureAwait(false);
 
         return result.SuccessCount;
+    }
+
+    /// <summary>
+    /// Creates an IProgress adapter that bridges ProgressSnapshot to IQueryProgressReporter.
+    /// </summary>
+    private static IProgress<ProgressSnapshot>? CreateProgressAdapter(QueryPlanContext context)
+    {
+        if (context.ProgressReporter == null) return null;
+
+        return new Progress<ProgressSnapshot>(snapshot =>
+        {
+            context.ProgressReporter.ReportProgress(
+                (int)snapshot.Processed,
+                (int)snapshot.Total,
+                $"{snapshot.Succeeded} succeeded, {snapshot.Failed} failed");
+        });
     }
 }
 
