@@ -206,6 +206,29 @@ public sealed class SqlQueryService : ISqlQueryService
             statement = selectStmt.WithTop(request.TopOverride.Value);
         }
 
+        int? dmlRowCap = null;
+
+        if (request.DmlSafety != null)
+        {
+            var safetyResult = _dmlSafetyGuard.Check(statement, request.DmlSafety);
+
+            if (safetyResult.IsBlocked)
+            {
+                throw new PpdsException(
+                    safetyResult.ErrorCode ?? ErrorCodes.Query.DmlBlocked,
+                    safetyResult.BlockReason ?? "DML operation blocked by safety guard.");
+            }
+
+            if (safetyResult.RequiresConfirmation)
+            {
+                throw new PpdsException(
+                    ErrorCodes.Query.DmlBlocked,
+                    "DML operations require --confirm to execute. Use --dry-run to preview the operation.");
+            }
+
+            dmlRowCap = safetyResult.RowCap;
+        }
+
         // Build execution plan via QueryPlanner
         var planOptions = new QueryPlanOptions
         {
@@ -215,7 +238,8 @@ public sealed class SqlQueryService : ISqlQueryService
             IncludeCount = request.IncludeCount,
             UseTdsEndpoint = request.UseTdsEndpoint,
             OriginalSql = request.Sql,
-            TdsQueryExecutor = _tdsQueryExecutor
+            TdsQueryExecutor = _tdsQueryExecutor,
+            DmlRowCap = dmlRowCap
         };
 
         var planResult = _planner.Plan(statement, planOptions);
