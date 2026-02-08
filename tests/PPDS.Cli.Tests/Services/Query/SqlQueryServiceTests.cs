@@ -2,6 +2,7 @@ using Moq;
 using PPDS.Cli.Services.Query;
 using PPDS.Dataverse.Query;
 using PPDS.Dataverse.Sql.Parsing;
+using PPDS.Dataverse.Sql.Transpilation;
 using Xunit;
 
 namespace PPDS.Cli.Tests.Services.Query;
@@ -261,6 +262,264 @@ public class SqlQueryServiceTests
 
         await Assert.ThrowsAsync<OperationCanceledException>(
             () => _service.ExecuteAsync(request, cts.Token));
+    }
+
+    #endregion
+
+    #region ExpandFormattedValueColumns Tests
+
+    [Fact]
+    [Trait("Category", "PlanUnit")]
+    public void ExpandFormattedValueColumns_LookupColumn_AddsNameColumn()
+    {
+        // Arrange: QueryResult with a lookup column that has a FormattedValue
+        var ownerId = Guid.NewGuid();
+        var result = new QueryResult
+        {
+            EntityLogicalName = "account",
+            Columns = new List<QueryColumn>
+            {
+                new() { LogicalName = "name" },
+                new() { LogicalName = "ownerid", DataType = QueryColumnType.Lookup }
+            },
+            Records = new List<IReadOnlyDictionary<string, QueryValue>>
+            {
+                new Dictionary<string, QueryValue>
+                {
+                    ["name"] = QueryValue.Simple("Contoso"),
+                    ["ownerid"] = QueryValue.Lookup(ownerId, "systemuser", "John Smith")
+                }
+            },
+            Count = 1
+        };
+
+        // Act
+        var expanded = SqlQueryResultExpander.ExpandFormattedValueColumns(result);
+
+        // Assert: should contain owneridname column
+        var columnNames = expanded.Columns.Select(c => c.LogicalName).ToList();
+        Assert.Contains("ownerid", columnNames);
+        Assert.Contains("owneridname", columnNames);
+
+        // The owneridname column should appear right after ownerid
+        var ownerIdIndex = columnNames.IndexOf("ownerid");
+        var ownerIdNameIndex = columnNames.IndexOf("owneridname");
+        Assert.Equal(ownerIdIndex + 1, ownerIdNameIndex);
+
+        // Verify the expanded record contains the display name
+        var record = expanded.Records[0];
+        Assert.True(record.ContainsKey("owneridname"), "Record should contain owneridname key");
+        Assert.Equal("John Smith", record["owneridname"].Value);
+    }
+
+    [Fact]
+    [Trait("Category", "PlanUnit")]
+    public void ExpandFormattedValueColumns_OptionSetColumn_AddsNameColumn()
+    {
+        // Arrange: QueryResult with an optionset column (int + FormattedValue)
+        var result = new QueryResult
+        {
+            EntityLogicalName = "account",
+            Columns = new List<QueryColumn>
+            {
+                new() { LogicalName = "statuscode", DataType = QueryColumnType.OptionSet }
+            },
+            Records = new List<IReadOnlyDictionary<string, QueryValue>>
+            {
+                new Dictionary<string, QueryValue>
+                {
+                    ["statuscode"] = QueryValue.WithFormatting(1, "Active")
+                }
+            },
+            Count = 1
+        };
+
+        // Act
+        var expanded = SqlQueryResultExpander.ExpandFormattedValueColumns(result);
+
+        // Assert: should contain statuscodename column
+        var columnNames = expanded.Columns.Select(c => c.LogicalName).ToList();
+        Assert.Contains("statuscode", columnNames);
+        Assert.Contains("statuscodename", columnNames);
+
+        var record = expanded.Records[0];
+        Assert.True(record.ContainsKey("statuscodename"), "Record should contain statuscodename key");
+        Assert.Equal("Active", record["statuscodename"].Value);
+    }
+
+    [Fact]
+    [Trait("Category", "PlanUnit")]
+    public void ExpandFormattedValueColumns_BooleanColumn_AddsNameColumn()
+    {
+        // Arrange: QueryResult with a boolean column that has a FormattedValue
+        var result = new QueryResult
+        {
+            EntityLogicalName = "solution",
+            Columns = new List<QueryColumn>
+            {
+                new() { LogicalName = "ismanaged", DataType = QueryColumnType.Boolean }
+            },
+            Records = new List<IReadOnlyDictionary<string, QueryValue>>
+            {
+                new Dictionary<string, QueryValue>
+                {
+                    ["ismanaged"] = QueryValue.WithFormatting(true, "Yes")
+                }
+            },
+            Count = 1
+        };
+
+        // Act
+        var expanded = SqlQueryResultExpander.ExpandFormattedValueColumns(result);
+
+        // Assert: should contain ismanagedname column
+        var columnNames = expanded.Columns.Select(c => c.LogicalName).ToList();
+        Assert.Contains("ismanaged", columnNames);
+        Assert.Contains("ismanagedname", columnNames);
+
+        var record = expanded.Records[0];
+        Assert.True(record.ContainsKey("ismanagedname"), "Record should contain ismanagedname key");
+        Assert.Equal("Yes", record["ismanagedname"].Value);
+    }
+
+    [Fact]
+    [Trait("Category", "PlanUnit")]
+    public void ExpandFormattedValueColumns_VirtualColumnOnly_HidesBaseColumn()
+    {
+        // Arrange: user queried owneridname (not ownerid), so the base column should be hidden
+        var ownerId = Guid.NewGuid();
+        var result = new QueryResult
+        {
+            EntityLogicalName = "account",
+            Columns = new List<QueryColumn>
+            {
+                new() { LogicalName = "ownerid", DataType = QueryColumnType.Lookup }
+            },
+            Records = new List<IReadOnlyDictionary<string, QueryValue>>
+            {
+                new Dictionary<string, QueryValue>
+                {
+                    ["ownerid"] = QueryValue.Lookup(ownerId, "systemuser", "John Smith")
+                }
+            },
+            Count = 1
+        };
+
+        var virtualColumns = new Dictionary<string, VirtualColumnInfo>
+        {
+            ["owneridname"] = new VirtualColumnInfo
+            {
+                BaseColumnName = "ownerid",
+                BaseColumnExplicitlyQueried = false
+            }
+        };
+
+        // Act
+        var expanded = SqlQueryResultExpander.ExpandFormattedValueColumns(result, virtualColumns);
+
+        // Assert: ownerid should be hidden, only owneridname shown
+        var columnNames = expanded.Columns.Select(c => c.LogicalName).ToList();
+        Assert.DoesNotContain("ownerid", columnNames);
+        Assert.Contains("owneridname", columnNames);
+
+        var record = expanded.Records[0];
+        Assert.False(record.ContainsKey("ownerid"), "Base column should be hidden when only *name was queried");
+        Assert.Equal("John Smith", record["owneridname"].Value);
+    }
+
+    [Fact]
+    [Trait("Category", "PlanUnit")]
+    public void ExpandFormattedValueColumns_VirtualAndBaseExplicit_ShowsBoth()
+    {
+        // Arrange: user queried both ownerid AND owneridname
+        var ownerId = Guid.NewGuid();
+        var result = new QueryResult
+        {
+            EntityLogicalName = "account",
+            Columns = new List<QueryColumn>
+            {
+                new() { LogicalName = "ownerid", DataType = QueryColumnType.Lookup }
+            },
+            Records = new List<IReadOnlyDictionary<string, QueryValue>>
+            {
+                new Dictionary<string, QueryValue>
+                {
+                    ["ownerid"] = QueryValue.Lookup(ownerId, "systemuser", "John Smith")
+                }
+            },
+            Count = 1
+        };
+
+        var virtualColumns = new Dictionary<string, VirtualColumnInfo>
+        {
+            ["owneridname"] = new VirtualColumnInfo
+            {
+                BaseColumnName = "ownerid",
+                BaseColumnExplicitlyQueried = true
+            }
+        };
+
+        // Act
+        var expanded = SqlQueryResultExpander.ExpandFormattedValueColumns(result, virtualColumns);
+
+        // Assert: both ownerid and owneridname should be present
+        var columnNames = expanded.Columns.Select(c => c.LogicalName).ToList();
+        Assert.Contains("ownerid", columnNames);
+        Assert.Contains("owneridname", columnNames);
+
+        var record = expanded.Records[0];
+        Assert.True(record.ContainsKey("ownerid"), "Base column should be present when explicitly queried");
+        Assert.True(record.ContainsKey("owneridname"), "Virtual column should be present");
+        Assert.Equal("John Smith", record["owneridname"].Value);
+    }
+
+    [Fact]
+    [Trait("Category", "PlanUnit")]
+    public void ExpandFormattedValueColumns_PlainStringColumn_NoExpansion()
+    {
+        // Arrange: a plain string column should not be expanded
+        var result = new QueryResult
+        {
+            EntityLogicalName = "account",
+            Columns = new List<QueryColumn>
+            {
+                new() { LogicalName = "name", DataType = QueryColumnType.String }
+            },
+            Records = new List<IReadOnlyDictionary<string, QueryValue>>
+            {
+                new Dictionary<string, QueryValue>
+                {
+                    ["name"] = QueryValue.Simple("Contoso")
+                }
+            },
+            Count = 1
+        };
+
+        // Act
+        var expanded = SqlQueryResultExpander.ExpandFormattedValueColumns(result);
+
+        // Assert: no additional columns
+        Assert.Single(expanded.Columns);
+        Assert.Equal("name", expanded.Columns[0].LogicalName);
+
+        var record = expanded.Records[0];
+        Assert.Single(record);
+        Assert.Equal("Contoso", record["name"].Value);
+    }
+
+    [Fact]
+    [Trait("Category", "PlanUnit")]
+    public void ExpandFormattedValueColumns_EmptyResult_ReturnsOriginal()
+    {
+        // Arrange
+        var result = QueryResult.Empty("account");
+
+        // Act
+        var expanded = SqlQueryResultExpander.ExpandFormattedValueColumns(result);
+
+        // Assert: should return the same empty result
+        Assert.Equal(0, expanded.Count);
+        Assert.Empty(expanded.Records);
     }
 
     #endregion
