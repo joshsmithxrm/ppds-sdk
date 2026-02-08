@@ -5,8 +5,8 @@ using PPDS.Dataverse.Sql.Ast;
 namespace PPDS.Dataverse.Sql.Parsing;
 
 /// <summary>
-/// Recursive descent parser for a subset of SQL SELECT statements.
-/// Produces a SqlSelectStatement AST from SQL text.
+/// Recursive descent parser for SQL statements.
+/// Produces AST nodes from SQL text (SELECT, INSERT, UPDATE, DELETE).
 /// </summary>
 /// <remarks>
 /// Supported SQL:
@@ -17,13 +17,15 @@ namespace PPDS.Dataverse.Sql.Parsing;
 /// - COUNT(DISTINCT column)
 /// - GROUP BY column1, column2
 /// - HAVING clause (post-aggregation filter)
-/// - WHERE with comparison, LIKE, IS NULL, IN operators
+/// - WHERE with comparison, LIKE, IS NULL, IN, BETWEEN operators
 /// - AND/OR logical operators with parentheses
 /// - ORDER BY column ASC/DESC
 /// - JOIN (INNER, LEFT, RIGHT)
-///
 /// - EXISTS / NOT EXISTS (SELECT ...)
 /// - UNION / UNION ALL
+/// - INSERT INTO entity (cols) VALUES (...) / INSERT INTO entity (cols) SELECT ...
+/// - UPDATE entity SET col = expr WHERE ...
+/// - DELETE FROM entity WHERE ...
 ///
 /// Not Supported (for now):
 /// - INTERSECT/EXCEPT
@@ -71,6 +73,37 @@ public sealed class SqlParser
         var result = lexer.Tokenize();
         _tokens = result.Tokens;
         _comments = result.Comments;
+
+        // Dispatch based on the first keyword
+        if (Check(SqlTokenType.Insert))
+        {
+            var stmt = ParseInsertStatement();
+            if (!IsAtEnd())
+            {
+                throw Error($"Unexpected token: {Peek().Value}");
+            }
+            return stmt;
+        }
+
+        if (Check(SqlTokenType.Update))
+        {
+            var stmt = ParseUpdateStatement();
+            if (!IsAtEnd())
+            {
+                throw Error($"Unexpected token: {Peek().Value}");
+            }
+            return stmt;
+        }
+
+        if (Check(SqlTokenType.Delete))
+        {
+            var stmt = ParseDeleteStatement();
+            if (!IsAtEnd())
+            {
+                throw Error($"Unexpected token: {Peek().Value}");
+            }
+            return stmt;
+        }
 
         var firstSelect = ParseSelectStatementWithoutEndCheck();
 
@@ -544,6 +577,201 @@ public sealed class SqlParser
             distinct,
             groupBy,
             having);
+    }
+
+    #endregion
+
+    #region DML Parsing
+
+    /// <summary>
+    /// Parses an INSERT statement:
+    ///   INSERT INTO entity (col1, col2, ...) VALUES (val1, val2, ...) [, (val1, val2, ...)]
+    ///   INSERT INTO entity (col1, col2, ...) SELECT ...
+    /// </summary>
+    private SqlInsertStatement ParseInsertStatement()
+    {
+        var sourcePosition = Peek().Position;
+        Expect(SqlTokenType.Insert);
+        Expect(SqlTokenType.Into);
+
+        var entityName = Expect(SqlTokenType.Identifier).Value;
+
+        // Parse column list: ( identifier [, identifier]* )
+        Expect(SqlTokenType.LeftParen);
+        var columns = new List<string>();
+        columns.Add(Expect(SqlTokenType.Identifier).Value);
+        while (Match(SqlTokenType.Comma))
+        {
+            columns.Add(Expect(SqlTokenType.Identifier).Value);
+        }
+        Expect(SqlTokenType.RightParen);
+
+        // VALUES or SELECT
+        if (Check(SqlTokenType.Values))
+        {
+            Expect(SqlTokenType.Values);
+            var valueRows = new List<IReadOnlyList<ISqlExpression>>();
+            valueRows.Add(ParseValueRow());
+
+            while (Match(SqlTokenType.Comma))
+            {
+                valueRows.Add(ParseValueRow());
+            }
+
+            // Validate column count matches value count
+            foreach (var row in valueRows)
+            {
+                if (row.Count != columns.Count)
+                {
+                    throw Error(
+                        $"VALUES row has {row.Count} values but {columns.Count} columns were specified");
+                }
+            }
+
+            return new SqlInsertStatement(entityName, columns, valueRows, null, sourcePosition);
+        }
+
+        if (Check(SqlTokenType.Select))
+        {
+            var sourceQuery = ParseSelectStatementWithoutEndCheck();
+            return new SqlInsertStatement(entityName, columns, null, sourceQuery, sourcePosition);
+        }
+
+        throw Error("Expected VALUES or SELECT after column list");
+    }
+
+    /// <summary>
+    /// Parses a parenthesized value row: ( expression [, expression]* )
+    /// </summary>
+    private IReadOnlyList<ISqlExpression> ParseValueRow()
+    {
+        Expect(SqlTokenType.LeftParen);
+        var values = new List<ISqlExpression>();
+        values.Add(ParseExpression());
+
+        while (Match(SqlTokenType.Comma))
+        {
+            values.Add(ParseExpression());
+        }
+
+        Expect(SqlTokenType.RightParen);
+        return values;
+    }
+
+    /// <summary>
+    /// Parses an UPDATE statement:
+    ///   UPDATE table SET col = expr [, col = expr ...] [FROM table [JOIN ...]] WHERE ...
+    /// </summary>
+    private SqlUpdateStatement ParseUpdateStatement()
+    {
+        var sourcePosition = Peek().Position;
+        Expect(SqlTokenType.Update);
+
+        var targetTable = ParseTableRef();
+        Expect(SqlTokenType.Set);
+
+        // Parse SET clauses: identifier = expression [, identifier = expression]*
+        var setClauses = new List<SqlSetClause>();
+        setClauses.Add(ParseSetClause());
+
+        while (Match(SqlTokenType.Comma))
+        {
+            setClauses.Add(ParseSetClause());
+        }
+
+        // Optional FROM clause for multi-table UPDATE
+        SqlTableRef? fromTable = null;
+        List<SqlJoin>? joins = null;
+        if (Match(SqlTokenType.From))
+        {
+            fromTable = ParseTableRef();
+            joins = new List<SqlJoin>();
+            while (MatchJoinKeyword())
+            {
+                joins.Add(ParseJoin());
+            }
+        }
+
+        // WHERE clause (required for safety)
+        ISqlCondition? where = null;
+        if (Match(SqlTokenType.Where))
+        {
+            where = ParseCondition();
+        }
+
+        if (where == null)
+        {
+            throw Error(
+                "UPDATE without WHERE is not allowed. Add a WHERE clause to limit affected records.");
+        }
+
+        return new SqlUpdateStatement(targetTable, setClauses, where, fromTable, joins, sourcePosition);
+    }
+
+    /// <summary>
+    /// Parses a single SET clause: column = expression.
+    /// Supports both simple (column) and qualified (table.column) column names.
+    /// </summary>
+    private SqlSetClause ParseSetClause()
+    {
+        var first = Expect(SqlTokenType.Identifier).Value;
+
+        // Handle qualified column: table.column = expression
+        string columnName;
+        if (Match(SqlTokenType.Dot))
+        {
+            // first was the table alias; the actual column is next
+            columnName = Expect(SqlTokenType.Identifier).Value;
+        }
+        else
+        {
+            columnName = first;
+        }
+
+        Expect(SqlTokenType.Equals);
+        var value = ParseExpression();
+        return new SqlSetClause(columnName, value);
+    }
+
+    /// <summary>
+    /// Parses a DELETE statement:
+    ///   DELETE FROM entity [FROM table [JOIN ...]] WHERE ...
+    /// </summary>
+    private SqlDeleteStatement ParseDeleteStatement()
+    {
+        var sourcePosition = Peek().Position;
+        Expect(SqlTokenType.Delete);
+        Expect(SqlTokenType.From);
+
+        var targetTable = ParseTableRef();
+
+        // Optional secondary FROM clause for multi-table DELETE
+        SqlTableRef? fromTable = null;
+        List<SqlJoin>? joins = null;
+        if (Match(SqlTokenType.From))
+        {
+            fromTable = ParseTableRef();
+            joins = new List<SqlJoin>();
+            while (MatchJoinKeyword())
+            {
+                joins.Add(ParseJoin());
+            }
+        }
+
+        // WHERE clause (required for safety)
+        ISqlCondition? where = null;
+        if (Match(SqlTokenType.Where))
+        {
+            where = ParseCondition();
+        }
+
+        if (where == null)
+        {
+            throw Error(
+                "DELETE without WHERE is not allowed. Use 'ppds truncate <entity>' for bulk deletion.");
+        }
+
+        return new SqlDeleteStatement(targetTable, where, fromTable, joins, sourcePosition);
     }
 
     #endregion
@@ -1354,13 +1582,28 @@ public sealed class SqlParser
                 AttachTrailingComment(cond);
                 return cond;
             }
-            throw Error("Expected LIKE or IN after NOT");
+            // Check for NOT BETWEEN
+            if (Match(SqlTokenType.Between))
+            {
+                var cond = ParseBetween(column, true);
+                AttachTrailingComment(cond);
+                return cond;
+            }
+            throw Error("Expected LIKE, IN, or BETWEEN after NOT");
         }
 
         // [NOT] IN
         if (Match(SqlTokenType.In))
         {
             var cond = ParseInList(column, false);
+            AttachTrailingComment(cond);
+            return cond;
+        }
+
+        // BETWEEN low AND high → col >= low AND col <= high
+        if (Match(SqlTokenType.Between))
+        {
+            var cond = ParseBetween(column, false);
             AttachTrailingComment(cond);
             return cond;
         }
@@ -1429,6 +1672,80 @@ public sealed class SqlParser
         var cond = new SqlExistsCondition(subquery, isNegated);
         AttachTrailingComment(cond);
         return cond;
+    }
+
+    /// <summary>
+    /// Parses BETWEEN low AND high (or NOT BETWEEN).
+    /// Desugars to: column &gt;= low AND column &lt;= high
+    /// (or NOT (column &gt;= low AND column &lt;= high) for NOT BETWEEN).
+    /// The BETWEEN token has already been consumed.
+    /// </summary>
+    private ISqlCondition ParseBetween(SqlColumnRef column, bool isNegated)
+    {
+        var lowExpr = ParseExpression();
+        Expect(SqlTokenType.And);
+        var highExpr = ParseExpression();
+
+        // Desugar to: column >= low AND column <= high
+        ISqlCondition geCond;
+        ISqlCondition leCond;
+
+        if (lowExpr is SqlLiteralExpression lowLit)
+        {
+            geCond = new SqlComparisonCondition(column, SqlComparisonOperator.GreaterThanOrEqual, lowLit.Value);
+        }
+        else
+        {
+            geCond = new SqlExpressionCondition(
+                new SqlColumnExpression(column), SqlComparisonOperator.GreaterThanOrEqual, lowExpr);
+        }
+
+        if (highExpr is SqlLiteralExpression highLit)
+        {
+            leCond = new SqlComparisonCondition(column, SqlComparisonOperator.LessThanOrEqual, highLit.Value);
+        }
+        else
+        {
+            leCond = new SqlExpressionCondition(
+                new SqlColumnExpression(column), SqlComparisonOperator.LessThanOrEqual, highExpr);
+        }
+
+        ISqlCondition result = SqlLogicalCondition.And(geCond, leCond);
+
+        // NOT BETWEEN → negate the whole thing
+        // NOT (col >= low AND col <= high) is equivalent to col < low OR col > high
+        // But for simplicity, we keep the AND and let the caller interpret NOT BETWEEN.
+        // Actually, since we desugar, NOT BETWEEN x AND y = col < x OR col > y.
+        if (isNegated)
+        {
+            // Desugar NOT BETWEEN to: column < low OR column > high
+            ISqlCondition ltCond;
+            ISqlCondition gtCond;
+
+            if (lowExpr is SqlLiteralExpression lowLit2)
+            {
+                ltCond = new SqlComparisonCondition(column, SqlComparisonOperator.LessThan, lowLit2.Value);
+            }
+            else
+            {
+                ltCond = new SqlExpressionCondition(
+                    new SqlColumnExpression(column), SqlComparisonOperator.LessThan, lowExpr);
+            }
+
+            if (highExpr is SqlLiteralExpression highLit2)
+            {
+                gtCond = new SqlComparisonCondition(column, SqlComparisonOperator.GreaterThan, highLit2.Value);
+            }
+            else
+            {
+                gtCond = new SqlExpressionCondition(
+                    new SqlColumnExpression(column), SqlComparisonOperator.GreaterThan, highExpr);
+            }
+
+            result = SqlLogicalCondition.Or(ltCond, gtCond);
+        }
+
+        return result;
     }
 
     /// <summary>

@@ -84,6 +84,20 @@ public enum SqlTokenType
     Cast,
     /// <summary>CONVERT keyword.</summary>
     Convert,
+    /// <summary>INSERT keyword.</summary>
+    Insert,
+    /// <summary>INTO keyword.</summary>
+    Into,
+    /// <summary>VALUES keyword.</summary>
+    Values,
+    /// <summary>UPDATE keyword.</summary>
+    Update,
+    /// <summary>SET keyword.</summary>
+    Set,
+    /// <summary>DELETE keyword.</summary>
+    Delete,
+    /// <summary>BETWEEN keyword.</summary>
+    Between,
 
     #endregion
 
@@ -205,6 +219,13 @@ public static class SqlTokenTypeExtensions
         SqlTokenType.All,
         SqlTokenType.Cast,
         SqlTokenType.Convert,
+        SqlTokenType.Insert,
+        SqlTokenType.Into,
+        SqlTokenType.Values,
+        SqlTokenType.Update,
+        SqlTokenType.Set,
+        SqlTokenType.Delete,
+        SqlTokenType.Between,
         SqlTokenType.Count,
         SqlTokenType.Sum,
         SqlTokenType.Avg,
@@ -302,6 +323,13 @@ public static class SqlTokenTypeExtensions
         ["ALL"] = SqlTokenType.All,
         ["CAST"] = SqlTokenType.Cast,
         ["CONVERT"] = SqlTokenType.Convert,
+        ["INSERT"] = SqlTokenType.Insert,
+        ["INTO"] = SqlTokenType.Into,
+        ["VALUES"] = SqlTokenType.Values,
+        ["UPDATE"] = SqlTokenType.Update,
+        ["SET"] = SqlTokenType.Set,
+        ["DELETE"] = SqlTokenType.Delete,
+        ["BETWEEN"] = SqlTokenType.Between,
         ["COUNT"] = SqlTokenType.Count,
         ["SUM"] = SqlTokenType.Sum,
         ["AVG"] = SqlTokenType.Avg,

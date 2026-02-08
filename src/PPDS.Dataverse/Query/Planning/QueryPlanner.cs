@@ -35,17 +35,34 @@ public sealed class QueryPlanner
     /// <exception cref="SqlParseException">If the statement type is not supported.</exception>
     public QueryPlanResult Plan(ISqlStatement statement, QueryPlanOptions? options = null)
     {
+        var opts = options ?? new QueryPlanOptions();
+
         if (statement is SqlUnionStatement union)
         {
-            return PlanUnion(union, options ?? new QueryPlanOptions());
+            return PlanUnion(union, opts);
+        }
+
+        if (statement is SqlInsertStatement insert)
+        {
+            return PlanInsert(insert, opts);
+        }
+
+        if (statement is SqlUpdateStatement update)
+        {
+            return PlanUpdate(update, opts);
+        }
+
+        if (statement is SqlDeleteStatement delete)
+        {
+            return PlanDelete(delete, opts);
         }
 
         if (statement is not SqlSelectStatement selectStatement)
         {
-            throw new SqlParseException("Only SELECT and UNION statements are currently supported.");
+            throw new SqlParseException("Unsupported statement type.");
         }
 
-        return PlanSelect(selectStatement, options ?? new QueryPlanOptions());
+        return PlanSelect(selectStatement, opts);
     }
 
     private QueryPlanResult PlanSelect(SqlSelectStatement statement, QueryPlanOptions options)
@@ -170,6 +187,166 @@ public sealed class QueryPlanner
             VirtualColumns = transpileResult.VirtualColumns,
             EntityLogicalName = statement.GetEntityName()
         };
+    }
+
+    /// <summary>
+    /// Builds an execution plan for an INSERT statement.
+    /// INSERT VALUES: wraps value rows in a DmlExecuteNode directly.
+    /// INSERT SELECT: plans the source SELECT, wraps with DmlExecuteNode.
+    /// </summary>
+    private QueryPlanResult PlanInsert(SqlInsertStatement insert, QueryPlanOptions options)
+    {
+        IQueryPlanNode rootNode;
+
+        if (insert.ValueRows != null)
+        {
+            // INSERT VALUES: create DmlExecuteNode directly with value rows
+            rootNode = DmlExecuteNode.InsertValues(
+                insert.TargetEntity,
+                insert.Columns,
+                insert.ValueRows);
+        }
+        else if (insert.SourceQuery != null)
+        {
+            // INSERT SELECT: plan the source SELECT, wrap with DmlExecuteNode
+            var sourceResult = PlanSelect(insert.SourceQuery, options);
+            rootNode = DmlExecuteNode.InsertSelect(
+                insert.TargetEntity,
+                insert.Columns,
+                sourceResult.RootNode);
+        }
+        else
+        {
+            throw new SqlParseException("INSERT statement must have VALUES or SELECT source.");
+        }
+
+        return new QueryPlanResult
+        {
+            RootNode = rootNode,
+            FetchXml = $"-- DML: INSERT INTO {insert.TargetEntity}",
+            VirtualColumns = new Dictionary<string, VirtualColumnInfo>(),
+            EntityLogicalName = insert.TargetEntity
+        };
+    }
+
+    /// <summary>
+    /// Builds an execution plan for an UPDATE statement.
+    /// Creates a FetchXML scan to find matching records, then wraps with DmlExecuteNode.
+    /// </summary>
+    private QueryPlanResult PlanUpdate(SqlUpdateStatement update, QueryPlanOptions options)
+    {
+        var entityName = update.TargetTable.TableName;
+
+        // Build a SELECT to find records matching the WHERE clause.
+        // SELECT entityid FROM entity WHERE ...
+        var idColumn = SqlColumnRef.Simple(entityName + "id");
+        var selectColumns = new List<ISqlSelectColumn> { idColumn };
+
+        // Also include any columns referenced in SET clause expressions
+        // so they're available for evaluation (e.g., SET revenue = revenue * 1.1)
+        foreach (var clause in update.SetClauses)
+        {
+            var referencedColumns = ExtractColumnNames(clause.Value);
+            foreach (var colName in referencedColumns)
+            {
+                if (!selectColumns.Exists(c => c is SqlColumnRef cr && cr.ColumnName == colName))
+                {
+                    selectColumns.Add(SqlColumnRef.Simple(colName));
+                }
+            }
+        }
+
+        var selectStatement = new SqlSelectStatement(
+            selectColumns,
+            update.TargetTable,
+            update.Joins,
+            update.Where);
+
+        var selectResult = PlanSelect(selectStatement, options);
+
+        var rootNode = DmlExecuteNode.Update(
+            entityName,
+            selectResult.RootNode,
+            update.SetClauses);
+
+        return new QueryPlanResult
+        {
+            RootNode = rootNode,
+            FetchXml = selectResult.FetchXml,
+            VirtualColumns = new Dictionary<string, VirtualColumnInfo>(),
+            EntityLogicalName = entityName
+        };
+    }
+
+    /// <summary>
+    /// Builds an execution plan for a DELETE statement.
+    /// Creates a FetchXML scan to find matching record IDs, then wraps with DmlExecuteNode.
+    /// </summary>
+    private QueryPlanResult PlanDelete(SqlDeleteStatement delete, QueryPlanOptions options)
+    {
+        var entityName = delete.TargetTable.TableName;
+
+        // Build a SELECT to find record IDs matching the WHERE clause.
+        // SELECT entityid FROM entity WHERE ...
+        var idColumn = SqlColumnRef.Simple(entityName + "id");
+        var selectStatement = new SqlSelectStatement(
+            new ISqlSelectColumn[] { idColumn },
+            delete.TargetTable,
+            delete.Joins,
+            delete.Where);
+
+        var selectResult = PlanSelect(selectStatement, options);
+
+        var rootNode = DmlExecuteNode.Delete(
+            entityName,
+            selectResult.RootNode);
+
+        return new QueryPlanResult
+        {
+            RootNode = rootNode,
+            FetchXml = selectResult.FetchXml,
+            VirtualColumns = new Dictionary<string, VirtualColumnInfo>(),
+            EntityLogicalName = entityName
+        };
+    }
+
+    /// <summary>
+    /// Extracts column names referenced in an expression (for UPDATE SET clause dependency detection).
+    /// </summary>
+    private static List<string> ExtractColumnNames(ISqlExpression expression)
+    {
+        var columns = new List<string>();
+        ExtractColumnNamesRecursive(expression, columns);
+        return columns;
+    }
+
+    private static void ExtractColumnNamesRecursive(ISqlExpression expression, List<string> columns)
+    {
+        switch (expression)
+        {
+            case SqlColumnExpression col:
+                if (col.Column.ColumnName != null)
+                {
+                    columns.Add(col.Column.ColumnName);
+                }
+                break;
+            case SqlBinaryExpression bin:
+                ExtractColumnNamesRecursive(bin.Left, columns);
+                ExtractColumnNamesRecursive(bin.Right, columns);
+                break;
+            case SqlUnaryExpression unary:
+                ExtractColumnNamesRecursive(unary.Operand, columns);
+                break;
+            case SqlFunctionExpression func:
+                foreach (var arg in func.Arguments)
+                {
+                    ExtractColumnNamesRecursive(arg, columns);
+                }
+                break;
+            case SqlCastExpression cast:
+                ExtractColumnNamesRecursive(cast.Expression, columns);
+                break;
+        }
     }
 
     /// <summary>

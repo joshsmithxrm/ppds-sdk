@@ -51,11 +51,11 @@ public class QueryPlannerTests
     [Fact]
     public void Plan_NonSelectStatement_Throws()
     {
-        // ISqlStatement that is not SqlSelectStatement
+        // ISqlStatement that is not a recognized statement type
         var nonSelect = new NonSelectStatement();
 
         var ex = Assert.Throws<SqlParseException>(() => _planner.Plan(nonSelect));
-        Assert.Contains("SELECT", ex.Message);
+        Assert.Contains("Unsupported", ex.Message);
     }
 
     [Fact]

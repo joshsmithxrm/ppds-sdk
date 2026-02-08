@@ -1,5 +1,6 @@
 using System;
 using System.Threading;
+using PPDS.Dataverse.BulkOperations;
 using PPDS.Dataverse.Metadata;
 using PPDS.Dataverse.Query.Execution;
 
@@ -31,6 +32,9 @@ public sealed class QueryPlanContext
     /// <summary>Optional metadata query executor for metadata virtual tables (Phase 6).</summary>
     public IMetadataQueryExecutor? MetadataQueryExecutor { get; }
 
+    /// <summary>Optional bulk operation executor for DML operations (INSERT, UPDATE, DELETE).</summary>
+    public IBulkOperationExecutor? BulkOperationExecutor { get; }
+
     public QueryPlanContext(
         IQueryExecutor queryExecutor,
         IExpressionEvaluator expressionEvaluator,
@@ -38,7 +42,8 @@ public sealed class QueryPlanContext
         QueryPlanStatistics? statistics = null,
         IQueryProgressReporter? progressReporter = null,
         ITdsQueryExecutor? tdsQueryExecutor = null,
-        IMetadataQueryExecutor? metadataQueryExecutor = null)
+        IMetadataQueryExecutor? metadataQueryExecutor = null,
+        IBulkOperationExecutor? bulkOperationExecutor = null)
     {
         QueryExecutor = queryExecutor ?? throw new ArgumentNullException(nameof(queryExecutor));
         ExpressionEvaluator = expressionEvaluator ?? throw new ArgumentNullException(nameof(expressionEvaluator));
@@ -47,5 +52,6 @@ public sealed class QueryPlanContext
         ProgressReporter = progressReporter;
         TdsQueryExecutor = tdsQueryExecutor;
         MetadataQueryExecutor = metadataQueryExecutor;
+        BulkOperationExecutor = bulkOperationExecutor;
     }
 }
