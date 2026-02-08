@@ -62,6 +62,18 @@ public enum SqlTokenType
     Group,
     /// <summary>HAVING keyword.</summary>
     Having,
+    /// <summary>CASE keyword.</summary>
+    Case,
+    /// <summary>WHEN keyword.</summary>
+    When,
+    /// <summary>THEN keyword.</summary>
+    Then,
+    /// <summary>ELSE keyword.</summary>
+    Else,
+    /// <summary>END keyword.</summary>
+    End,
+    /// <summary>IIF keyword (conditional function).</summary>
+    Iif,
 
     #endregion
 
@@ -164,6 +176,12 @@ public static class SqlTokenTypeExtensions
         SqlTokenType.Distinct,
         SqlTokenType.Group,
         SqlTokenType.Having,
+        SqlTokenType.Case,
+        SqlTokenType.When,
+        SqlTokenType.Then,
+        SqlTokenType.Else,
+        SqlTokenType.End,
+        SqlTokenType.Iif,
         SqlTokenType.Count,
         SqlTokenType.Sum,
         SqlTokenType.Avg,
@@ -236,6 +254,12 @@ public static class SqlTokenTypeExtensions
         ["DISTINCT"] = SqlTokenType.Distinct,
         ["GROUP"] = SqlTokenType.Group,
         ["HAVING"] = SqlTokenType.Having,
+        ["CASE"] = SqlTokenType.Case,
+        ["WHEN"] = SqlTokenType.When,
+        ["THEN"] = SqlTokenType.Then,
+        ["ELSE"] = SqlTokenType.Else,
+        ["END"] = SqlTokenType.End,
+        ["IIF"] = SqlTokenType.Iif,
         ["COUNT"] = SqlTokenType.Count,
         ["SUM"] = SqlTokenType.Sum,
         ["AVG"] = SqlTokenType.Avg,

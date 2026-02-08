@@ -19,6 +19,8 @@ public sealed class ExpressionEvaluator : IExpressionEvaluator
             SqlColumnExpression col => EvaluateColumn(col, row),
             SqlBinaryExpression bin => EvaluateBinary(bin, row),
             SqlUnaryExpression unary => EvaluateUnary(unary, row),
+            SqlCaseExpression caseExpr => EvaluateCase(caseExpr, row),
+            SqlIifExpression iif => EvaluateIif(iif, row),
             _ => throw new NotSupportedException($"Expression type {expression.GetType().Name} is not yet supported.")
         };
     }
@@ -112,6 +114,29 @@ public sealed class ExpressionEvaluator : IExpressionEvaluator
             SqlUnaryOperator.Not => operand is bool b ? !b : throw new InvalidOperationException("NOT requires a boolean operand."),
             _ => throw new NotSupportedException($"Unary operator {unary.Operator} is not supported.")
         };
+    }
+
+    private object? EvaluateCase(SqlCaseExpression caseExpr, IReadOnlyDictionary<string, QueryValue> row)
+    {
+        foreach (var whenClause in caseExpr.WhenClauses)
+        {
+            if (EvaluateCondition(whenClause.Condition, row))
+            {
+                return Evaluate(whenClause.Result, row);
+            }
+        }
+
+        // No WHEN matched: return ELSE if present, otherwise NULL
+        return caseExpr.ElseExpression != null
+            ? Evaluate(caseExpr.ElseExpression, row)
+            : null;
+    }
+
+    private object? EvaluateIif(SqlIifExpression iif, IReadOnlyDictionary<string, QueryValue> row)
+    {
+        return EvaluateCondition(iif.Condition, row)
+            ? Evaluate(iif.TrueValue, row)
+            : Evaluate(iif.FalseValue, row);
     }
 
     #endregion

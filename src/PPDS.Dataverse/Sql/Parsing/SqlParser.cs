@@ -371,13 +371,21 @@ public sealed class SqlParser
     }
 
     /// <summary>
-    /// Parses a single SELECT column (regular column or aggregate function).
+    /// Parses a single SELECT column (regular column, aggregate function, or computed expression).
     /// </summary>
     private ISqlSelectColumn ParseSelectColumn()
     {
         if (IsAggregateFunction())
         {
             return ParseAggregateColumn();
+        }
+
+        // CASE and IIF produce computed columns
+        if (Check(SqlTokenType.Case) || Check(SqlTokenType.Iif))
+        {
+            var expression = ParseExpression();
+            var alias = ParseOptionalAlias();
+            return new SqlComputedColumn(expression, alias);
         }
 
         return ParseColumnRef();
@@ -564,6 +572,117 @@ public sealed class SqlParser
         var rightColumn = ParseColumnRef();
 
         return new SqlJoin(joinType, table, leftColumn, rightColumn);
+    }
+
+    #endregion
+
+    #region Expression Parsing
+
+    /// <summary>
+    /// Parses an expression: literal, column reference, CASE, IIF, or parenthesized expression.
+    /// Phase 1: no arithmetic operators (added in Task 1.4).
+    /// </summary>
+    private ISqlExpression ParseExpression()
+    {
+        if (Check(SqlTokenType.Case))
+        {
+            return ParseCaseExpression();
+        }
+
+        if (Check(SqlTokenType.Iif))
+        {
+            return ParseIifExpression();
+        }
+
+        if (Match(SqlTokenType.LeftParen))
+        {
+            var inner = ParseExpression();
+            Expect(SqlTokenType.RightParen);
+            return inner;
+        }
+
+        if (Check(SqlTokenType.String))
+        {
+            Advance();
+            return new SqlLiteralExpression(SqlLiteral.String(Previous().Value));
+        }
+
+        if (Check(SqlTokenType.Number))
+        {
+            Advance();
+            return new SqlLiteralExpression(SqlLiteral.Number(Previous().Value));
+        }
+
+        if (Check(SqlTokenType.Null))
+        {
+            Advance();
+            return new SqlLiteralExpression(SqlLiteral.Null());
+        }
+
+        // Column reference (identifier, possibly table.column)
+        if (Check(SqlTokenType.Identifier))
+        {
+            var first = Advance();
+            if (Match(SqlTokenType.Dot))
+            {
+                var second = Expect(SqlTokenType.Identifier);
+                return new SqlColumnExpression(SqlColumnRef.Qualified(first.Value, second.Value));
+            }
+            return new SqlColumnExpression(SqlColumnRef.Simple(first.Value));
+        }
+
+        throw Error($"Expected expression, found {Peek().Type}");
+    }
+
+    /// <summary>
+    /// Parses a CASE WHEN condition THEN expression [WHEN ...] [ELSE expression] END.
+    /// </summary>
+    private SqlCaseExpression ParseCaseExpression()
+    {
+        Expect(SqlTokenType.Case);
+
+        var whenClauses = new List<SqlWhenClause>();
+
+        // At least one WHEN clause required
+        do
+        {
+            Expect(SqlTokenType.When);
+            var condition = ParseCondition();
+            Expect(SqlTokenType.Then);
+            var result = ParseExpression();
+            whenClauses.Add(new SqlWhenClause(condition, result));
+        }
+        while (Check(SqlTokenType.When));
+
+        // Optional ELSE clause
+        ISqlExpression? elseExpression = null;
+        if (Match(SqlTokenType.Else))
+        {
+            elseExpression = ParseExpression();
+        }
+
+        Expect(SqlTokenType.End);
+
+        return new SqlCaseExpression(whenClauses, elseExpression);
+    }
+
+    /// <summary>
+    /// Parses IIF(condition, true_value, false_value).
+    /// </summary>
+    private SqlIifExpression ParseIifExpression()
+    {
+        Expect(SqlTokenType.Iif);
+        Expect(SqlTokenType.LeftParen);
+
+        var condition = ParseCondition();
+        Expect(SqlTokenType.Comma);
+        var trueValue = ParseExpression();
+        Expect(SqlTokenType.Comma);
+        var falseValue = ParseExpression();
+
+        Expect(SqlTokenType.RightParen);
+
+        return new SqlIifExpression(condition, trueValue, falseValue);
     }
 
     #endregion

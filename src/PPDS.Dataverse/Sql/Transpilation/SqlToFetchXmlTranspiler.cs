@@ -227,6 +227,11 @@ public sealed class SqlToFetchXmlTranspiler
                     TranspileRegularColumnWithVirtual(
                         columnRef, mainEntity, groupByColumns, virtualColumns, emittedBaseColumns, lines);
                     break;
+                case SqlComputedColumn computed:
+                    // Computed columns (CASE/IIF) are evaluated client-side.
+                    // Emit all referenced base columns so FetchXML returns the data.
+                    EmitReferencedColumns(computed.Expression, emittedBaseColumns, lines);
+                    break;
             }
         }
 
@@ -262,6 +267,8 @@ public sealed class SqlToFetchXmlTranspiler
             groupBy.Select(col => NormalizeAttributeName(col.ColumnName)),
             StringComparer.OrdinalIgnoreCase);
 
+        var emittedColumns = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
         foreach (var column in columns)
         {
             switch (column)
@@ -271,6 +278,9 @@ public sealed class SqlToFetchXmlTranspiler
                     break;
                 case SqlColumnRef columnRef:
                     TranspileRegularColumn(columnRef, mainEntity, groupByColumns, lines);
+                    break;
+                case SqlComputedColumn computed:
+                    EmitReferencedColumns(computed.Expression, emittedColumns, lines);
                     break;
             }
         }
@@ -477,6 +487,90 @@ public sealed class SqlToFetchXmlTranspiler
     {
         _aliasCounter++;
         return $"{func.ToString().ToLowerInvariant()}_{_aliasCounter}";
+    }
+
+    /// <summary>
+    /// Emits FetchXML attribute elements for all column references within an expression.
+    /// Used for computed columns (CASE/IIF) so the base data is retrieved from Dataverse.
+    /// </summary>
+    private void EmitReferencedColumns(ISqlExpression expression, HashSet<string> emitted, List<string> lines)
+    {
+        var columnNames = new List<string>();
+        CollectReferencedColumns(expression, columnNames);
+
+        foreach (var colName in columnNames)
+        {
+            var attrName = NormalizeAttributeName(colName);
+            if (emitted.Add(attrName))
+            {
+                lines.Add($"    <attribute name=\"{attrName}\" />");
+            }
+        }
+    }
+
+    /// <summary>
+    /// Recursively collects all column names referenced in an expression or its conditions.
+    /// </summary>
+    private static void CollectReferencedColumns(ISqlExpression expression, List<string> columnNames)
+    {
+        switch (expression)
+        {
+            case SqlColumnExpression col:
+                columnNames.Add(col.Column.ColumnName);
+                break;
+            case SqlCaseExpression caseExpr:
+                foreach (var when in caseExpr.WhenClauses)
+                {
+                    CollectReferencedColumnsFromCondition(when.Condition, columnNames);
+                    CollectReferencedColumns(when.Result, columnNames);
+                }
+                if (caseExpr.ElseExpression != null)
+                {
+                    CollectReferencedColumns(caseExpr.ElseExpression, columnNames);
+                }
+                break;
+            case SqlIifExpression iif:
+                CollectReferencedColumnsFromCondition(iif.Condition, columnNames);
+                CollectReferencedColumns(iif.TrueValue, columnNames);
+                CollectReferencedColumns(iif.FalseValue, columnNames);
+                break;
+            case SqlBinaryExpression bin:
+                CollectReferencedColumns(bin.Left, columnNames);
+                CollectReferencedColumns(bin.Right, columnNames);
+                break;
+            case SqlUnaryExpression unary:
+                CollectReferencedColumns(unary.Operand, columnNames);
+                break;
+            // SqlLiteralExpression has no columns to collect
+        }
+    }
+
+    /// <summary>
+    /// Recursively collects column names from condition trees.
+    /// </summary>
+    private static void CollectReferencedColumnsFromCondition(ISqlCondition condition, List<string> columnNames)
+    {
+        switch (condition)
+        {
+            case SqlComparisonCondition comp:
+                columnNames.Add(comp.Column.ColumnName);
+                break;
+            case SqlNullCondition nullCond:
+                columnNames.Add(nullCond.Column.ColumnName);
+                break;
+            case SqlLikeCondition like:
+                columnNames.Add(like.Column.ColumnName);
+                break;
+            case SqlInCondition inCond:
+                columnNames.Add(inCond.Column.ColumnName);
+                break;
+            case SqlLogicalCondition logical:
+                foreach (var child in logical.Conditions)
+                {
+                    CollectReferencedColumnsFromCondition(child, columnNames);
+                }
+                break;
+        }
     }
 
     #endregion

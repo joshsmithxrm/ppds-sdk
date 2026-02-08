@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using PPDS.Dataverse.Query.Planning.Nodes;
 using PPDS.Dataverse.Sql.Ast;
 using PPDS.Dataverse.Sql.Parsing;
@@ -80,6 +81,14 @@ public sealed class QueryPlanner
             rootNode = new ClientFilterNode(rootNode, statement.Having);
         }
 
+        // Computed columns (CASE/IIF expressions): add ProjectNode to evaluate
+        // expressions client-side against the scan output. Regular columns pass through,
+        // computed columns are evaluated by the ExpressionEvaluator.
+        if (HasComputedColumns(statement))
+        {
+            rootNode = BuildProjectNode(rootNode, statement.Columns);
+        }
+
         return new QueryPlanResult
         {
             RootNode = rootNode,
@@ -135,6 +144,48 @@ public sealed class QueryPlanner
     {
         var agg = (SqlAggregateColumn)statement.Columns[0];
         return agg.Alias ?? "count";
+    }
+
+    /// <summary>
+    /// Checks whether the SELECT list contains any computed columns (CASE/IIF expressions).
+    /// </summary>
+    private static bool HasComputedColumns(SqlSelectStatement statement)
+    {
+        return statement.Columns.Any(col => col is SqlComputedColumn);
+    }
+
+    /// <summary>
+    /// Builds a ProjectNode that passes through regular columns and evaluates computed columns.
+    /// </summary>
+    private static ProjectNode BuildProjectNode(IQueryPlanNode input, IReadOnlyList<ISqlSelectColumn> columns)
+    {
+        var projections = new List<ProjectColumn>();
+
+        foreach (var column in columns)
+        {
+            switch (column)
+            {
+                case SqlColumnRef { IsWildcard: true }:
+                    // Wildcard: handled at scan level, not projected through here.
+                    // For now skip — ProjectNode only applies when there are computed columns
+                    // mixed with regular columns, and wildcard + computed is unusual.
+                    break;
+                case SqlColumnRef colRef:
+                    var outputName = colRef.Alias ?? colRef.ColumnName;
+                    projections.Add(ProjectColumn.PassThrough(outputName));
+                    break;
+                case SqlAggregateColumn agg:
+                    var aggOutput = agg.Alias ?? agg.GetColumnName() ?? "count";
+                    projections.Add(ProjectColumn.PassThrough(aggOutput));
+                    break;
+                case SqlComputedColumn computed:
+                    var compAlias = computed.Alias ?? "computed";
+                    projections.Add(ProjectColumn.Computed(compAlias, computed.Expression));
+                    break;
+            }
+        }
+
+        return new ProjectNode(input, projections);
     }
 }
 
