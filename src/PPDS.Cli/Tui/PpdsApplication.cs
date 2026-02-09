@@ -1,6 +1,8 @@
+using Microsoft.Extensions.DependencyInjection;
 using PPDS.Auth;
 using PPDS.Auth.Credentials;
 using PPDS.Auth.Profiles;
+using PPDS.Cli.Infrastructure;
 using PPDS.Cli.Tui.Infrastructure;
 using Terminal.Gui;
 
@@ -19,6 +21,7 @@ internal sealed class PpdsApplication : IDisposable
 
     private readonly string? _profileName;
     private readonly Action<DeviceCodeInfo>? _deviceCodeCallback;
+    private ServiceProvider? _authProvider;
     private ProfileStore? _profileStore;
     private InteractiveSession? _session;
     private bool _disposed;
@@ -41,8 +44,9 @@ internal sealed class PpdsApplication : IDisposable
         TuiDebugLog.Clear();
         TuiDebugLog.Log("TUI session starting");
 
-        // Create shared ProfileStore singleton for all local services
-        _profileStore = new ProfileStore();
+        // Create shared auth service provider for ProfileStore and EnvironmentConfigStore
+        _authProvider = ProfileServiceFactory.CreateLocalProvider();
+        _profileStore = _authProvider.GetRequiredService<ProfileStore>();
 
         // Callback invoked before browser opens for interactive authentication.
         // Shows a dialog giving user control: Open Browser, Use Device Code, or Cancel.
@@ -85,7 +89,13 @@ internal sealed class PpdsApplication : IDisposable
         };
 
         // Create session for connection pool reuse across screens
-        _session = new InteractiveSession(_profileName, _profileStore, serviceProviderFactory: null, _deviceCodeCallback, beforeInteractiveAuth);
+        _session = new InteractiveSession(
+            _profileName,
+            _profileStore,
+            _authProvider.GetRequiredService<EnvironmentConfigStore>(),
+            serviceProviderFactory: null,
+            _deviceCodeCallback,
+            beforeInteractiveAuth);
 
         // Start warming the connection pool in the background
         // This runs while Terminal.Gui initializes, so connection is ready faster
@@ -197,6 +207,7 @@ internal sealed class PpdsApplication : IDisposable
                     _sessionDisposed = true;
                 }
             }
+            _authProvider?.Dispose();
 #pragma warning restore PPDS012
         }
     }
