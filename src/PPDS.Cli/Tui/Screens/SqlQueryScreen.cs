@@ -9,6 +9,7 @@ using PPDS.Cli.Tui.Testing;
 using PPDS.Cli.Tui.Testing.States;
 using PPDS.Cli.Tui.Views;
 using PPDS.Dataverse.Resilience;
+using PPDS.Dataverse.Sql.Intellisense;
 using Terminal.Gui;
 
 namespace PPDS.Cli.Tui.Screens;
@@ -28,7 +29,7 @@ internal sealed class SqlQueryScreen : TuiScreenBase, ITuiStateCapture<SqlQueryS
     private readonly Action<DeviceCodeInfo>? _deviceCodeCallback;
 
     private readonly FrameView _queryFrame;
-    private readonly TextView _queryInput;
+    private readonly SyntaxHighlightedTextView _queryInput;
     private readonly QueryResultsTableView _resultsTable;
     private readonly TextField _filterField;
     private readonly FrameView _filterFrame;
@@ -82,7 +83,7 @@ internal sealed class SqlQueryScreen : TuiScreenBase, ITuiStateCapture<SqlQueryS
             ColorScheme = TuiColorPalette.Default
         };
 
-        _queryInput = new TextView
+        _queryInput = new SyntaxHighlightedTextView(new SqlSourceTokenizer(), TuiColorPalette.SqlSyntax)
         {
             X = 0,
             Y = 0,

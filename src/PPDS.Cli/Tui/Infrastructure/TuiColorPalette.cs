@@ -1,4 +1,6 @@
+using System.Collections.Generic;
 using PPDS.Auth.Profiles;
+using PPDS.Dataverse.Sql.Intellisense;
 using Terminal.Gui;
 
 namespace PPDS.Cli.Tui.Infrastructure;
@@ -294,6 +296,39 @@ public static class TuiColorPalette
         HotFocus = MakeAttr(Color.White, Color.Green),
         Disabled = MakeAttr(Color.DarkGray, Color.Black)
     };
+
+    #endregion
+
+    #region SQL Syntax Highlighting
+
+    /// <summary>
+    /// Color map for SQL syntax highlighting (SSMS-inspired dark theme).
+    /// Maps <see cref="SourceTokenType"/> to Terminal.Gui attributes.
+    /// Cached as a static field to avoid repeated dictionary allocation.
+    /// </summary>
+    private static readonly Dictionary<SourceTokenType, Terminal.Gui.Attribute> SqlSyntaxMap = new()
+    {
+        [SourceTokenType.Keyword] = MakeAttr(Color.Blue, Color.Black),
+        [SourceTokenType.Function] = MakeAttr(Color.Magenta, Color.Black),
+        [SourceTokenType.StringLiteral] = MakeAttr(Color.Red, Color.Black),
+        [SourceTokenType.NumericLiteral] = MakeAttr(Color.Cyan, Color.Black),
+        [SourceTokenType.Comment] = MakeAttr(Color.Green, Color.Black),
+        [SourceTokenType.Operator] = MakeAttr(Color.Gray, Color.Black),
+        [SourceTokenType.Identifier] = MakeAttr(Color.White, Color.Black),
+        [SourceTokenType.Punctuation] = MakeAttr(Color.Gray, Color.Black),
+        [SourceTokenType.Variable] = MakeAttr(Color.Cyan, Color.Black),
+        [SourceTokenType.Error] = MakeAttr(Color.White, Color.Red)
+    };
+
+    /// <summary>
+    /// Gets the color map for SQL syntax highlighting (SSMS-inspired dark theme).
+    /// </summary>
+    public static Dictionary<SourceTokenType, Terminal.Gui.Attribute> SqlSyntax => SqlSyntaxMap;
+
+    /// <summary>
+    /// SQL error highlight attribute — white text on red background.
+    /// </summary>
+    public static Terminal.Gui.Attribute SqlError => MakeAttr(Color.White, Color.Red);
 
     #endregion
 
