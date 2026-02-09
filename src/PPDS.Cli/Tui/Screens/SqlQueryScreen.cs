@@ -457,7 +457,8 @@ internal sealed class SqlQueryScreen : TuiScreenBase, ITuiStateCapture<SqlQueryS
             {
                 Sql = sql,
                 PageNumber = null,
-                PagingCookie = null
+                PagingCookie = null,
+                EnablePrefetch = true
             };
 
             IReadOnlyList<Dataverse.Query.QueryColumn>? columns = null;
@@ -636,7 +637,8 @@ internal sealed class SqlQueryScreen : TuiScreenBase, ITuiStateCapture<SqlQueryS
             {
                 Sql = _lastSql,
                 PageNumber = _lastPageNumber + 1,
-                PagingCookie = _lastPagingCookie
+                PagingCookie = _lastPagingCookie,
+                EnablePrefetch = true
             };
 
             var result = await service.ExecuteAsync(request, ScreenCancellation);

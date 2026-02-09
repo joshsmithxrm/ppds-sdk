@@ -44,4 +44,10 @@ public sealed record SqlQueryRequest
     /// are skipped (e.g., for non-CLI callers that handle safety externally).
     /// </summary>
     public DmlSafetyOptions? DmlSafety { get; init; }
+
+    /// <summary>
+    /// Whether to enable page-ahead buffering for large result sets.
+    /// When true, the next page is fetched in the background while the current page is consumed.
+    /// </summary>
+    public bool EnablePrefetch { get; init; }
 }
