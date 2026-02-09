@@ -502,7 +502,7 @@ public class QueryPlannerTests
     [Fact]
     public void ShouldPartitionAggregate_TrueForEligibleQuery()
     {
-        var stmt = (SqlSelectStatement)SqlParser.Parse("SELECT COUNT(*) AS cnt FROM account WHERE statecode = 0");
+        var stmt = SqlParser.Parse("SELECT COUNT(*) AS cnt FROM account WHERE statecode = 0");
         var options = MakePartitioningOptions(100_000);
 
         Assert.True(QueryPlanner.ShouldPartitionAggregate(stmt, options));
@@ -511,7 +511,7 @@ public class QueryPlannerTests
     [Fact]
     public void ShouldPartitionAggregate_FalseForNonAggregate()
     {
-        var stmt = (SqlSelectStatement)SqlParser.Parse("SELECT name FROM account");
+        var stmt = SqlParser.Parse("SELECT name FROM account");
         var options = MakePartitioningOptions(100_000);
 
         Assert.False(QueryPlanner.ShouldPartitionAggregate(stmt, options));
@@ -520,7 +520,7 @@ public class QueryPlannerTests
     [Fact]
     public void ShouldPartitionAggregate_FalseForCountDistinct()
     {
-        var stmt = (SqlSelectStatement)SqlParser.Parse("SELECT COUNT(DISTINCT ownerid) FROM account");
+        var stmt = SqlParser.Parse("SELECT COUNT(DISTINCT ownerid) FROM account");
         var options = MakePartitioningOptions(100_000);
 
         Assert.False(QueryPlanner.ShouldPartitionAggregate(stmt, options));
@@ -529,7 +529,7 @@ public class QueryPlannerTests
     [Fact]
     public void ShouldPartitionAggregate_FalseWhenBelowLimit()
     {
-        var stmt = (SqlSelectStatement)SqlParser.Parse("SELECT COUNT(*) FROM account");
+        var stmt = SqlParser.Parse("SELECT COUNT(*) FROM account");
         var options = MakePartitioningOptions(30_000);
 
         Assert.False(QueryPlanner.ShouldPartitionAggregate(stmt, options));
@@ -538,7 +538,7 @@ public class QueryPlannerTests
     [Fact]
     public void ShouldPartitionAggregate_FalseWhenPoolCapacity1()
     {
-        var stmt = (SqlSelectStatement)SqlParser.Parse("SELECT COUNT(*) FROM account");
+        var stmt = SqlParser.Parse("SELECT COUNT(*) FROM account");
         var options = MakePartitioningOptions(100_000, poolCapacity: 1);
 
         Assert.False(QueryPlanner.ShouldPartitionAggregate(stmt, options));
@@ -551,7 +551,7 @@ public class QueryPlannerTests
     [Fact]
     public void ContainsCountDistinct_TrueForCountDistinct()
     {
-        var stmt = (SqlSelectStatement)SqlParser.Parse("SELECT COUNT(DISTINCT ownerid) FROM account");
+        var stmt = SqlParser.Parse("SELECT COUNT(DISTINCT ownerid) FROM account");
 
         Assert.True(QueryPlanner.ContainsCountDistinct(stmt));
     }
@@ -559,7 +559,7 @@ public class QueryPlannerTests
     [Fact]
     public void ContainsCountDistinct_FalseForCountAll()
     {
-        var stmt = (SqlSelectStatement)SqlParser.Parse("SELECT COUNT(*) FROM account");
+        var stmt = SqlParser.Parse("SELECT COUNT(*) FROM account");
 
         Assert.False(QueryPlanner.ContainsCountDistinct(stmt));
     }
@@ -567,7 +567,7 @@ public class QueryPlannerTests
     [Fact]
     public void ContainsCountDistinct_FalseForCountColumn()
     {
-        var stmt = (SqlSelectStatement)SqlParser.Parse("SELECT COUNT(name) FROM account");
+        var stmt = SqlParser.Parse("SELECT COUNT(name) FROM account");
 
         Assert.False(QueryPlanner.ContainsCountDistinct(stmt));
     }
@@ -575,7 +575,7 @@ public class QueryPlannerTests
     [Fact]
     public void ContainsCountDistinct_FalseForSum()
     {
-        var stmt = (SqlSelectStatement)SqlParser.Parse("SELECT SUM(revenue) FROM account");
+        var stmt = SqlParser.Parse("SELECT SUM(revenue) FROM account");
 
         Assert.False(QueryPlanner.ContainsCountDistinct(stmt));
     }
@@ -709,7 +709,7 @@ public class QueryPlannerTests
     [Fact]
     public void BuildMergeAggregateColumns_MapsAllFunctions()
     {
-        var stmt = (SqlSelectStatement)SqlParser.Parse(
+        var stmt = SqlParser.Parse(
             "SELECT COUNT(*) AS cnt, SUM(revenue) AS total, AVG(revenue) AS avg_rev, " +
             "MIN(revenue) AS min_rev, MAX(revenue) AS max_rev FROM account");
 
@@ -738,7 +738,7 @@ public class QueryPlannerTests
     [Fact]
     public void BuildMergeAggregateColumns_CountStarUsesAlias()
     {
-        var stmt = (SqlSelectStatement)SqlParser.Parse("SELECT COUNT(*) AS total_records FROM account");
+        var stmt = SqlParser.Parse("SELECT COUNT(*) AS total_records FROM account");
 
         var columns = QueryPlanner.BuildMergeAggregateColumns(stmt);
 
@@ -749,7 +749,7 @@ public class QueryPlannerTests
     [Fact]
     public void BuildMergeAggregateColumns_UnaliasedCountUsesDefaultAlias()
     {
-        var stmt = (SqlSelectStatement)SqlParser.Parse("SELECT COUNT(*) FROM account");
+        var stmt = SqlParser.Parse("SELECT COUNT(*) FROM account");
 
         var columns = QueryPlanner.BuildMergeAggregateColumns(stmt);
 
