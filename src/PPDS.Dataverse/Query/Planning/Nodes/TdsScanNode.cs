@@ -61,16 +61,9 @@ public sealed class TdsScanNode : IQueryPlanNode
 
         context.Statistics.IncrementPagesFetched();
 
-        var rowCount = 0;
         foreach (var record in result.Records)
         {
-            if (MaxRows.HasValue && rowCount >= MaxRows.Value)
-            {
-                yield break;
-            }
-
             yield return QueryRow.FromRecord(record, result.EntityLogicalName);
-            rowCount++;
             context.Statistics.IncrementRowsRead();
         }
     }

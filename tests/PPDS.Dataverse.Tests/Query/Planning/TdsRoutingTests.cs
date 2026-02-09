@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using PPDS.Dataverse.Query;
@@ -490,12 +491,16 @@ public class TdsRoutingTests
             LastExecutedSql = sql;
             LastMaxRows = maxRows;
 
+            var effectiveRecords = maxRows.HasValue
+                ? _records.Take(maxRows.Value).ToList()
+                : _records;
+
             var result = new QueryResult
             {
                 EntityLogicalName = _entityName,
                 Columns = Array.Empty<QueryColumn>(),
-                Records = _records,
-                Count = _records.Count
+                Records = effectiveRecords,
+                Count = effectiveRecords.Count
             };
 
             return Task.FromResult(result);

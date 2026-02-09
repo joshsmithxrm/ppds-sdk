@@ -39,11 +39,6 @@ internal sealed class AutocompletePopup : View
     public event Action<SqlCompletion>? CompletionAccepted;
 
     /// <summary>
-    /// Fired when the popup is dismissed (Escape or programmatic Hide).
-    /// </summary>
-    public event Action? Dismissed;
-
-    /// <summary>
     /// Gets whether the popup is currently showing.
     /// </summary>
     public bool IsShowing { get; private set; }
@@ -111,7 +106,6 @@ internal sealed class AutocompletePopup : View
         _allItems = Array.Empty<SqlCompletion>();
         _filteredItems.Clear();
         _filterText = string.Empty;
-        Dismissed?.Invoke();
     }
 
     /// <summary>
@@ -170,20 +164,6 @@ internal sealed class AutocompletePopup : View
                 return false;
         }
     }
-
-    /// <summary>
-    /// Gets the icon prefix character for a completion kind.
-    /// </summary>
-    internal static char GetKindIcon(SqlCompletionKind kind) => kind switch
-    {
-        SqlCompletionKind.Keyword => 'K',
-        SqlCompletionKind.Entity => 'T',
-        SqlCompletionKind.Attribute => 'C',
-        SqlCompletionKind.Function => 'F',
-        SqlCompletionKind.OptionSetValue => 'O',
-        SqlCompletionKind.JoinClause => 'J',
-        _ => '?'
-    };
 
     /// <summary>
     /// Formats a completion item for display in the list: "K SELECT".

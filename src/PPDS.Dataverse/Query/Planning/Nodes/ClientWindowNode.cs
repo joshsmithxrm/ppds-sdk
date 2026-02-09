@@ -132,7 +132,7 @@ public sealed class ClientWindowNode : IQueryPlanNode
         foreach (var partition in partitions)
         {
             // Sort the partition by ORDER BY items
-            var sortedIndices = SortPartition(partition, allRows, expr.OrderBy, context);
+            var sortedIndices = SortPartition(partition, allRows, expr.OrderBy);
 
             // Compute function values
             var functionName = expr.FunctionName.ToUpperInvariant();
@@ -142,10 +142,10 @@ public sealed class ClientWindowNode : IQueryPlanNode
                     ComputeRowNumber(sortedIndices, windowValues, columnName);
                     break;
                 case "RANK":
-                    ComputeRank(sortedIndices, allRows, expr.OrderBy, windowValues, columnName, context);
+                    ComputeRank(sortedIndices, allRows, expr.OrderBy, windowValues, columnName);
                     break;
                 case "DENSE_RANK":
-                    ComputeDenseRank(sortedIndices, allRows, expr.OrderBy, windowValues, columnName, context);
+                    ComputeDenseRank(sortedIndices, allRows, expr.OrderBy, windowValues, columnName);
                     break;
                 case "SUM":
                 case "COUNT":
@@ -228,8 +228,7 @@ public sealed class ClientWindowNode : IQueryPlanNode
     private static List<int> SortPartition(
         List<int> partitionIndices,
         List<QueryRow> allRows,
-        IReadOnlyList<SqlOrderByItem>? orderBy,
-        QueryPlanContext context)
+        IReadOnlyList<SqlOrderByItem>? orderBy)
     {
         if (orderBy == null || orderBy.Count == 0)
         {
@@ -238,7 +237,7 @@ public sealed class ClientWindowNode : IQueryPlanNode
         }
 
         var sorted = new List<int>(partitionIndices);
-        sorted.Sort((a, b) => CompareRowsByOrderBy(allRows[a], allRows[b], orderBy, context));
+        sorted.Sort((a, b) => CompareRowsByOrderBy(allRows[a], allRows[b], orderBy));
         return sorted;
     }
 
@@ -248,8 +247,7 @@ public sealed class ClientWindowNode : IQueryPlanNode
     private static int CompareRowsByOrderBy(
         QueryRow rowA,
         QueryRow rowB,
-        IReadOnlyList<SqlOrderByItem> orderBy,
-        QueryPlanContext context)
+        IReadOnlyList<SqlOrderByItem> orderBy)
     {
         foreach (var item in orderBy)
         {
@@ -327,8 +325,7 @@ public sealed class ClientWindowNode : IQueryPlanNode
     private static bool AreOrderByValuesEqual(
         QueryRow rowA,
         QueryRow rowB,
-        IReadOnlyList<SqlOrderByItem> orderBy,
-        QueryPlanContext context)
+        IReadOnlyList<SqlOrderByItem> orderBy)
     {
         foreach (var item in orderBy)
         {
@@ -368,8 +365,7 @@ public sealed class ClientWindowNode : IQueryPlanNode
         List<QueryRow> allRows,
         IReadOnlyList<SqlOrderByItem>? orderBy,
         Dictionary<string, object?>[] windowValues,
-        string columnName,
-        QueryPlanContext context)
+        string columnName)
     {
         if (sortedIndices.Count == 0) return;
 
@@ -390,7 +386,7 @@ public sealed class ClientWindowNode : IQueryPlanNode
             var currentRow = allRows[sortedIndices[i]];
             var prevRow = allRows[sortedIndices[i - 1]];
 
-            if (AreOrderByValuesEqual(currentRow, prevRow, orderBy, context))
+            if (AreOrderByValuesEqual(currentRow, prevRow, orderBy))
             {
                 // Same rank as previous row
                 windowValues[sortedIndices[i]][columnName] = windowValues[sortedIndices[i - 1]][columnName];
@@ -411,8 +407,7 @@ public sealed class ClientWindowNode : IQueryPlanNode
         List<QueryRow> allRows,
         IReadOnlyList<SqlOrderByItem>? orderBy,
         Dictionary<string, object?>[] windowValues,
-        string columnName,
-        QueryPlanContext context)
+        string columnName)
     {
         if (sortedIndices.Count == 0) return;
 
@@ -434,7 +429,7 @@ public sealed class ClientWindowNode : IQueryPlanNode
             var currentRow = allRows[sortedIndices[i]];
             var prevRow = allRows[sortedIndices[i - 1]];
 
-            if (!AreOrderByValuesEqual(currentRow, prevRow, orderBy, context))
+            if (!AreOrderByValuesEqual(currentRow, prevRow, orderBy))
             {
                 currentRank++;
             }

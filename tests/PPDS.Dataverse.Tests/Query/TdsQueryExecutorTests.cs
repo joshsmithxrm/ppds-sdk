@@ -165,47 +165,6 @@ public class TdsCompatibilityCheckerTests
     }
 
     #endregion
-
-    #region UsesVirtualNameColumns
-
-    [Fact]
-    public void UsesVirtualNameColumns_NullKnownColumns_ReturnsFalse()
-    {
-        TdsCompatibilityChecker.UsesVirtualNameColumns(
-            "SELECT primarycontactidname FROM account", null).Should().BeFalse();
-    }
-
-    [Fact]
-    public void UsesVirtualNameColumns_EmptyKnownColumns_ReturnsFalse()
-    {
-        var known = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        TdsCompatibilityChecker.UsesVirtualNameColumns(
-            "SELECT primarycontactidname FROM account", known).Should().BeFalse();
-    }
-
-    [Fact]
-    public void UsesVirtualNameColumns_MatchFound_ReturnsTrue()
-    {
-        var known = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-        {
-            "primarycontactidname"
-        };
-        TdsCompatibilityChecker.UsesVirtualNameColumns(
-            "SELECT primarycontactidname FROM account", known).Should().BeTrue();
-    }
-
-    [Fact]
-    public void UsesVirtualNameColumns_NoMatch_ReturnsFalse()
-    {
-        var known = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-        {
-            "primarycontactidname"
-        };
-        TdsCompatibilityChecker.UsesVirtualNameColumns(
-            "SELECT name, accountid FROM account", known).Should().BeFalse();
-    }
-
-    #endregion
 }
 
 [Trait("Category", "TuiUnit")]

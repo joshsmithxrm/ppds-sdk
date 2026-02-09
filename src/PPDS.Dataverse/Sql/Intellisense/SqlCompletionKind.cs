@@ -12,14 +12,5 @@ public enum SqlCompletionKind
     Entity,
 
     /// <summary>Attribute/column name from Dataverse metadata.</summary>
-    Attribute,
-
-    /// <summary>Built-in SQL function (COUNT, SUM, etc.).</summary>
-    Function,
-
-    /// <summary>Option set value for picklist attributes.</summary>
-    OptionSetValue,
-
-    /// <summary>JOIN clause template (INNER JOIN, LEFT JOIN, etc.).</summary>
-    JoinClause
+    Attribute
 }

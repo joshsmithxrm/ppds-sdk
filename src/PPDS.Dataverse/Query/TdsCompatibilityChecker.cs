@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Text.RegularExpressions;
 
 namespace PPDS.Dataverse.Query;
 
@@ -37,14 +36,6 @@ public static class TdsCompatibilityChecker
     [
         "virtual_",
     ];
-
-    /// <summary>
-    /// Pattern to detect PPDS virtual *name column references (e.g., accountname, primarycontactidname).
-    /// These are expanded client-side by PPDS and not available in the TDS Endpoint.
-    /// </summary>
-    private static readonly Regex VirtualNameColumnPattern = new(
-        @"\b\w+name\b",
-        RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
     /// <summary>
     /// Checks whether a SQL query is compatible with the TDS Endpoint.
@@ -125,35 +116,6 @@ public static class TdsCompatibilityChecker
         foreach (var prefix in IncompatibleEntityPrefixes)
         {
             if (entityLogicalName.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
-            {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    /// <summary>
-    /// Checks whether the SQL query uses PPDS virtual *name columns.
-    /// These columns are expanded client-side and are not available via TDS.
-    /// </summary>
-    /// <param name="sql">The SQL query to check.</param>
-    /// <param name="knownVirtualNameColumns">
-    /// Known virtual *name columns for the entity (e.g., "primarycontactidname").
-    /// If null, detection is skipped.
-    /// </param>
-    /// <returns>True if the query references virtual *name columns.</returns>
-    public static bool UsesVirtualNameColumns(string sql, IReadOnlySet<string>? knownVirtualNameColumns)
-    {
-        if (knownVirtualNameColumns == null || knownVirtualNameColumns.Count == 0)
-        {
-            return false;
-        }
-
-        var matches = VirtualNameColumnPattern.Matches(sql);
-        foreach (Match match in matches)
-        {
-            if (knownVirtualNameColumns.Contains(match.Value))
             {
                 return true;
             }
