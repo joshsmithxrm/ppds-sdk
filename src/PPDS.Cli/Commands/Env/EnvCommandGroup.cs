@@ -601,7 +601,7 @@ public static class EnvCommandGroup
     }
 
     private static async Task<int> ExecuteConfigSetAsync(
-        EnvironmentConfigService service, string url,
+        IEnvironmentConfigService service, string url,
         string? label, string? type, EnvironmentColor? color,
         CancellationToken ct)
     {
@@ -616,7 +616,7 @@ public static class EnvCommandGroup
     }
 
     private static async Task<int> ExecuteConfigShowAsync(
-        EnvironmentConfigService service, string url, CancellationToken ct)
+        IEnvironmentConfigService service, string url, CancellationToken ct)
     {
         var config = await service.GetConfigAsync(url, ct);
         if (config == null)
@@ -631,7 +631,7 @@ public static class EnvCommandGroup
     }
 
     private static async Task<int> ExecuteConfigRemoveAsync(
-        EnvironmentConfigService service, string url, CancellationToken ct)
+        IEnvironmentConfigService service, string url, CancellationToken ct)
     {
         var removed = await service.RemoveConfigAsync(url, ct);
         if (removed)
@@ -648,7 +648,7 @@ public static class EnvCommandGroup
     }
 
     private static async Task<int> ExecuteConfigListAsync(
-        EnvironmentConfigService service, CancellationToken ct)
+        IEnvironmentConfigService service, CancellationToken ct)
     {
         var configs = await service.GetAllConfigsAsync(ct);
         if (configs.Count == 0)

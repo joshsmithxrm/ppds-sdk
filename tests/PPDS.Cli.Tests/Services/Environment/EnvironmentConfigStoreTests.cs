@@ -117,6 +117,14 @@ public class EnvironmentConfigStoreTests : IDisposable
         Assert.Equal(EnvironmentColor.BrightYellow, reloaded.TypeDefaults["Gold"]);
     }
 
+    [Fact]
+    public async Task SaveConfigAsync_EmptyString_ClearsField()
+    {
+        await _store.SaveConfigAsync("https://org.crm.dynamics.com", label: "MyLabel");
+        var result = await _store.SaveConfigAsync("https://org.crm.dynamics.com", label: "");
+        Assert.Null(result.Label);
+    }
+
     public void Dispose()
     {
         _store.Dispose();

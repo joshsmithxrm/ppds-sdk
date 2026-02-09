@@ -496,8 +496,9 @@ internal sealed class EnvironmentSelectorDialog : TuiDialog, ITuiStateCapture<En
                 _previewColor.Text = $"Color: {resolvedColor}  |  Region: {env.Region ?? "(unknown)"}";
                 _previewStatus.Text = config != null ? "Configured" : "Not configured \u2014 use Configure to set up";
             }
-            catch
+            catch (Exception ex) when (ex is not OutOfMemoryException and not StackOverflowException)
             {
+                TuiDebugLog.Log($"EnvironmentSelectorDialog preview failed: {ex.Message}");
                 _previewType.Text = $"Type: {env.Type ?? "(unknown)"}";
                 _previewColor.Text = $"Region: {env.Region ?? "(unknown)"}";
                 _previewStatus.Text = string.Empty;
@@ -526,8 +527,9 @@ internal sealed class EnvironmentSelectorDialog : TuiDialog, ITuiStateCapture<En
             return _configService.ResolveTypeAsync(env.Url, env.Type).GetAwaiter().GetResult();
 #pragma warning restore PPDS012
         }
-        catch
+        catch (Exception ex) when (ex is not OutOfMemoryException and not StackOverflowException)
         {
+            TuiDebugLog.Log($"EnvironmentSelectorDialog resolve type failed: {ex.Message}");
             return env.Type;
         }
     }

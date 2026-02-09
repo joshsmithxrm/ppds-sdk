@@ -167,9 +167,10 @@ internal sealed class EnvironmentConfigDialog : TuiDialog, ITuiStateCapture<Envi
                 _typeField.Text = NormalizeDiscoveryType(_suggestedType);
             }
         }
-        catch
+        catch (Exception ex) when (ex is not OutOfMemoryException and not StackOverflowException)
         {
             // Non-critical: if load fails, dialog starts with empty fields
+            TuiDebugLog.Log($"EnvironmentConfigDialog load failed: {ex.Message}");
         }
     }
 

@@ -41,6 +41,7 @@ public sealed class EnvironmentConfigStore : IDisposable
     /// <summary>Loads the environment config collection, using cache if available.</summary>
     public async Task<EnvironmentConfigCollection> LoadAsync(CancellationToken ct = default)
     {
+        ThrowIfDisposed();
         await _lock.WaitAsync(ct).ConfigureAwait(false);
         try
         {
@@ -66,6 +67,7 @@ public sealed class EnvironmentConfigStore : IDisposable
     /// <summary>Persists the environment config collection to disk.</summary>
     public async Task SaveAsync(EnvironmentConfigCollection collection, CancellationToken ct = default)
     {
+        ThrowIfDisposed();
         ArgumentNullException.ThrowIfNull(collection);
 
         await _lock.WaitAsync(ct).ConfigureAwait(false);
@@ -88,6 +90,7 @@ public sealed class EnvironmentConfigStore : IDisposable
     /// </summary>
     public async Task<EnvironmentConfig?> GetConfigAsync(string url, CancellationToken ct = default)
     {
+        ThrowIfDisposed();
         var collection = await LoadAsync(ct).ConfigureAwait(false);
         var normalized = EnvironmentConfig.NormalizeUrl(url);
         return collection.Environments.FirstOrDefault(
@@ -96,11 +99,13 @@ public sealed class EnvironmentConfigStore : IDisposable
 
     /// <summary>
     /// Saves or updates config for a specific environment. Merges non-null fields.
+    /// Empty string clears a field back to null.
     /// </summary>
     public async Task<EnvironmentConfig> SaveConfigAsync(
         string url, string? label = null, string? type = null, EnvironmentColor? color = null,
         CancellationToken ct = default)
     {
+        ThrowIfDisposed();
         var collection = await LoadAsync(ct).ConfigureAwait(false);
         var normalized = EnvironmentConfig.NormalizeUrl(url);
 
@@ -109,8 +114,8 @@ public sealed class EnvironmentConfigStore : IDisposable
 
         if (existing != null)
         {
-            if (label != null) existing.Label = label;
-            if (type != null) existing.Type = type;
+            if (label != null) existing.Label = label == "" ? null : label;
+            if (type != null) existing.Type = type == "" ? null : type;
             if (color != null) existing.Color = color;
         }
         else
@@ -134,6 +139,7 @@ public sealed class EnvironmentConfigStore : IDisposable
     /// </summary>
     public async Task<bool> RemoveConfigAsync(string url, CancellationToken ct = default)
     {
+        ThrowIfDisposed();
         var collection = await LoadAsync(ct).ConfigureAwait(false);
         var normalized = EnvironmentConfig.NormalizeUrl(url);
         var removed = collection.Environments.RemoveAll(
@@ -150,6 +156,7 @@ public sealed class EnvironmentConfigStore : IDisposable
     /// <summary>Clears the in-memory cache, forcing a reload from disk on next access.</summary>
     public void ClearCache()
     {
+        ThrowIfDisposed();
         _lock.Wait();
         try { _cached = null; }
         finally { _lock.Release(); }
@@ -161,5 +168,10 @@ public sealed class EnvironmentConfigStore : IDisposable
         if (_disposed) return;
         _lock.Dispose();
         _disposed = true;
+    }
+
+    private void ThrowIfDisposed()
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
     }
 }
