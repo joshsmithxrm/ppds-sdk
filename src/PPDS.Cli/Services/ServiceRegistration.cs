@@ -1,6 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using PPDS.Auth.Credentials;
+using PPDS.Auth.DependencyInjection;
 using PPDS.Auth.Profiles;
 using PPDS.Cli.Infrastructure;
 using PPDS.Cli.Plugins.Registration;
@@ -33,8 +34,10 @@ public static class ServiceRegistration
     /// <returns>The service collection for chaining.</returns>
     public static IServiceCollection AddCliApplicationServices(this IServiceCollection services)
     {
+        // Auth services (ProfileStore, EnvironmentConfigStore, NativeCredentialStore)
+        services.AddAuthServices();
+
         // Profile management services
-        services.AddSingleton<ProfileStore>();
         services.AddTransient<IProfileService, ProfileService>();
         services.AddTransient<IEnvironmentService, EnvironmentService>();
 
@@ -75,6 +78,10 @@ public static class ServiceRegistration
 
         // TUI theming
         services.AddSingleton<ITuiThemeService, TuiThemeService>();
+
+        // Environment configuration
+        services.AddSingleton<IEnvironmentConfigService>(sp =>
+            new EnvironmentConfigService(sp.GetRequiredService<EnvironmentConfigStore>()));
 
         // Connection service - requires profile-based token provider and environment ID
         // Registered as factory because it needs runtime values from ResolvedConnectionInfo
