@@ -29,13 +29,30 @@ internal sealed class SqlQueryScreen : TuiScreenBase, ITuiStateCapture<SqlQueryS
 
     private readonly Action<DeviceCodeInfo>? _deviceCodeCallback;
 
+    /// <summary>
+    /// Minimum editor height in rows (including frame border).
+    /// </summary>
+    private const int MinEditorHeight = 3;
+
+    /// <summary>
+    /// Default editor height in rows (including frame border).
+    /// </summary>
+    private const int DefaultEditorHeight = 6;
+
     private readonly FrameView _queryFrame;
     private readonly SyntaxHighlightedTextView _queryInput;
     private readonly QueryResultsTableView _resultsTable;
     private readonly TextField _filterField;
     private readonly FrameView _filterFrame;
+    private readonly SplitterView _splitter;
     private readonly TuiSpinner _statusSpinner;
     private readonly Label _statusLabel;
+
+    /// <summary>
+    /// Current editor height in rows. Adjusted by keyboard (Ctrl+Shift+Up/Down)
+    /// or mouse drag on the splitter bar.
+    /// </summary>
+    private int _editorHeight = DefaultEditorHeight;
 
     private string? _lastSql;
     private string? _lastPagingCookie;
@@ -76,12 +93,12 @@ internal sealed class SqlQueryScreen : TuiScreenBase, ITuiStateCapture<SqlQueryS
         _deviceCodeCallback = deviceCodeCallback;
 
         // Query input area
-        _queryFrame = new FrameView("Query (Ctrl+Enter to execute, Ctrl+Space for suggestions, F6 to toggle focus)")
+        _queryFrame = new FrameView("Query (Ctrl+Enter to execute, Ctrl+Space for suggestions, Ctrl+Shift+\u2191\u2193 to resize, F6 to toggle focus)")
         {
             X = 0,
             Y = 0,
             Width = Dim.Fill(),
-            Height = 6,
+            Height = _editorHeight,
             ColorScheme = TuiColorPalette.Default
         };
 
@@ -186,11 +203,19 @@ internal sealed class SqlQueryScreen : TuiScreenBase, ITuiStateCapture<SqlQueryS
 
         _queryFrame.Add(_queryInput);
 
+        // Splitter bar between query editor and results
+        _splitter = new SplitterView
+        {
+            X = 0,
+            Y = Pos.Bottom(_queryFrame)
+        };
+        _splitter.Dragged += OnSplitterDragged;
+
         // Filter field (hidden by default)
         _filterFrame = new FrameView("Filter (/)")
         {
             X = 0,
-            Y = Pos.Bottom(_queryFrame),
+            Y = Pos.Bottom(_splitter),
             Width = Dim.Fill(),
             Height = 3,
             Visible = false,
@@ -212,7 +237,7 @@ internal sealed class SqlQueryScreen : TuiScreenBase, ITuiStateCapture<SqlQueryS
         _resultsTable = new QueryResultsTableView
         {
             X = 0,
-            Y = Pos.Bottom(_queryFrame),
+            Y = Pos.Bottom(_splitter),
             Width = Dim.Fill(),
             Height = Dim.Fill() - 1
         };
@@ -236,17 +261,17 @@ internal sealed class SqlQueryScreen : TuiScreenBase, ITuiStateCapture<SqlQueryS
             Height = 1
         };
 
-        Content.Add(_queryFrame, _filterFrame, _resultsTable, _statusSpinner, _statusLabel);
+        Content.Add(_queryFrame, _splitter, _filterFrame, _resultsTable, _statusSpinner, _statusLabel);
 
         // Visual focus indicators - only change title, not colors
         // The table's built-in selection highlighting is sufficient
         _queryFrame.Enter += (_) =>
         {
-            _queryFrame.Title = "\u25b6 Query (Ctrl+Enter to execute, Ctrl+Space for suggestions, F6 to toggle focus)";
+            _queryFrame.Title = "\u25b6 Query (Ctrl+Enter to execute, Ctrl+Space for suggestions, Ctrl+Shift+\u2191\u2193 to resize, F6 to toggle focus)";
         };
         _queryFrame.Leave += (_) =>
         {
-            _queryFrame.Title = "Query (Ctrl+Enter to execute, Ctrl+Space for suggestions, F6 to toggle focus)";
+            _queryFrame.Title = "Query (Ctrl+Enter to execute, Ctrl+Space for suggestions, Ctrl+Shift+\u2191\u2193 to resize, F6 to toggle focus)";
         };
         _resultsTable.Enter += (_) =>
         {
@@ -324,8 +349,53 @@ internal sealed class SqlQueryScreen : TuiScreenBase, ITuiStateCapture<SqlQueryS
                         e.Handled = true;
                     }
                     break;
+
+                case Key.CursorUp | Key.CtrlMask | Key.ShiftMask:
+                    // Shrink editor
+                    ResizeEditor(-1);
+                    e.Handled = true;
+                    break;
+
+                case Key.CursorDown | Key.CtrlMask | Key.ShiftMask:
+                    // Grow editor
+                    ResizeEditor(1);
+                    e.Handled = true;
+                    break;
             }
         };
+    }
+
+    /// <summary>
+    /// Calculates the maximum allowed editor height (80% of available screen height).
+    /// </summary>
+    private int GetMaxEditorHeight()
+    {
+        // Content.Frame.Height may be 0 before layout; fall back to a sensible default
+        var available = Content.Frame.Height > 0 ? Content.Frame.Height : 25;
+        return Math.Max(MinEditorHeight, (int)(available * 0.8));
+    }
+
+    /// <summary>
+    /// Resizes the query editor by the specified delta (positive = grow, negative = shrink).
+    /// Clamps to <see cref="MinEditorHeight"/> and 80% of screen height.
+    /// </summary>
+    private void ResizeEditor(int delta)
+    {
+        var newHeight = Math.Clamp(_editorHeight + delta, MinEditorHeight, GetMaxEditorHeight());
+        if (newHeight == _editorHeight) return;
+
+        _editorHeight = newHeight;
+        _queryFrame.Height = _editorHeight;
+        Content.LayoutSubviews();
+        Content.SetNeedsDisplay();
+    }
+
+    /// <summary>
+    /// Handles mouse drag events from the splitter bar.
+    /// </summary>
+    private void OnSplitterDragged(int delta)
+    {
+        ResizeEditor(delta);
     }
 
     private async Task ExecuteQueryAsync()
@@ -632,7 +702,7 @@ internal sealed class SqlQueryScreen : TuiScreenBase, ITuiStateCapture<SqlQueryS
     private void HideFilter()
     {
         _filterFrame.Visible = false;
-        _resultsTable.Y = Pos.Bottom(_queryFrame);
+        _resultsTable.Y = Pos.Bottom(_splitter);
         _filterField.Text = string.Empty;
         _resultsTable.ApplyFilter(null);
     }
@@ -831,7 +901,8 @@ internal sealed class SqlQueryScreen : TuiScreenBase, ITuiStateCapture<SqlQueryS
             FilterText: _filterField.Text?.ToString() ?? string.Empty,
             FilterVisible: _filterFrame.Visible,
             CanExport: totalRows > 0,
-            ErrorMessage: _lastErrorMessage);
+            ErrorMessage: _lastErrorMessage,
+            EditorHeight: _editorHeight);
     }
 
     protected override void OnDispose()
