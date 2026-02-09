@@ -538,6 +538,8 @@ public class TdsRoutingTests
     /// </summary>
     private sealed class StubExpressionEvaluator : IExpressionEvaluator
     {
+        public VariableScope? VariableScope { get; set; }
+
         public object? Evaluate(
             ISqlExpression expression,
             IReadOnlyDictionary<string, QueryValue> row)

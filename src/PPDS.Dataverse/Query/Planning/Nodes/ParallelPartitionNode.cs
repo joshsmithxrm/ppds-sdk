@@ -40,6 +40,10 @@ public sealed class ParallelPartitionNode : IQueryPlanNode
         QueryPlanContext context,
         [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
+        // Suppress paging metadata writes — each partition has its own paging
+        // state and writing from multiple threads would be a data race.
+        context.Statistics.SuppressPagingMetadata = true;
+
         context.ProgressReporter?.ReportPhase("Parallel Aggregation",
             $"Executing {Partitions.Count} partitions across {MaxParallelism} connections");
 
@@ -105,7 +109,17 @@ public sealed class ParallelPartitionNode : IQueryPlanNode
             yield return row;
         }
 
-        await producerTask.ConfigureAwait(false);
+        // The producer task's exception (if any) was already propagated through
+        // channel.Writer.Complete(ex) → ReadAllAsync. Await only to observe
+        // completion; suppress the duplicate throw.
+        try
+        {
+            await producerTask.ConfigureAwait(false);
+        }
+        catch (Exception) when (producerTask.IsFaulted)
+        {
+            // Exception already surfaced through channel reader — suppress duplicate
+        }
     }
 
 }

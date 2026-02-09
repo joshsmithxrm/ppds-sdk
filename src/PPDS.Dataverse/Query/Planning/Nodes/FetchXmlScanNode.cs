@@ -112,11 +112,15 @@ public sealed class FetchXmlScanNode : IQueryPlanNode
 
             context.Statistics.IncrementPagesFetched();
 
-            // Store paging metadata for caller-controlled paging scenarios
-            context.Statistics.LastPagingCookie = result.PagingCookie;
-            context.Statistics.LastMoreRecords = result.MoreRecords;
-            context.Statistics.LastPageNumber = result.PageNumber;
-            context.Statistics.LastTotalCount = result.TotalCount;
+            // Store paging metadata for caller-controlled paging scenarios.
+            // Suppressed during parallel execution to avoid thread-unsafe writes.
+            if (!context.Statistics.SuppressPagingMetadata)
+            {
+                context.Statistics.LastPagingCookie = result.PagingCookie;
+                context.Statistics.LastMoreRecords = result.MoreRecords;
+                context.Statistics.LastPageNumber = result.PageNumber;
+                context.Statistics.LastTotalCount = result.TotalCount;
+            }
 
             foreach (var record in result.Records)
             {

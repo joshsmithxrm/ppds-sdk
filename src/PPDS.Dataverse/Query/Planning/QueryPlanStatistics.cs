@@ -45,6 +45,9 @@ public sealed class QueryPlanStatistics
     /// <summary>Total record count from the last fetched page, if requested.</summary>
     public int? LastTotalCount { get; set; }
 
+    /// <summary>When true, paging metadata writes are suppressed (parallel execution).</summary>
+    public bool SuppressPagingMetadata { get; set; }
+
     /// <summary>Increments <see cref="RowsRead"/> by one.</summary>
     public void IncrementRowsRead() => Interlocked.Increment(ref _rowsRead);
 

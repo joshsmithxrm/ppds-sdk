@@ -210,6 +210,11 @@ public sealed class DmlExecuteNode : IQueryPlanNode
 
         foreach (var row in InsertValueRows!)
         {
+            if (entities.Count >= RowCap)
+            {
+                break;
+            }
+
             var entity = new Microsoft.Xrm.Sdk.Entity(EntityLogicalName);
             for (var i = 0; i < InsertColumns!.Count; i++)
             {

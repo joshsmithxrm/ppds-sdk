@@ -9,6 +9,9 @@ namespace PPDS.Dataverse.Query.Execution;
 /// </summary>
 public interface IExpressionEvaluator
 {
+    /// <summary>Optional variable scope for resolving @variable references.</summary>
+    VariableScope? VariableScope { get; set; }
+
     /// <summary>Evaluate an expression, returning the computed value.</summary>
     object? Evaluate(ISqlExpression expression, IReadOnlyDictionary<string, QueryValue> row);
 

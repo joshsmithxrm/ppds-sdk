@@ -46,11 +46,8 @@ public sealed class ScriptExecutionNode : IQueryPlanNode
         var scope = context.VariableScope ?? new VariableScope();
         var evaluator = context.ExpressionEvaluator;
 
-        // Set the variable scope on the expression evaluator if it supports it
-        if (evaluator is ExpressionEvaluator concreteEvaluator)
-        {
-            concreteEvaluator.VariableScope = scope;
-        }
+        // Set the variable scope on the expression evaluator
+        evaluator.VariableScope = scope;
 
         await foreach (var row in ExecuteStatementListAsync(
             _statements, scope, evaluator, context, cancellationToken))
