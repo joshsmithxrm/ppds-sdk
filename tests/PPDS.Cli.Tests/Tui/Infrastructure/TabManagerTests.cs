@@ -272,7 +272,7 @@ public sealed class TabManagerTests : IDisposable
     public void RefreshTabColors_UpdatesChangedColors()
     {
         var themeService = new ConfigurableThemeService();
-        var manager = new TabManager(themeService);
+        using var manager = new TabManager(themeService);
 
         manager.AddTab(new StubScreen(_session), "https://org.crm.dynamics.com", "ORG");
         Assert.Equal(EnvironmentColor.Green, manager.Tabs[0].EnvironmentColor);
@@ -284,14 +284,13 @@ public sealed class TabManagerTests : IDisposable
 
         Assert.Equal(EnvironmentColor.Red, manager.Tabs[0].EnvironmentColor);
         Assert.Equal(EnvironmentType.Production, manager.Tabs[0].EnvironmentType);
-        manager.Dispose();
     }
 
     [Fact]
     public void RefreshTabColors_FiresTabsChanged_WhenColorsDiffer()
     {
         var themeService = new ConfigurableThemeService();
-        var manager = new TabManager(themeService);
+        using var manager = new TabManager(themeService);
         manager.AddTab(new StubScreen(_session), "https://org.crm.dynamics.com", "ORG");
 
         var fired = false;
@@ -301,14 +300,13 @@ public sealed class TabManagerTests : IDisposable
         manager.RefreshTabColors();
 
         Assert.True(fired);
-        manager.Dispose();
     }
 
     [Fact]
     public void RefreshTabColors_DoesNotFire_WhenColorsUnchanged()
     {
         var themeService = new ConfigurableThemeService();
-        var manager = new TabManager(themeService);
+        using var manager = new TabManager(themeService);
         manager.AddTab(new StubScreen(_session), "https://org.crm.dynamics.com", "ORG");
 
         var fired = false;
@@ -318,7 +316,6 @@ public sealed class TabManagerTests : IDisposable
         manager.RefreshTabColors();
 
         Assert.False(fired);
-        manager.Dispose();
     }
 
     [Fact]

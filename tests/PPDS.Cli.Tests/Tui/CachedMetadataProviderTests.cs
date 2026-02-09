@@ -580,7 +580,7 @@ public class CachedMetadataProviderTests
     public async Task Dispose_ThenGetEntities_ThrowsObjectDisposed()
     {
         var service = new StubMetadataService();
-        var provider = CreateProvider(service);
+        using var provider = CreateProvider(service);
         await provider.PreloadAsync();
 
         provider.Dispose();
