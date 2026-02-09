@@ -4,7 +4,6 @@ using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Channels;
 using System.Threading.Tasks;
-using PPDS.Dataverse.Query.Execution;
 
 namespace PPDS.Dataverse.Query.Planning.Nodes;
 
@@ -96,11 +95,7 @@ public sealed class ParallelPartitionNode : IQueryPlanNode
             }
             catch (Exception ex)
             {
-                // Detect Dataverse AggregateQueryRecordLimit (50K) failures
-                // and wrap in a structured QueryExecutionException so the CLI
-                // can map to ErrorCodes.Query.AggregateLimitExceeded.
-                var wrapped = WrapIfAggregateLimitExceeded(ex);
-                channel.Writer.Complete(wrapped);
+                channel.Writer.Complete(ex);
             }
         }, cancellationToken);
 
@@ -113,56 +108,4 @@ public sealed class ParallelPartitionNode : IQueryPlanNode
         await producerTask.ConfigureAwait(false);
     }
 
-    /// <summary>
-    /// Detects Dataverse AggregateQueryRecordLimit errors and wraps them
-    /// in a <see cref="QueryExecutionException"/> with a structured error code.
-    /// Returns the original exception if it is not an aggregate limit error.
-    /// </summary>
-    private static Exception WrapIfAggregateLimitExceeded(Exception ex)
-    {
-        // Flatten AggregateException so we check all inner exceptions from parallel tasks
-        var toCheck = ex is AggregateException agg ? agg.Flatten() : ex;
-
-        // Check the exception chain for aggregate limit messages from Dataverse.
-        // The Dataverse SDK throws FaultException with "AggregateQueryRecordLimit"
-        // in the message text when an aggregate query scans over 50,000 records.
-        var current = toCheck;
-        while (current != null)
-        {
-            if (ContainsAggregateLimitMessage(current))
-            {
-                return CreateAggregateLimitException(ex);
-            }
-            current = current.InnerException;
-        }
-
-        // For flattened AggregateException, also check each inner exception's chain
-        if (toCheck is AggregateException flattened)
-        {
-            foreach (var inner in flattened.InnerExceptions)
-            {
-                var innerCurrent = inner;
-                while (innerCurrent != null)
-                {
-                    if (ContainsAggregateLimitMessage(innerCurrent))
-                    {
-                        return CreateAggregateLimitException(ex);
-                    }
-                    innerCurrent = innerCurrent.InnerException;
-                }
-            }
-        }
-
-        return ex;
-    }
-
-    private static bool ContainsAggregateLimitMessage(Exception ex) =>
-        ex.Message.Contains("AggregateQueryRecordLimit", StringComparison.OrdinalIgnoreCase)
-        || ex.Message.Contains("aggregate operation exceeded", StringComparison.OrdinalIgnoreCase);
-
-    private static QueryExecutionException CreateAggregateLimitException(Exception innerException) =>
-        new(QueryErrorCode.AggregateLimitExceeded,
-            "Aggregate query exceeded the Dataverse 50,000 record limit. " +
-            "Consider partitioning the query by date range or adding more restrictive filters.",
-            innerException);
 }
