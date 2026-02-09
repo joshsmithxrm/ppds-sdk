@@ -1038,19 +1038,19 @@ public sealed class QueryPlanner
         // so each partition returns the row count needed for weighted average merging.
         var enrichedFetchXml = InjectAvgCompanionCounts(transpileResult.FetchXml, mergeColumns);
 
-        // Create a FetchXmlScanNode per partition, each with date range filter injected
+        // Create an AdaptiveAggregateScanNode per partition. Each node stores the
+        // template FetchXML and its date range, enabling recursive retry with
+        // binary splitting if a partition exceeds the 50K aggregate limit.
         var partitionNodes = new List<IQueryPlanNode>();
         foreach (var partition in partitions)
         {
-            var partitionedFetchXml = InjectDateRangeFilter(
-                enrichedFetchXml, partition.Start, partition.End);
-
-            var scanNode = new FetchXmlScanNode(
-                partitionedFetchXml,
+            var adaptiveNode = new AdaptiveAggregateScanNode(
+                enrichedFetchXml,
                 entityName,
-                autoPage: false); // Aggregate queries return a single page
+                partition.Start,
+                partition.End);
 
-            partitionNodes.Add(scanNode);
+            partitionNodes.Add(adaptiveNode);
         }
 
         // Wrap in ParallelPartitionNode for concurrent execution
