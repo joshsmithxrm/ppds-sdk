@@ -613,10 +613,10 @@ internal sealed class SyntaxHighlightedTextView : TextView
                     attr = _defaultAttr;
                 }
 
-                // Invert colors at cursor position for visibility
+                // Highlight cursor position with DarkGray background, preserving syntax foreground
                 if (hasFocus && screenRow == cursorScreenRow && screenCol == cursorScreenCol)
                 {
-                    attr = Driver.MakeAttribute(attr.Background, attr.Foreground);
+                    attr = Driver.MakeAttribute(attr.Foreground, Color.DarkGray);
                 }
 
                 Driver.SetAttribute(attr);
@@ -644,9 +644,8 @@ internal sealed class SyntaxHighlightedTextView : TextView
             {
                 for (int c = screenCol; c < bounds.Width; c++)
                 {
-                    // Invert at cursor position on empty space
                     if (hasFocus && screenRow == cursorScreenRow && c == cursorScreenCol)
-                        Driver.SetAttribute(Driver.MakeAttribute(_defaultAttr.Background, _defaultAttr.Foreground));
+                        Driver.SetAttribute(Driver.MakeAttribute(Color.White, Color.DarkGray));
                     else
                         Driver.SetAttribute(_defaultAttr);
                     AddRune(c, screenRow, ' ');
@@ -665,7 +664,7 @@ internal sealed class SyntaxHighlightedTextView : TextView
                 for (int c = 0; c < bounds.Width; c++)
                 {
                     if (hasFocus && r == cursorScreenRow && c == cursorScreenCol)
-                        Driver.SetAttribute(Driver.MakeAttribute(_defaultAttr.Background, _defaultAttr.Foreground));
+                        Driver.SetAttribute(Driver.MakeAttribute(Color.White, Color.DarkGray));
                     else
                         Driver.SetAttribute(_defaultAttr);
                     AddRune(c, r, ' ');
