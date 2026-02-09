@@ -9,13 +9,15 @@ namespace PPDS.Cli.Services;
 
 /// <summary>
 /// Default implementation of <see cref="ISqlLanguageService"/>.
-/// Composes <see cref="SqlSourceTokenizer"/> for syntax highlighting
-/// and <see cref="SqlCompletionEngine"/> for IntelliSense completions.
+/// Composes <see cref="SqlSourceTokenizer"/> for syntax highlighting,
+/// <see cref="SqlCompletionEngine"/> for IntelliSense completions,
+/// and <see cref="SqlValidator"/> for diagnostics.
 /// </summary>
 public sealed class SqlLanguageService : ISqlLanguageService
 {
     private readonly SqlSourceTokenizer _tokenizer = new();
     private readonly SqlCompletionEngine _completionEngine;
+    private readonly SqlValidator _validator;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="SqlLanguageService"/> class.
@@ -26,6 +28,8 @@ public sealed class SqlLanguageService : ISqlLanguageService
     /// </param>
     public SqlLanguageService(ICachedMetadataProvider? metadataProvider)
     {
+        _validator = new SqlValidator(metadataProvider);
+
         if (metadataProvider != null)
         {
             _completionEngine = new SqlCompletionEngine(metadataProvider);
@@ -70,8 +74,6 @@ public sealed class SqlLanguageService : ISqlLanguageService
     /// <inheritdoc />
     public Task<IReadOnlyList<SqlDiagnostic>> ValidateAsync(string sql, CancellationToken ct = default)
     {
-        // Phase 5 will implement full validation.
-        // For now, return empty diagnostics.
-        return Task.FromResult<IReadOnlyList<SqlDiagnostic>>(Array.Empty<SqlDiagnostic>());
+        return _validator.ValidateAsync(sql, ct);
     }
 }

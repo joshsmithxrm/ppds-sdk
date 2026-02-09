@@ -38,6 +38,27 @@ internal sealed class SyntaxHighlightedTextView : TextView
     private CancellationTokenSource? _completionCts;
 
     /// <summary>
+    /// Latest validation diagnostics. Updated asynchronously after debounce.
+    /// </summary>
+    private IReadOnlyList<SqlDiagnostic> _diagnostics = Array.Empty<SqlDiagnostic>();
+
+    /// <summary>
+    /// Cancellation source for in-flight validation requests.
+    /// </summary>
+    private CancellationTokenSource? _validationCts;
+
+    /// <summary>
+    /// Token returned by <see cref="Application.MainLoop.AddTimeout"/> for debounced validation.
+    /// Null when no timer is pending.
+    /// </summary>
+    private object? _validationTimerToken;
+
+    /// <summary>
+    /// Debounce delay for validation after keystrokes (milliseconds).
+    /// </summary>
+    private const int ValidationDebounceMs = 500;
+
+    /// <summary>
     /// Gets or sets the SQL language service used for IntelliSense completions.
     /// Set this after construction when the environment connection is established.
     /// </summary>
@@ -47,6 +68,11 @@ internal sealed class SyntaxHighlightedTextView : TextView
     /// Gets the autocomplete popup (for testing / external access).
     /// </summary>
     internal AutocompletePopup AutocompletePopupView => _autocompletePopup;
+
+    /// <summary>
+    /// Gets the latest validation diagnostics (for testing / status display).
+    /// </summary>
+    internal IReadOnlyList<SqlDiagnostic> Diagnostics => _diagnostics;
 
     /// <summary>
     /// Initializes a new syntax-highlighted text view.
@@ -97,6 +123,12 @@ internal sealed class SyntaxHighlightedTextView : TextView
         if (handled)
         {
             CheckAutocompleteTrigger(keyEvent);
+
+            // Schedule debounced validation on text-changing keys
+            if (IsTextChangingKey(keyEvent))
+            {
+                ScheduleDebouncedValidation();
+            }
         }
 
         return handled;
@@ -340,6 +372,95 @@ internal sealed class SyntaxHighlightedTextView : TextView
                keyEvent.Key == Key.PageUp || keyEvent.Key == Key.PageDown;
     }
 
+    /// <summary>
+    /// Determines if a key event could modify the text content.
+    /// </summary>
+    private static bool IsTextChangingKey(KeyEvent keyEvent)
+    {
+        if (IsPrintableChar(keyEvent)) return true;
+        if (keyEvent.Key == Key.Backspace || keyEvent.Key == Key.DeleteChar) return true;
+        if (keyEvent.Key == Key.Enter) return true;
+        // Ctrl+V (paste), Ctrl+X (cut), Ctrl+Z (undo), Ctrl+Y (redo)
+        if (keyEvent.Key == (Key.CtrlMask | Key.V) ||
+            keyEvent.Key == (Key.CtrlMask | Key.X) ||
+            keyEvent.Key == (Key.CtrlMask | Key.Z) ||
+            keyEvent.Key == (Key.CtrlMask | Key.Y))
+        {
+            return true;
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// Schedules a debounced validation run. Resets any previously scheduled timer.
+    /// After <see cref="ValidationDebounceMs"/> of inactivity, runs validation asynchronously.
+    /// </summary>
+    private void ScheduleDebouncedValidation()
+    {
+        if (LanguageService == null) return;
+
+        // Cancel any pending timer
+        if (_validationTimerToken != null && Application.MainLoop != null)
+        {
+            Application.MainLoop.RemoveTimeout(_validationTimerToken);
+            _validationTimerToken = null;
+        }
+
+        // Schedule a new timer
+        if (Application.MainLoop != null)
+        {
+            _validationTimerToken = Application.MainLoop.AddTimeout(
+                TimeSpan.FromMilliseconds(ValidationDebounceMs),
+                timerArgs =>
+                {
+                    _validationTimerToken = null;
+                    var fireAndForget = RunValidationAsync();
+                    return false; // do not repeat
+                });
+        }
+    }
+
+    /// <summary>
+    /// Runs validation asynchronously and updates the diagnostics field.
+    /// </summary>
+    internal async Task RunValidationAsync()
+    {
+        if (LanguageService == null) return;
+
+        // Cancel any in-flight validation
+        _validationCts?.Cancel();
+        _validationCts = new CancellationTokenSource();
+        var ct = _validationCts.Token;
+
+        var fullText = Text?.ToString() ?? string.Empty;
+
+        try
+        {
+            var diags = await LanguageService.ValidateAsync(fullText, ct);
+
+            if (ct.IsCancellationRequested) return;
+
+            _diagnostics = diags;
+
+            // Refresh display to show/hide error highlights
+            Application.MainLoop?.Invoke(() =>
+            {
+                if (!ct.IsCancellationRequested)
+                {
+                    SetNeedsDisplay();
+                }
+            });
+        }
+        catch (OperationCanceledException)
+        {
+            // Expected when text changes during validation
+        }
+        catch (Exception ex)
+        {
+            TuiDebugLog.Log($"Validation error: {ex.Message}");
+        }
+    }
+
     /// <inheritdoc />
     public override void Redraw(Rect bounds)
     {
@@ -473,7 +594,7 @@ internal sealed class SyntaxHighlightedTextView : TextView
 
     /// <summary>
     /// Builds a flat array mapping each character position in the source text
-    /// to its syntax color attribute.
+    /// to its syntax color attribute, then overlays diagnostic error highlights.
     /// </summary>
     private Terminal.Gui.Attribute[] BuildColorMap(string text, IReadOnlyList<SourceToken> tokens)
     {
@@ -487,6 +608,24 @@ internal sealed class SyntaxHighlightedTextView : TextView
                 var end = Math.Min(token.Start + token.Length, text.Length);
                 for (int i = token.Start; i < end; i++)
                     map[i] = attr;
+            }
+        }
+
+        // Overlay diagnostic error highlights (red background)
+        var diagnostics = _diagnostics;
+        if (diagnostics.Count > 0)
+        {
+            var errorAttr = TuiColorPalette.SqlError;
+
+            foreach (var diag in diagnostics)
+            {
+                if (diag.Severity != SqlDiagnosticSeverity.Error) continue;
+
+                var diagEnd = Math.Min(diag.Start + diag.Length, text.Length);
+                for (int i = Math.Max(0, diag.Start); i < diagEnd; i++)
+                {
+                    map[i] = errorAttr;
+                }
             }
         }
 
