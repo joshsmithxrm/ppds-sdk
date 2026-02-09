@@ -31,6 +31,8 @@ public sealed class DmlSafetyGuard
                 EstimatedAffectedRows = -1
             },
             SqlSelectStatement => new DmlSafetyResult { IsBlocked = false },
+            SqlBlockStatement block => CheckBlock(block, options),
+            SqlIfStatement ifStmt => CheckIf(ifStmt, options),
             _ => new DmlSafetyResult { IsBlocked = false }
         };
     }
@@ -65,6 +67,34 @@ public sealed class DmlSafetyGuard
         }
 
         return CheckRowCap(options);
+    }
+
+    private DmlSafetyResult CheckBlock(SqlBlockStatement block, DmlSafetyOptions options)
+    {
+        // Return the most restrictive result from any contained statement
+        DmlSafetyResult worst = new() { IsBlocked = false };
+        foreach (var stmt in block.Statements)
+        {
+            var result = Check(stmt, options);
+            if (result.IsBlocked) return result;
+            if (result.RequiresConfirmation) worst = result;
+        }
+        return worst;
+    }
+
+    private DmlSafetyResult CheckIf(SqlIfStatement ifStmt, DmlSafetyOptions options)
+    {
+        var thenResult = Check(ifStmt.ThenBlock, options);
+        if (thenResult.IsBlocked) return thenResult;
+
+        if (ifStmt.ElseBlock != null)
+        {
+            var elseResult = Check(ifStmt.ElseBlock, options);
+            if (elseResult.IsBlocked) return elseResult;
+            if (elseResult.RequiresConfirmation) return elseResult;
+        }
+
+        return thenResult;
     }
 
     private static DmlSafetyResult CheckRowCap(DmlSafetyOptions options)

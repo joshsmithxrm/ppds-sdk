@@ -410,6 +410,77 @@ public class DmlSafetyGuardTests
 
     #endregion
 
+    // ── Script DML Detection ──────────────────────────────────────────
+
+    #region Script DML Detection Tests
+
+    [Fact]
+    public void Check_IfStatement_ContainingDelete_RequiresConfirmation()
+    {
+        var delete = DeleteWithWhere();
+        var block = new SqlBlockStatement(new ISqlStatement[] { delete }, 0);
+        var ifStmt = new SqlIfStatement(
+            new SqlComparisonCondition(SqlColumnRef.Simple("x"), SqlComparisonOperator.Equal, new SqlLiteral("1", SqlLiteralType.Number)),
+            block, elseBlock: null, sourcePosition: 0);
+
+        var result = _guard.Check(ifStmt, new DmlSafetyOptions());
+
+        Assert.True(result.RequiresConfirmation, "DML inside IF should require confirmation");
+    }
+
+    [Fact]
+    public void Check_IfStatement_ContainingDeleteWithoutWhere_IsBlocked()
+    {
+        var delete = DeleteWithoutWhere();
+        var block = new SqlBlockStatement(new ISqlStatement[] { delete }, 0);
+        var ifStmt = new SqlIfStatement(
+            new SqlComparisonCondition(SqlColumnRef.Simple("x"), SqlComparisonOperator.Equal, new SqlLiteral("1", SqlLiteralType.Number)),
+            block, elseBlock: null, sourcePosition: 0);
+
+        var result = _guard.Check(ifStmt, new DmlSafetyOptions());
+
+        Assert.True(result.IsBlocked, "DELETE without WHERE inside IF should be blocked");
+    }
+
+    [Fact]
+    public void Check_BlockStatement_ContainingUpdate_RequiresConfirmation()
+    {
+        var update = UpdateWithWhere();
+        var block = new SqlBlockStatement(new ISqlStatement[] { update }, 0);
+
+        var result = _guard.Check(block, new DmlSafetyOptions());
+
+        Assert.True(result.RequiresConfirmation, "DML inside block should require confirmation");
+    }
+
+    [Fact]
+    public void Check_BlockStatement_SelectOnly_NotBlocked()
+    {
+        var select = SimpleSelect();
+        var block = new SqlBlockStatement(new ISqlStatement[] { select }, 0);
+
+        var result = _guard.Check(block, new DmlSafetyOptions());
+
+        Assert.False(result.IsBlocked);
+        Assert.False(result.RequiresConfirmation);
+    }
+
+    [Fact]
+    public void Check_IfElse_DmlInElse_IsDetected()
+    {
+        var selectBlock = new SqlBlockStatement(new ISqlStatement[] { SimpleSelect() }, 0);
+        var deleteBlock = new SqlBlockStatement(new ISqlStatement[] { DeleteWithoutWhere() }, 0);
+        var ifStmt = new SqlIfStatement(
+            new SqlComparisonCondition(SqlColumnRef.Simple("x"), SqlComparisonOperator.Equal, new SqlLiteral("1", SqlLiteralType.Number)),
+            selectBlock, deleteBlock, sourcePosition: 0);
+
+        var result = _guard.Check(ifStmt, new DmlSafetyOptions());
+
+        Assert.True(result.IsBlocked, "DELETE without WHERE in ELSE block should be blocked");
+    }
+
+    #endregion
+
     // ── ExceedsRowCap default ────────────────────────────────────────
 
     #region ExceedsRowCap Tests
