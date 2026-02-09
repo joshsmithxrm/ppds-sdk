@@ -400,7 +400,7 @@ public class QueryPlannerTests
     }
 
     [Fact]
-    public void Plan_PartitionedPlan_FetchXmlHasDateRangeFilter()
+    public void Plan_PartitionedPlan_AdaptiveNodesHaveDateRangeBounds()
     {
         var stmt = SqlParser.Parse("SELECT COUNT(*) AS cnt FROM account WHERE statecode = 0");
         var options = MakePartitioningOptions(100_000);
@@ -410,21 +410,20 @@ public class QueryPlannerTests
         var mergeNode = Assert.IsType<MergeAggregateNode>(result.RootNode);
         var parallelNode = Assert.IsType<ParallelPartitionNode>(mergeNode.Input);
 
-        // Each partition's FetchXML should contain createdon date range filters
+        // Each partition should be an AdaptiveAggregateScanNode with date range bounds
         foreach (var partition in parallelNode.Partitions)
         {
-            var scanNode = Assert.IsType<FetchXmlScanNode>(partition);
-            Assert.Contains("createdon", scanNode.FetchXml);
-            Assert.Contains("operator=\"ge\"", scanNode.FetchXml);
-            Assert.Contains("operator=\"lt\"", scanNode.FetchXml);
+            var adaptiveNode = Assert.IsType<AdaptiveAggregateScanNode>(partition);
+            Assert.True(adaptiveNode.RangeStart < adaptiveNode.RangeEnd,
+                "Partition date range start must be before end");
         }
     }
 
     [Fact]
-    public void Plan_PartitionedPlan_ScanNodesAreNotAutoPage()
+    public void Plan_PartitionedPlan_UsesAdaptiveAggregateScanNodes()
     {
-        // Aggregate queries return a single page, no paging needed
-        // Note: use WHERE to avoid the bare COUNT(*) optimization path
+        // Partitions should use AdaptiveAggregateScanNode which internally
+        // creates FetchXmlScanNode with autoPage: false at execution time
         var stmt = SqlParser.Parse("SELECT COUNT(*) AS cnt FROM account WHERE statecode = 0");
         var options = MakePartitioningOptions(100_000);
 
@@ -435,8 +434,9 @@ public class QueryPlannerTests
 
         foreach (var partition in parallelNode.Partitions)
         {
-            var scanNode = Assert.IsType<FetchXmlScanNode>(partition);
-            Assert.False(scanNode.AutoPage, "Aggregate partition scans should not auto-page");
+            var adaptiveNode = Assert.IsType<AdaptiveAggregateScanNode>(partition);
+            Assert.Equal("account", adaptiveNode.EntityLogicalName);
+            Assert.Equal(0, adaptiveNode.Depth);
         }
     }
 
@@ -476,7 +476,7 @@ public class QueryPlannerTests
     }
 
     [Fact]
-    public void Plan_AvgAggregate_PartitionFetchXmlIncludesCompanionCount()
+    public void Plan_AvgAggregate_PartitionTemplateIncludesCompanionCount()
     {
         var stmt = SqlParser.Parse("SELECT AVG(revenue) AS avg_rev FROM account");
         var options = MakePartitioningOptions(100_000);
@@ -486,12 +486,12 @@ public class QueryPlannerTests
         var mergeNode = Assert.IsType<MergeAggregateNode>(result.RootNode);
         var parallelNode = Assert.IsType<ParallelPartitionNode>(mergeNode.Input);
 
-        // Each partition's FetchXML should contain the companion countcolumn
+        // Each partition's template FetchXML should contain the companion countcolumn
         foreach (var partition in parallelNode.Partitions)
         {
-            var scanNode = Assert.IsType<FetchXmlScanNode>(partition);
-            Assert.Contains("avg_rev_count", scanNode.FetchXml);
-            Assert.Contains("aggregate=\"countcolumn\"", scanNode.FetchXml);
+            var adaptiveNode = Assert.IsType<AdaptiveAggregateScanNode>(partition);
+            Assert.Contains("avg_rev_count", adaptiveNode.TemplateFetchXml);
+            Assert.Contains("aggregate=\"countcolumn\"", adaptiveNode.TemplateFetchXml);
         }
     }
 
