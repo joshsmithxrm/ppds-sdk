@@ -146,8 +146,10 @@ public sealed class SqlValidator
         // Build a map of alias/table name → entity logical name for resolving columns
         var tableMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
-        // Validate FROM entity
-        var fromValid = await ValidateEntityAsync(select.From, sql, diagnostics, ct);
+        // Validate FROM entity — search from the FROM keyword position
+        var fromSearchFrom = sql.IndexOf("FROM", StringComparison.OrdinalIgnoreCase);
+        if (fromSearchFrom < 0) fromSearchFrom = 0;
+        var fromValid = await ValidateEntityAsync(select.From, sql, diagnostics, ct, fromSearchFrom);
         if (fromValid)
         {
             tableMap[select.From.TableName] = select.From.TableName;
@@ -157,10 +159,14 @@ public sealed class SqlValidator
             }
         }
 
-        // Validate JOIN entities
+        // Validate JOIN entities — advance searchFrom past each previous match
+        var joinSearchFrom = fromSearchFrom + 4; // past "FROM"
         foreach (var join in select.Joins)
         {
-            var joinValid = await ValidateEntityAsync(join.Table, sql, diagnostics, ct);
+            var joinKeywordPos = sql.IndexOf("JOIN", joinSearchFrom, StringComparison.OrdinalIgnoreCase);
+            if (joinKeywordPos >= 0) joinSearchFrom = joinKeywordPos + 4; // past "JOIN"
+
+            var joinValid = await ValidateEntityAsync(join.Table, sql, diagnostics, ct, joinSearchFrom);
             if (joinValid)
             {
                 tableMap[join.Table.TableName] = join.Table.TableName;
@@ -229,7 +235,9 @@ public sealed class SqlValidator
         SqlInsertStatement insert, string sql, List<SqlDiagnostic> diagnostics,
         CancellationToken ct)
     {
-        var entityValid = await ValidateEntityNameAsync(insert.TargetEntity, sql, diagnostics, ct);
+        var insertSearchFrom = sql.IndexOf("INTO", StringComparison.OrdinalIgnoreCase);
+        if (insertSearchFrom < 0) insertSearchFrom = 0;
+        var entityValid = await ValidateEntityNameAsync(insert.TargetEntity, sql, diagnostics, ct, insertSearchFrom);
         if (entityValid)
         {
             var attributes = await _metadataProvider!.GetAttributesAsync(insert.TargetEntity, ct);
@@ -264,7 +272,9 @@ public sealed class SqlValidator
     {
         var tableMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
-        var targetValid = await ValidateEntityAsync(update.TargetTable, sql, diagnostics, ct);
+        var updateSearchFrom = sql.IndexOf("UPDATE", StringComparison.OrdinalIgnoreCase);
+        if (updateSearchFrom < 0) updateSearchFrom = 0;
+        var targetValid = await ValidateEntityAsync(update.TargetTable, sql, diagnostics, ct, updateSearchFrom);
         if (targetValid)
         {
             tableMap[update.TargetTable.TableName] = update.TargetTable.TableName;
@@ -298,7 +308,13 @@ public sealed class SqlValidator
         SqlDeleteStatement delete, string sql, List<SqlDiagnostic> diagnostics,
         CancellationToken ct)
     {
-        await ValidateEntityAsync(delete.TargetTable, sql, diagnostics, ct);
+        var deleteSearchFrom = sql.IndexOf("FROM", StringComparison.OrdinalIgnoreCase);
+        if (deleteSearchFrom < 0)
+        {
+            deleteSearchFrom = sql.IndexOf("DELETE", StringComparison.OrdinalIgnoreCase);
+            if (deleteSearchFrom < 0) deleteSearchFrom = 0;
+        }
+        await ValidateEntityAsync(delete.TargetTable, sql, diagnostics, ct, deleteSearchFrom);
     }
 
     /// <summary>
@@ -307,9 +323,9 @@ public sealed class SqlValidator
     /// </summary>
     private async Task<bool> ValidateEntityAsync(
         SqlTableRef tableRef, string sql, List<SqlDiagnostic> diagnostics,
-        CancellationToken ct)
+        CancellationToken ct, int searchFrom = 0)
     {
-        return await ValidateEntityNameAsync(tableRef.TableName, sql, diagnostics, ct);
+        return await ValidateEntityNameAsync(tableRef.TableName, sql, diagnostics, ct, searchFrom);
     }
 
     /// <summary>
@@ -318,7 +334,7 @@ public sealed class SqlValidator
     /// </summary>
     private async Task<bool> ValidateEntityNameAsync(
         string entityName, string sql, List<SqlDiagnostic> diagnostics,
-        CancellationToken ct)
+        CancellationToken ct, int searchFrom = 0)
     {
         var entities = await _metadataProvider!.GetEntitiesAsync(ct);
         var entityNames = new HashSet<string>(
@@ -326,7 +342,7 @@ public sealed class SqlValidator
 
         if (!entityNames.Contains(entityName))
         {
-            var pos = FindIdentifierPosition(sql, entityName);
+            var pos = FindIdentifierPosition(sql, entityName, searchFrom);
             diagnostics.Add(new SqlDiagnostic(pos, entityName.Length,
                 SqlDiagnosticSeverity.Warning,
                 $"Unknown entity '{entityName}'"));
@@ -382,7 +398,20 @@ public sealed class SqlValidator
 
         if (!attrNames.Contains(colRef.ColumnName))
         {
-            var pos = FindIdentifierPosition(sql, colRef.ColumnName);
+            // For qualified refs (alias.column), search for "alias.column" to get precise position.
+            // For unqualified refs, search from SELECT keyword to find first occurrence.
+            int pos;
+            if (colRef.TableName != null)
+            {
+                var qualifiedName = colRef.TableName + "." + colRef.ColumnName;
+                var qualifiedPos = FindIdentifierPosition(sql, qualifiedName);
+                pos = qualifiedPos + colRef.TableName.Length + 1; // point to column part
+            }
+            else
+            {
+                pos = FindIdentifierPosition(sql, colRef.ColumnName);
+            }
+
             diagnostics.Add(new SqlDiagnostic(pos, colRef.ColumnName.Length,
                 SqlDiagnosticSeverity.Warning,
                 $"Unknown attribute '{colRef.ColumnName}' on entity '{entityName}'"));

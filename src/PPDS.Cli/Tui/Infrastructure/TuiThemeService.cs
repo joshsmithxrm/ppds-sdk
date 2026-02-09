@@ -25,22 +25,15 @@ public sealed class TuiThemeService : ITuiThemeService
             return EnvironmentType.Unknown;
         }
 
-        var url = environmentUrl.ToLowerInvariant();
-
-        // Only use keyword detection from the org name portion of the URL.
-        // The CRM regional suffix (crm, crm2, crm4, etc.) indicates geographic
-        // region, NOT environment type — do not use it for classification.
-        if (ContainsDevKeyword(url))
+        // Delegate to EnvironmentConfigService for segment-based keyword matching
+        var detectedType = EnvironmentConfigService.DetectTypeFromUrl(environmentUrl);
+        return detectedType switch
         {
-            return EnvironmentType.Development;
-        }
-
-        if (ContainsTrialKeyword(url))
-        {
-            return EnvironmentType.Trial;
-        }
-
-        return EnvironmentType.Unknown;
+            "Development" => EnvironmentType.Development,
+            "Test" => EnvironmentType.Test,
+            "Trial" => EnvironmentType.Trial,
+            _ => EnvironmentType.Unknown
+        };
     }
 
     /// <inheritdoc />
@@ -65,6 +58,7 @@ public sealed class TuiThemeService : ITuiThemeService
         EnvironmentType.Production => "PROD",
         EnvironmentType.Sandbox => "SANDBOX",
         EnvironmentType.Development => "DEV",
+        EnvironmentType.Test => "TEST",
         EnvironmentType.Trial => "TRIAL",
         _ => ""
     };
@@ -144,23 +138,4 @@ public sealed class TuiThemeService : ITuiThemeService
         };
     }
 
-    #region Keyword Detection
-
-    private static bool ContainsDevKeyword(string url)
-    {
-        // Common development environment naming patterns
-        string[] devKeywords = ["dev", "develop", "development", "test", "qa", "uat"];
-        return devKeywords.Any(keyword =>
-            url.Contains(keyword, StringComparison.OrdinalIgnoreCase));
-    }
-
-    private static bool ContainsTrialKeyword(string url)
-    {
-        // Trial environment indicators
-        string[] trialKeywords = ["trial", "demo", "preview"];
-        return trialKeywords.Any(keyword =>
-            url.Contains(keyword, StringComparison.OrdinalIgnoreCase));
-    }
-
-    #endregion
 }

@@ -174,13 +174,11 @@ public sealed class CachedMetadataProvider : ICachedMetadataProvider, IDisposabl
         _attributeCache.Clear();
         _relationshipCache.Clear();
 
-        // Dispose and clear per-entity semaphores to prevent unbounded growth
-        foreach (var semaphore in _attributeLocks.Values)
-            semaphore.Dispose();
+        // Clear semaphore dictionaries — old semaphores will be GC'd
+        // after any in-flight operations complete. Do NOT dispose them here
+        // as concurrent GetAttributesAsync/GetRelationshipsAsync calls may
+        // still hold references.
         _attributeLocks.Clear();
-
-        foreach (var semaphore in _relationshipLocks.Values)
-            semaphore.Dispose();
         _relationshipLocks.Clear();
     }
 

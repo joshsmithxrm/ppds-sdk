@@ -116,7 +116,8 @@ public sealed class EnvironmentConfigService : IEnvironmentConfigService
 
     #region URL Heuristics (fallback only)
 
-    private static readonly string[] DevKeywords = ["dev", "develop", "development", "test", "qa", "uat"];
+    private static readonly string[] DevKeywords = ["dev", "develop", "development"];
+    private static readonly string[] TestKeywords = ["test", "qa", "uat"];
     private static readonly string[] TrialKeywords = ["trial", "demo", "preview"];
 
     /// <summary>
@@ -125,18 +126,57 @@ public sealed class EnvironmentConfigService : IEnvironmentConfigService
     /// Does NOT use the CRM regional suffix (crm, crm2, crm4, etc.) — those
     /// indicate geographic region, not environment type.
     /// </summary>
+    /// <remarks>
+    /// Extracts the org name (subdomain before the first dot) from the URL hostname,
+    /// splits it on common delimiters (-, ., _), and checks for exact segment matches
+    /// to avoid false positives (e.g., "adventureworks" matching "dev").
+    /// </remarks>
     internal static string? DetectTypeFromUrl(string? url)
     {
         if (string.IsNullOrWhiteSpace(url)) return null;
 
-        var lower = url.ToLowerInvariant();
+        var segments = ExtractOrgSegments(url);
+        if (segments.Length == 0) return null;
 
-        if (DevKeywords.Any(k => lower.Contains(k, StringComparison.OrdinalIgnoreCase)))
+        if (segments.Any(s => DevKeywords.Any(k => s.Equals(k, StringComparison.OrdinalIgnoreCase))))
             return "Development";
-        if (TrialKeywords.Any(k => lower.Contains(k, StringComparison.OrdinalIgnoreCase)))
+        if (segments.Any(s => TestKeywords.Any(k => s.Equals(k, StringComparison.OrdinalIgnoreCase))))
+            return "Test";
+        if (segments.Any(s => TrialKeywords.Any(k => s.Equals(k, StringComparison.OrdinalIgnoreCase))))
             return "Trial";
 
         return null;
+    }
+
+    /// <summary>
+    /// Extracts the org name from a URL hostname and splits it into segments.
+    /// For "https://contoso-dev.crm.dynamics.com", returns ["contoso", "dev"].
+    /// </summary>
+    private static string[] ExtractOrgSegments(string url)
+    {
+        try
+        {
+            string host;
+            if (Uri.TryCreate(url, UriKind.Absolute, out var uri))
+            {
+                host = uri.Host;
+            }
+            else
+            {
+                // Fallback: treat the whole string as a potential hostname
+                host = url;
+            }
+
+            // The org name is the subdomain before the first dot
+            var dotIndex = host.IndexOf('.');
+            var orgName = dotIndex > 0 ? host[..dotIndex] : host;
+
+            return orgName.Split(['-', '.', '_'], StringSplitOptions.RemoveEmptyEntries);
+        }
+        catch
+        {
+            return [];
+        }
     }
 
     #endregion

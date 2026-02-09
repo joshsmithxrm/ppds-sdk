@@ -154,6 +154,21 @@ public static class TuiColorPalette
         Disabled = MakeAttr(Color.DarkGray, Color.Green)
     };
 
+    private static ColorScheme? _statusBarTest;
+
+    /// <summary>
+    /// Status bar for TEST/QA/UAT environments.
+    /// Caution theme - black on yellow.
+    /// </summary>
+    public static ColorScheme StatusBar_Test => _statusBarTest ??= new()
+    {
+        Normal = MakeAttr(Color.Black, Color.BrightYellow),
+        Focus = MakeAttr(Color.Black, Color.BrightYellow),
+        HotNormal = MakeAttr(Color.Red, Color.BrightYellow),
+        HotFocus = MakeAttr(Color.Red, Color.BrightYellow),
+        Disabled = MakeAttr(Color.DarkGray, Color.BrightYellow)
+    };
+
     private static ColorScheme? _statusBarTrial;
 
     /// <summary>
@@ -384,6 +399,7 @@ public static class TuiColorPalette
         EnvironmentType.Production => StatusBar_Production,
         EnvironmentType.Sandbox => StatusBar_Sandbox,
         EnvironmentType.Development => StatusBar_Development,
+        EnvironmentType.Test => StatusBar_Test,
         EnvironmentType.Trial => StatusBar_Trial,
         _ => StatusBar_Default
     };
@@ -558,6 +574,7 @@ public static class TuiColorPalette
             (nameof(StatusBar_Production), StatusBar_Production),
             (nameof(StatusBar_Sandbox), StatusBar_Sandbox),
             (nameof(StatusBar_Development), StatusBar_Development),
+            (nameof(StatusBar_Test), StatusBar_Test),
             (nameof(StatusBar_Trial), StatusBar_Trial),
             (nameof(StatusBar_Default), StatusBar_Default),
             (nameof(MenuBar), MenuBar),

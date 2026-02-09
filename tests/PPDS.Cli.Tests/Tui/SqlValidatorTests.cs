@@ -334,6 +334,16 @@ public class SqlValidatorTests
         Assert.True(entityDiag.Start >= 0, "Diagnostic start should be non-negative");
     }
 
+    [Fact]
+    public async Task ValidateAsync_RepeatedIdentifier_DiagnosticPointsToCorrectPosition()
+    {
+        var diagnostics = await _validator.ValidateAsync("SELECT name FROM badentity");
+        var entityDiag = diagnostics.FirstOrDefault(d => d.Message.Contains("badentity"));
+        Assert.NotNull(entityDiag);
+        // "badentity" starts at position 17
+        Assert.Equal(17, entityDiag!.Start);
+    }
+
     #endregion
 
     #region WHERE Condition Column Validation
