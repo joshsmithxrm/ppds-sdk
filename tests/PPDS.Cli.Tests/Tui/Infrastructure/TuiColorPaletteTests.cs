@@ -67,26 +67,26 @@ public class TuiColorPaletteTests
     #region GetTabScheme Tests
 
     [Fact]
-    public void GetTabScheme_ActiveTab_UsesEnvironmentColorOnDarkGray()
+    public void GetTabScheme_ActiveTab_UsesEnvironmentColorAsBackground()
     {
-        // Act - Production active tab should show red on DarkGray
+        // Active tab should use environment color as background with contrasting foreground
         var scheme = TuiColorPalette.GetTabScheme(EnvironmentType.Production, isActive: true);
 
-        Assert.Equal(Color.Red, scheme.Normal.Foreground);
-        Assert.Equal(Color.DarkGray, scheme.Normal.Background);
+        Assert.Equal(Color.Red, scheme.Normal.Background);
+        Assert.Equal(Color.Black, scheme.Normal.Foreground);
     }
 
     [Theory]
-    [InlineData(EnvironmentType.Production)]
-    [InlineData(EnvironmentType.Sandbox)]
-    [InlineData(EnvironmentType.Development)]
-    [InlineData(EnvironmentType.Trial)]
-    [InlineData(EnvironmentType.Unknown)]
-    public void GetTabScheme_ActiveTab_AlwaysHasDarkGrayBackground(EnvironmentType envType)
+    [InlineData(EnvironmentType.Production, Color.Red)]
+    [InlineData(EnvironmentType.Sandbox, Color.Brown)]
+    [InlineData(EnvironmentType.Development, Color.Green)]
+    [InlineData(EnvironmentType.Trial, Color.Cyan)]
+    [InlineData(EnvironmentType.Unknown, Color.Gray)]
+    public void GetTabScheme_ActiveTab_UsesEnvironmentColorBackground(EnvironmentType envType, Color expectedBg)
     {
         var scheme = TuiColorPalette.GetTabScheme(envType, isActive: true);
 
-        Assert.Equal(Color.DarkGray, scheme.Normal.Background);
+        Assert.Equal(expectedBg, scheme.Normal.Background);
     }
 
     [Fact]
@@ -97,10 +97,11 @@ public class TuiColorPaletteTests
     }
 
     [Fact]
-    public void GetTabScheme_InactiveSandbox_HasBrownForeground()
+    public void GetTabScheme_InactiveSandbox_HasBrightYellowForeground()
     {
+        // Brown is hard to read on black, so it uses BrightYellow
         var scheme = TuiColorPalette.GetTabScheme(EnvironmentType.Sandbox, isActive: false);
-        Assert.Equal(Color.Brown, scheme.Normal.Foreground);
+        Assert.Equal(Color.BrightYellow, scheme.Normal.Foreground);
     }
 
     [Fact]
@@ -118,10 +119,11 @@ public class TuiColorPaletteTests
     }
 
     [Fact]
-    public void GetTabScheme_InactiveUnknown_HasGrayForeground()
+    public void GetTabScheme_InactiveUnknown_HasWhiteForeground()
     {
+        // Gray is hard to read on black, so it uses White
         var scheme = TuiColorPalette.GetTabScheme(EnvironmentType.Unknown, isActive: false);
-        Assert.Equal(Color.Gray, scheme.Normal.Foreground);
+        Assert.Equal(Color.White, scheme.Normal.Foreground);
     }
 
     [Theory]
@@ -130,26 +132,29 @@ public class TuiColorPaletteTests
     [InlineData(EnvironmentType.Development)]
     [InlineData(EnvironmentType.Trial)]
     [InlineData(EnvironmentType.Unknown)]
-    public void GetTabScheme_AllInactiveSchemes_PassCyanBackgroundRule(EnvironmentType envType)
+    public void GetTabScheme_AllSchemes_PassCyanBackgroundRule(EnvironmentType envType)
     {
-        var scheme = TuiColorPalette.GetTabScheme(envType, isActive: false);
-
-        Color[] cyanBackgrounds = { Color.Cyan, Color.BrightCyan };
-        var attributes = new[]
+        foreach (var isActive in new[] { true, false })
         {
-            ("Normal", scheme.Normal),
-            ("Focus", scheme.Focus),
-            ("HotNormal", scheme.HotNormal),
-            ("HotFocus", scheme.HotFocus),
-            ("Disabled", scheme.Disabled)
-        };
+            var scheme = TuiColorPalette.GetTabScheme(envType, isActive);
 
-        foreach (var (name, attr) in attributes)
-        {
-            if (cyanBackgrounds.Contains(attr.Background))
+            Color[] cyanBackgrounds = { Color.Cyan, Color.BrightCyan };
+            var attributes = new[]
             {
-                Assert.True(attr.Foreground == Color.Black,
-                    $"GetTabScheme({envType}, inactive).{name}: {attr.Foreground} on {attr.Background} violates cyan background rule");
+                ("Normal", scheme.Normal),
+                ("Focus", scheme.Focus),
+                ("HotNormal", scheme.HotNormal),
+                ("HotFocus", scheme.HotFocus),
+                ("Disabled", scheme.Disabled)
+            };
+
+            foreach (var (name, attr) in attributes)
+            {
+                if (cyanBackgrounds.Contains(attr.Background))
+                {
+                    Assert.True(attr.Foreground == Color.Black,
+                        $"GetTabScheme({envType}, active={isActive}).{name}: {attr.Foreground} on {attr.Background} violates cyan background rule");
+                }
             }
         }
     }

@@ -60,6 +60,7 @@ internal sealed class ProfileCreationDialog : TuiDialog, ITuiStateCapture<Profil
     private readonly Label _statusLabel;
     private readonly Button _authenticateButton;
     private readonly CancellationTokenSource _cts = new();
+    private bool _disposed;
 
     private ProfileSummary? _createdProfile;
     private bool _isAuthenticating;
@@ -649,8 +650,9 @@ internal sealed class ProfileCreationDialog : TuiDialog, ITuiStateCapture<Profil
     /// <inheritdoc />
     protected override void Dispose(bool disposing)
     {
-        if (disposing)
+        if (disposing && !_disposed)
         {
+            _disposed = true;
             _cts.Cancel();
             _cts.Dispose();
         }

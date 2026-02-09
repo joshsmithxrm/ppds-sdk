@@ -337,18 +337,15 @@ internal sealed class SqlQueryScreen : TuiScreenBase, ITuiStateCapture<SqlQueryS
                     if (_filterFrame.Visible)
                     {
                         HideFilter();
+                        e.Handled = true;
                     }
                     else if (!_queryInput.HasFocus)
                     {
                         // Return to query from results
                         _queryInput.SetFocus();
+                        e.Handled = true;
                     }
-                    else
-                    {
-                        // Request close when already in query
-                        RequestClose();
-                    }
-                    e.Handled = true;
+                    // Escape does nothing when already in query editor — use Ctrl+W to close tab
                     break;
 
                 case Key k when k == (Key)'/':

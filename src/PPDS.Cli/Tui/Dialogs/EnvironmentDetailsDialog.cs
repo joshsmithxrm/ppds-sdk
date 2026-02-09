@@ -20,6 +20,7 @@ internal sealed class EnvironmentDetailsDialog : TuiDialog, ITuiStateCapture<Env
     private readonly string? _environmentDisplayName;
     private readonly ITuiThemeService _themeService;
     private readonly CancellationTokenSource _cancellationSource = new();
+    private bool _disposed;
 
     private readonly Label _envNameLabel;
     private readonly Label _urlLabel;
@@ -31,7 +32,6 @@ internal sealed class EnvironmentDetailsDialog : TuiDialog, ITuiStateCapture<Env
     private readonly Label _connectedAsLabel;
     private readonly Label _statusLabel;
     private readonly Button _refreshButton;
-    private bool _disposed;
 
     /// <summary>
     /// Creates a new environment details dialog.
