@@ -228,8 +228,8 @@ public static class CastConverter
             int i => i != 0,
             long l => l != 0,
             decimal d => d != 0m,
-            double dbl => dbl != 0.0,
-            float f => f != 0f,
+            double dbl => dbl != 0.0, // CodeQL [cs/equality-on-floats] SQL BIT cast: exact zero check is correct
+            float f => f != 0f, // CodeQL [cs/equality-on-floats] SQL BIT cast: exact zero check is correct
             string s => s.Trim() switch
             {
                 "1" or "true" or "TRUE" or "True" => true,

@@ -457,8 +457,8 @@ public sealed class ExpressionEvaluator : IExpressionEvaluator
                 SqlBinaryOperator.Add => ld + rd,
                 SqlBinaryOperator.Subtract => ld - rd,
                 SqlBinaryOperator.Multiply => ld * rd,
-                SqlBinaryOperator.Divide => rd == 0 ? throw new DivideByZeroException() : ld / rd,
-                SqlBinaryOperator.Modulo => rd == 0 ? throw new DivideByZeroException() : ld % rd,
+                SqlBinaryOperator.Divide => rd == 0.0 ? throw new DivideByZeroException() : ld / rd, // CodeQL [cs/equality-on-floats] SQL semantics: exact zero guard is intentional
+                SqlBinaryOperator.Modulo => rd == 0.0 ? throw new DivideByZeroException() : ld % rd, // CodeQL [cs/equality-on-floats] SQL semantics: exact zero guard is intentional
                 _ => throw new NotSupportedException($"Operator {op} is not supported for arithmetic.")
             },
             (long ld, long rd) => op switch
