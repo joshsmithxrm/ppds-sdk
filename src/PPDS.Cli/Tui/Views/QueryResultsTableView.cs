@@ -2,6 +2,7 @@ using System.Data;
 using System.Net.Http;
 using PPDS.Cli.Infrastructure;
 using PPDS.Cli.Tui.Helpers;
+using PPDS.Cli.Tui.Infrastructure;
 using PPDS.Dataverse.Query;
 using Terminal.Gui;
 
@@ -431,6 +432,10 @@ internal sealed class QueryResultsTableView : FrameView
         {
             await LoadMoreRequested.Invoke();
         }
+        catch (OperationCanceledException)
+        {
+            // Cancellation is expected during navigation away; silently ignore
+        }
         catch (InvalidOperationException ex)
         {
             ShowTemporaryStatus($"Error loading: {ex.Message}");
@@ -438,6 +443,11 @@ internal sealed class QueryResultsTableView : FrameView
         catch (HttpRequestException ex)
         {
             ShowTemporaryStatus($"Network error: {ex.Message}");
+        }
+        catch (Exception ex)
+        {
+            ShowTemporaryStatus($"Error: {ex.Message}");
+            TuiDebugLog.Log($"LoadMoreAsync error: {ex}");
         }
         finally
         {

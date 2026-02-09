@@ -28,11 +28,13 @@ public static class TuiColorPalette
 {
     #region Base Theme Colors
 
+    private static ColorScheme? _default;
+
     /// <summary>
     /// Default color scheme for general UI elements.
     /// White/Gray text on black background.
     /// </summary>
-    public static ColorScheme Default => new()
+    public static ColorScheme Default => _default ??= new()
     {
         Normal = MakeAttr(Color.White, Color.Black),
         Focus = MakeAttr(Color.Black, Color.Cyan),
@@ -41,11 +43,13 @@ public static class TuiColorPalette
         Disabled = MakeAttr(Color.DarkGray, Color.Black)
     };
 
+    private static ColorScheme? _focused;
+
     /// <summary>
     /// Color scheme for focused/active elements.
     /// Cyan accent on dark background.
     /// </summary>
-    public static ColorScheme Focused => new()
+    public static ColorScheme Focused => _focused ??= new()
     {
         Normal = MakeAttr(Color.Cyan, Color.Black),
         Focus = MakeAttr(Color.Black, Color.Cyan),
@@ -54,11 +58,13 @@ public static class TuiColorPalette
         Disabled = MakeAttr(Color.DarkGray, Color.Black)
     };
 
+    private static ColorScheme? _textInput;
+
     /// <summary>
     /// Color scheme for text input fields (TextField).
     /// No background change on focus - block cursor provides visibility.
     /// </summary>
-    public static ColorScheme TextInput => new()
+    public static ColorScheme TextInput => _textInput ??= new()
     {
         Normal = MakeAttr(Color.White, Color.Black),
         Focus = MakeAttr(Color.White, Color.Black),
@@ -67,12 +73,14 @@ public static class TuiColorPalette
         Disabled = MakeAttr(Color.DarkGray, Color.Black)
     };
 
+    private static ColorScheme? _readOnlyText;
+
     /// <summary>
     /// Color scheme for read-only text display (TextViews showing non-editable content).
     /// Maintains black background even when focused for readability.
     /// Uses White for Disabled because Terminal.Gui treats ReadOnly as Disabled.
     /// </summary>
-    public static ColorScheme ReadOnlyText => new()
+    public static ColorScheme ReadOnlyText => _readOnlyText ??= new()
     {
         Normal = MakeAttr(Color.White, Color.Black),
         Focus = MakeAttr(Color.White, Color.Black),
@@ -81,12 +89,14 @@ public static class TuiColorPalette
         Disabled = MakeAttr(Color.White, Color.Black)
     };
 
+    private static ColorScheme? _fileDialog;
+
     /// <summary>
     /// Color scheme for file dialogs (SaveDialog, OpenDialog).
     /// Uses black text on cyan for Focus per blue background rule.
     /// Disabled uses Black because Terminal.Gui may not respect the background color.
     /// </summary>
-    public static ColorScheme FileDialog => new()
+    public static ColorScheme FileDialog => _fileDialog ??= new()
     {
         Normal = MakeAttr(Color.White, Color.Black),
         Focus = MakeAttr(Color.Black, Color.Cyan),
@@ -99,11 +109,13 @@ public static class TuiColorPalette
 
     #region Status Bar - Environment-Aware
 
+    private static ColorScheme? _statusBarProduction;
+
     /// <summary>
     /// Status bar for PRODUCTION environments.
     /// High contrast danger theme - white on red.
     /// </summary>
-    public static ColorScheme StatusBar_Production => new()
+    public static ColorScheme StatusBar_Production => _statusBarProduction ??= new()
     {
         Normal = MakeAttr(Color.White, Color.Red),
         Focus = MakeAttr(Color.White, Color.BrightRed),
@@ -112,11 +124,13 @@ public static class TuiColorPalette
         Disabled = MakeAttr(Color.Gray, Color.Red)
     };
 
+    private static ColorScheme? _statusBarSandbox;
+
     /// <summary>
     /// Status bar for SANDBOX/STAGING environments.
     /// Warning theme - black on yellow (Brown is dark yellow in 16-color console).
     /// </summary>
-    public static ColorScheme StatusBar_Sandbox => new()
+    public static ColorScheme StatusBar_Sandbox => _statusBarSandbox ??= new()
     {
         Normal = MakeAttr(Color.Black, Color.Brown),
         Focus = MakeAttr(Color.Black, Color.BrightYellow),
@@ -125,11 +139,13 @@ public static class TuiColorPalette
         Disabled = MakeAttr(Color.DarkGray, Color.Brown)
     };
 
+    private static ColorScheme? _statusBarDevelopment;
+
     /// <summary>
     /// Status bar for DEVELOPMENT environments.
     /// Safe theme - black on green.
     /// </summary>
-    public static ColorScheme StatusBar_Development => new()
+    public static ColorScheme StatusBar_Development => _statusBarDevelopment ??= new()
     {
         Normal = MakeAttr(Color.Black, Color.Green),
         Focus = MakeAttr(Color.Black, Color.BrightGreen),
@@ -138,11 +154,13 @@ public static class TuiColorPalette
         Disabled = MakeAttr(Color.DarkGray, Color.Green)
     };
 
+    private static ColorScheme? _statusBarTrial;
+
     /// <summary>
     /// Status bar for TRIAL environments.
     /// Info theme - black on cyan per blue background rule.
     /// </summary>
-    public static ColorScheme StatusBar_Trial => new()
+    public static ColorScheme StatusBar_Trial => _statusBarTrial ??= new()
     {
         Normal = MakeAttr(Color.Black, Color.Cyan),
         Focus = MakeAttr(Color.Black, Color.BrightCyan),
@@ -151,11 +169,13 @@ public static class TuiColorPalette
         Disabled = MakeAttr(Color.Black, Color.Cyan)
     };
 
+    private static ColorScheme? _statusBarDefault;
+
     /// <summary>
     /// Status bar for UNKNOWN environments.
     /// Neutral theme - black on gray for maximum readability.
     /// </summary>
-    public static ColorScheme StatusBar_Default => new()
+    public static ColorScheme StatusBar_Default => _statusBarDefault ??= new()
     {
         Normal = MakeAttr(Color.Black, Color.Gray),
         Focus = MakeAttr(Color.Black, Color.BrightYellow),
@@ -168,11 +188,13 @@ public static class TuiColorPalette
 
     #region Menu Bar
 
+    private static ColorScheme? _menuBar;
+
     /// <summary>
     /// Color scheme for the menu bar.
     /// Dark background with cyan accents for a modern look.
     /// </summary>
-    public static ColorScheme MenuBar => new()
+    public static ColorScheme MenuBar => _menuBar ??= new()
     {
         Normal = MakeAttr(Color.Cyan, Color.Black),
         Focus = MakeAttr(Color.Black, Color.Cyan),
@@ -185,11 +207,13 @@ public static class TuiColorPalette
 
     #region Tab Bar
 
+    private static ColorScheme? _tabActive;
+
     /// <summary>
     /// Active tab in tab bar.
     /// White text on dark gray background for clear visibility.
     /// </summary>
-    public static ColorScheme TabActive => new()
+    public static ColorScheme TabActive => _tabActive ??= new()
     {
         Normal = MakeAttr(Color.White, Color.DarkGray),
         Focus = MakeAttr(Color.White, Color.DarkGray),
@@ -198,11 +222,13 @@ public static class TuiColorPalette
         Disabled = MakeAttr(Color.Gray, Color.DarkGray)
     };
 
+    private static ColorScheme? _tabInactive;
+
     /// <summary>
     /// Inactive tab in tab bar.
     /// Gray text on black background for muted appearance.
     /// </summary>
-    public static ColorScheme TabInactive => new()
+    public static ColorScheme TabInactive => _tabInactive ??= new()
     {
         Normal = MakeAttr(Color.Gray, Color.Black),
         Focus = MakeAttr(Color.White, Color.Black),
@@ -245,11 +271,13 @@ public static class TuiColorPalette
 
     #region Accent Colors
 
+    private static ColorScheme? _tableHeader;
+
     /// <summary>
     /// Color scheme for table headers.
     /// Cyan text on black background.
     /// </summary>
-    public static ColorScheme TableHeader => new()
+    public static ColorScheme TableHeader => _tableHeader ??= new()
     {
         Normal = MakeAttr(Color.Cyan, Color.Black),
         Focus = MakeAttr(Color.Black, Color.Cyan),
@@ -258,11 +286,13 @@ public static class TuiColorPalette
         Disabled = MakeAttr(Color.DarkGray, Color.Black)
     };
 
+    private static ColorScheme? _selected;
+
     /// <summary>
     /// Color scheme for selected/highlighted items.
     /// Black text on cyan background per blue background rule.
     /// </summary>
-    public static ColorScheme Selected => new()
+    public static ColorScheme Selected => _selected ??= new()
     {
         Normal = MakeAttr(Color.Black, Color.Cyan),
         Focus = MakeAttr(Color.Black, Color.BrightCyan),
@@ -271,11 +301,13 @@ public static class TuiColorPalette
         Disabled = MakeAttr(Color.Black, Color.Cyan)
     };
 
+    private static ColorScheme? _error;
+
     /// <summary>
     /// Color scheme for error messages.
     /// Red text on black background.
     /// </summary>
-    public static ColorScheme Error => new()
+    public static ColorScheme Error => _error ??= new()
     {
         Normal = MakeAttr(Color.Red, Color.Black),
         Focus = MakeAttr(Color.BrightRed, Color.Black),
@@ -284,11 +316,13 @@ public static class TuiColorPalette
         Disabled = MakeAttr(Color.DarkGray, Color.Black)
     };
 
+    private static ColorScheme? _success;
+
     /// <summary>
     /// Color scheme for success messages.
     /// Green text on black background.
     /// </summary>
-    public static ColorScheme Success => new()
+    public static ColorScheme Success => _success ??= new()
     {
         Normal = MakeAttr(Color.Green, Color.Black),
         Focus = MakeAttr(Color.BrightGreen, Color.Black),
