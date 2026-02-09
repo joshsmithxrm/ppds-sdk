@@ -92,7 +92,7 @@ internal sealed class SqlQueryScreen : TuiScreenBase, ITuiStateCapture<SqlQueryS
         _deviceCodeCallback = deviceCodeCallback;
 
         // Query input area
-        _queryFrame = new FrameView("Query (Ctrl+Enter to execute, Ctrl+Space for suggestions, Ctrl+Shift+\u2191\u2193 to resize, F6 to toggle focus)")
+        _queryFrame = new FrameView("Query (Ctrl+Enter to execute, Ctrl+Space for suggestions, Alt+\u2191\u2193 to resize, F6 to toggle focus)")
         {
             X = 0,
             Y = 0,
@@ -266,11 +266,11 @@ internal sealed class SqlQueryScreen : TuiScreenBase, ITuiStateCapture<SqlQueryS
         // The table's built-in selection highlighting is sufficient
         _queryFrame.Enter += (_) =>
         {
-            _queryFrame.Title = "\u25b6 Query (Ctrl+Enter to execute, Ctrl+Space for suggestions, Ctrl+Shift+\u2191\u2193 to resize, F6 to toggle focus)";
+            _queryFrame.Title = "\u25b6 Query (Ctrl+Enter to execute, Ctrl+Space for suggestions, Alt+\u2191\u2193 to resize, F6 to toggle focus)";
         };
         _queryFrame.Leave += (_) =>
         {
-            _queryFrame.Title = "Query (Ctrl+Enter to execute, Ctrl+Space for suggestions, Ctrl+Shift+\u2191\u2193 to resize, F6 to toggle focus)";
+            _queryFrame.Title = "Query (Ctrl+Enter to execute, Ctrl+Space for suggestions, Alt+\u2191\u2193 to resize, F6 to toggle focus)";
         };
         _resultsTable.Enter += (_) =>
         {
@@ -368,14 +368,16 @@ internal sealed class SqlQueryScreen : TuiScreenBase, ITuiStateCapture<SqlQueryS
                     }
                     break;
 
+                case Key.CursorUp | Key.AltMask:
                 case Key.CursorUp | Key.CtrlMask | Key.ShiftMask:
-                    // Shrink editor
+                    // Shrink editor (Alt+Up primary, Ctrl+Shift+Up secondary)
                     ResizeEditor(-1);
                     e.Handled = true;
                     break;
 
+                case Key.CursorDown | Key.AltMask:
                 case Key.CursorDown | Key.CtrlMask | Key.ShiftMask:
-                    // Grow editor
+                    // Grow editor (Alt+Down primary, Ctrl+Shift+Down secondary)
                     ResizeEditor(1);
                     e.Handled = true;
                     break;
