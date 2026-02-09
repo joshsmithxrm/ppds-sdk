@@ -566,7 +566,7 @@ internal sealed class QueryResultsTableView : FrameView
             Application.MainLoop?.Invoke(() =>
             {
                 // Only restore if this token is still active (not superseded by another message)
-                if (_statusRestoreToken == token)
+                if (ReferenceEquals(_statusRestoreToken, token))
                 {
                     UpdateStatus();
                 }

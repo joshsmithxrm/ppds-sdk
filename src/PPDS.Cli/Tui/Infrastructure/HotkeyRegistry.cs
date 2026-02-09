@@ -116,7 +116,7 @@ internal sealed class HotkeyRegistry : IHotkeyRegistry
             var conflict = _bindings.FirstOrDefault(b =>
                 b.Key == key &&
                 b.Scope == scope &&
-                (scope == HotkeyScope.Global || b.Owner == owner));
+                (scope == HotkeyScope.Global || ReferenceEquals(b.Owner, owner)));
 
             if (conflict != null)
             {
@@ -182,7 +182,7 @@ internal sealed class HotkeyRegistry : IHotkeyRegistry
                 matchedBinding = _bindings.FirstOrDefault(b =>
                     b.Key == keyEvent.Key &&
                     b.Scope == HotkeyScope.Dialog &&
-                    b.Owner == _activeDialog);
+                    ReferenceEquals(b.Owner, _activeDialog));
             }
 
             // 2. Check screen-scope bindings (only if no dialog is open)
@@ -191,7 +191,7 @@ internal sealed class HotkeyRegistry : IHotkeyRegistry
                 matchedBinding = _bindings.FirstOrDefault(b =>
                     b.Key == keyEvent.Key &&
                     b.Scope == HotkeyScope.Screen &&
-                    b.Owner == _activeScreen);
+                    ReferenceEquals(b.Owner, _activeScreen));
             }
 
             // 3. Check global bindings (always available)
@@ -304,7 +304,7 @@ internal sealed class HotkeyRegistry : IHotkeyRegistry
             {
                 result.AddRange(_bindings.Where(b =>
                     b.Scope == HotkeyScope.Screen &&
-                    b.Owner == _activeScreen));
+                    ReferenceEquals(b.Owner, _activeScreen)));
             }
 
             // Include active dialog bindings
@@ -312,7 +312,7 @@ internal sealed class HotkeyRegistry : IHotkeyRegistry
             {
                 result.AddRange(_bindings.Where(b =>
                     b.Scope == HotkeyScope.Dialog &&
-                    b.Owner == _activeDialog));
+                    ReferenceEquals(b.Owner, _activeDialog)));
             }
 
             return result.AsReadOnly();
