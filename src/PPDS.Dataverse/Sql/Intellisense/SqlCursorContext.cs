@@ -71,9 +71,13 @@ public static class SqlCursorContext
                 return AnalyzeSelectStatement(sql, cursorOffset, select);
             }
         }
-        catch
+        catch (OperationCanceledException)
         {
-            // Parse failed — fall through to lexer-based heuristic
+            throw; // Never swallow cancellation
+        }
+        catch (Exception)
+        {
+            // Parse failed on partial SQL — fall through to lexer-based heuristic
         }
 
         // Lexer-based fallback for partial SQL
@@ -665,7 +669,11 @@ public static class SqlCursorContext
             var result = lexer.Tokenize();
             return result.Tokens;
         }
-        catch
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception)
         {
             return Array.Empty<SqlToken>();
         }

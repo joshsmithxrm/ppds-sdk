@@ -23,7 +23,11 @@ public sealed class SqlSourceTokenizer : ISourceTokenizer
             var result = lexer.Tokenize();
             return BuildSourceTokens(text, result.Tokens, result.Comments);
         }
-        catch
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception)
         {
             // Lexer threw (e.g. unterminated string) — fall back to error token for entire input
             return new[] { new SourceToken(0, text.Length, SourceTokenType.Error) };

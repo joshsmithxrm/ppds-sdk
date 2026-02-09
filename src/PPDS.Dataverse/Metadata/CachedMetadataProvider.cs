@@ -173,6 +173,15 @@ public sealed class CachedMetadataProvider : ICachedMetadataProvider, IDisposabl
         _entities = null;
         _attributeCache.Clear();
         _relationshipCache.Clear();
+
+        // Dispose and clear per-entity semaphores to prevent unbounded growth
+        foreach (var semaphore in _attributeLocks.Values)
+            semaphore.Dispose();
+        _attributeLocks.Clear();
+
+        foreach (var semaphore in _relationshipLocks.Values)
+            semaphore.Dispose();
+        _relationshipLocks.Clear();
     }
 
     /// <inheritdoc />

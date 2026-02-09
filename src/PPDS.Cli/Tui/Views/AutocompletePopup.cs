@@ -160,6 +160,14 @@ internal sealed class AutocompletePopup : View
                 MoveSelection(1);
                 return true;
 
+            case Key.PageUp:
+                MoveSelection(-8); // Page size matches max visible items
+                return true;
+
+            case Key.PageDown:
+                MoveSelection(8);
+                return true;
+
             default:
                 return false;
         }
@@ -275,6 +283,12 @@ internal sealed class AutocompletePopup : View
     public override void Redraw(Rect bounds)
     {
         if (Driver == null)
+        {
+            base.Redraw(bounds);
+            return;
+        }
+
+        if (_filteredItems.Count == 0)
         {
             base.Redraw(bounds);
             return;

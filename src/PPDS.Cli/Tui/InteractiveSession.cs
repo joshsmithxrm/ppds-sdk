@@ -277,14 +277,18 @@ internal sealed class InteractiveSession : IAsyncDisposable
                 {
                     try
                     {
-                        await cachedMetadata.PreloadAsync().ConfigureAwait(false);
+                        await cachedMetadata.PreloadAsync(cancellationToken).ConfigureAwait(false);
                         TuiDebugLog.Log($"Metadata preload completed for {environmentUrl}");
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        TuiDebugLog.Log($"Metadata preload cancelled for {environmentUrl}");
                     }
                     catch (Exception ex)
                     {
                         TuiDebugLog.Log($"Metadata preload failed for {environmentUrl}: {ex.Message}");
                     }
-                });
+                }, cancellationToken);
             }
 
             return provider;

@@ -149,9 +149,13 @@ public sealed class SqlCompletionEngine
                     var attributes = await _metadataProvider.GetAttributesAsync(entityName, ct);
                     completions.AddRange(attributes.Select(attr => CreateAttributeCompletion(attr)));
                 }
-                catch
+                catch (OperationCanceledException)
                 {
-                    // Skip entities where metadata lookup fails
+                    throw; // Respect cancellation
+                }
+                catch (Exception)
+                {
+                    // Skip entities where metadata lookup fails (e.g. network error)
                 }
             }
         }

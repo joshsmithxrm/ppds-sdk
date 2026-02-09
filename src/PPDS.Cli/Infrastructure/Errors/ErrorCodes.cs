@@ -168,6 +168,9 @@ public static class ErrorCodes
 
         /// <summary>Query exceeded the in-memory working set limit.</summary>
         public const string MemoryLimitExceeded = "Query.MemoryLimitExceeded";
+
+        /// <summary>IntelliSense completion lookup failed.</summary>
+        public const string CompletionFailed = "Query.CompletionFailed";
     }
 
     /// <summary>

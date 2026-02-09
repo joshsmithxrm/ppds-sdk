@@ -43,6 +43,14 @@ internal sealed class SyntaxHighlightedTextView : TextView
     private IReadOnlyList<SqlDiagnostic> _diagnostics = Array.Empty<SqlDiagnostic>();
 
     /// <summary>
+    /// Cached tokenization results to avoid re-tokenizing on every Redraw cycle.
+    /// Invalidated when text content changes.
+    /// </summary>
+    private string? _cachedText;
+    private IReadOnlyList<SourceToken>? _cachedTokens;
+    private Terminal.Gui.Attribute[]? _cachedColorMap;
+
+    /// <summary>
     /// Cancellation source for in-flight validation requests.
     /// </summary>
     private CancellationTokenSource? _validationCts;
@@ -157,7 +165,7 @@ internal sealed class SyntaxHighlightedTextView : TextView
         }
 
         // Dot trigger: after typing '.'
-        if (keyEvent.Key == (Key)46) // '.' character
+        if (keyEvent.Key == (Key)'.')
         {
             _ = TriggerCompletionsAsync();
             return;
@@ -203,8 +211,9 @@ internal sealed class SyntaxHighlightedTextView : TextView
     {
         if (LanguageService == null) return;
 
-        // Cancel any in-flight request
+        // Cancel and dispose any in-flight request
         _completionCts?.Cancel();
+        _completionCts?.Dispose();
         _completionCts = new CancellationTokenSource();
         var ct = _completionCts.Token;
 
@@ -427,8 +436,9 @@ internal sealed class SyntaxHighlightedTextView : TextView
     {
         if (LanguageService == null) return;
 
-        // Cancel any in-flight validation
+        // Cancel and dispose any in-flight validation
         _validationCts?.Cancel();
+        _validationCts?.Dispose();
         _validationCts = new CancellationTokenSource();
         var ct = _validationCts.Token;
 
@@ -461,6 +471,38 @@ internal sealed class SyntaxHighlightedTextView : TextView
         }
     }
 
+    /// <summary>
+    /// Returns cached tokens and color map, recomputing only when text has changed.
+    /// </summary>
+    private (IReadOnlyList<SourceToken> tokens, Terminal.Gui.Attribute[] colorMap)? GetCachedTokenization(string fullText)
+    {
+        if (_cachedText == fullText && _cachedTokens != null && _cachedColorMap != null)
+        {
+            return (_cachedTokens, _cachedColorMap);
+        }
+
+        try
+        {
+            var tokens = _tokenizer.Tokenize(fullText);
+            var colorMap = BuildColorMap(fullText, tokens);
+            _cachedText = fullText;
+            _cachedTokens = tokens;
+            _cachedColorMap = colorMap;
+            return (tokens, colorMap);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception)
+        {
+            _cachedText = null;
+            _cachedTokens = null;
+            _cachedColorMap = null;
+            return null;
+        }
+    }
+
     /// <inheritdoc />
     public override void Redraw(Rect bounds)
     {
@@ -472,21 +514,16 @@ internal sealed class SyntaxHighlightedTextView : TextView
 
         var fullText = Text?.ToString() ?? string.Empty;
 
-        // Tokenize once per redraw
-        IReadOnlyList<SourceToken> tokens;
-        try
+        // Use cached tokenization to avoid re-tokenizing on every paint cycle
+        var cached = GetCachedTokenization(fullText);
+        if (cached == null)
         {
-            tokens = _tokenizer.Tokenize(fullText);
-        }
-        catch
-        {
-            // If tokenizer fails, fall back to base rendering
+            // Tokenizer failed — fall back to base rendering
             base.Redraw(bounds);
             return;
         }
 
-        // Build a flat array mapping each character offset → Attribute
-        var charColors = BuildColorMap(fullText, tokens);
+        var charColors = cached.Value.colorMap;
 
         // Render line by line
         var lines = fullText.Split('\n');

@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
+using PPDS.Cli.Infrastructure.Errors;
 using PPDS.Dataverse.Metadata;
 using PPDS.Dataverse.Sql.Intellisense;
 
@@ -16,7 +17,7 @@ namespace PPDS.Cli.Services;
 public sealed class SqlLanguageService : ISqlLanguageService
 {
     private readonly SqlSourceTokenizer _tokenizer = new();
-    private readonly SqlCompletionEngine _completionEngine;
+    private readonly SqlCompletionEngine? _completionEngine;
     private readonly SqlValidator _validator;
 
     /// <summary>
@@ -29,16 +30,9 @@ public sealed class SqlLanguageService : ISqlLanguageService
     public SqlLanguageService(ICachedMetadataProvider? metadataProvider)
     {
         _validator = new SqlValidator(metadataProvider);
-
-        if (metadataProvider != null)
-        {
-            _completionEngine = new SqlCompletionEngine(metadataProvider);
-        }
-        else
-        {
-            // No metadata provider — engine will be null, completions limited to keywords
-            _completionEngine = null!;
-        }
+        _completionEngine = metadataProvider != null
+            ? new SqlCompletionEngine(metadataProvider)
+            : null;
     }
 
     /// <inheritdoc />
@@ -68,7 +62,21 @@ public sealed class SqlLanguageService : ISqlLanguageService
             return Array.Empty<SqlCompletion>();
         }
 
-        return await _completionEngine.GetCompletionsAsync(sql, cursorOffset, ct);
+        try
+        {
+            return await _completionEngine.GetCompletionsAsync(sql, cursorOffset, ct);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            throw new PpdsException(
+                ErrorCodes.Query.CompletionFailed,
+                "Failed to retrieve IntelliSense completions.",
+                ex);
+        }
     }
 
     /// <inheritdoc />
