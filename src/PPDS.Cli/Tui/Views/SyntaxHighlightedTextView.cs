@@ -113,17 +113,6 @@ internal sealed class SyntaxHighlightedTextView : TextView
     /// <inheritdoc />
     public override bool ProcessKey(KeyEvent keyEvent)
     {
-        // Debug: log all Ctrl/Alt key combinations to diagnose IntelliSense trigger issues
-        var rawKey = keyEvent.Key;
-        if ((rawKey & Key.CtrlMask) != 0 || (rawKey & Key.AltMask) != 0 || rawKey == Key.Space || (int)rawKey == 0)
-        {
-            TuiDebugLog.Log($"ProcessKey: key=0x{(int)rawKey:X8} ({rawKey}), " +
-                            $"IsCtrl={(rawKey & Key.CtrlMask) != 0}, " +
-                            $"expected Ctrl+Space=0x{(int)(Key.CtrlMask | Key.Space):X8}, " +
-                            $"LanguageService={(LanguageService != null ? "set" : "NULL")}, " +
-                            $"PopupShowing={_autocompletePopup.IsShowing}");
-        }
-
         // If the autocomplete popup is showing, route keys to it first
         if (_autocompletePopup.IsShowing)
         {
@@ -137,7 +126,7 @@ internal sealed class SyntaxHighlightedTextView : TextView
         // Note: Some terminals send NUL (0x00) for Ctrl+Space instead of CtrlMask|Space
         if (keyEvent.Key == (Key.CtrlMask | Key.Space) || (int)keyEvent.Key == 0)
         {
-            TuiDebugLog.Log($"Ctrl+Space detected (key=0x{(int)rawKey:X8}), triggering completions");
+            TuiDebugLog.Log($"Ctrl+Space detected (key=0x{(int)keyEvent.Key:X8}), triggering completions");
             _ = TriggerCompletionsAsync();
             return true;
         }
