@@ -70,7 +70,7 @@ public class TdsQueryExecutor : ITdsQueryExecutor
         var token = await _tokenProvider(cancellationToken).ConfigureAwait(false);
         var connectionString = BuildConnectionString(_orgUrl);
 
-        var columns = new List<QueryColumn>();
+        List<QueryColumn> columns;
         var records = new List<IReadOnlyDictionary<string, QueryValue>>();
         var rowCount = 0;
 

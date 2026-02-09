@@ -298,7 +298,7 @@ public class ParallelPartitionNodeTests
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(async () =>
         {
-            await foreach (var row in node.ExecuteAsync(ctx, cts.Token))
+            await foreach (var _ in node.ExecuteAsync(ctx, cts.Token))
             {
                 // Should not get here with pre-cancelled token
             }

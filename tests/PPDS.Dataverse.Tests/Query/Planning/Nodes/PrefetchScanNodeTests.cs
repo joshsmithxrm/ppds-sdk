@@ -413,7 +413,7 @@ public class PrefetchScanNodeTests
         // Act: consume slowly and track the max producer lead
         var consumed = 0;
         var maxLead = 0;
-        await foreach (var row in node.ExecuteAsync(ctx))
+        await foreach (var _ in node.ExecuteAsync(ctx))
         {
             consumed++;
             var currentProduced = produced.ProducedCount;

@@ -206,8 +206,6 @@ internal sealed class EnvironmentDetailsDialog : TuiDialog, ITuiStateCapture<Env
         // Get environment type from profile or detect from URL
         var envInfo = profile?.Environment;
         var envType = envInfo?.Type;
-        var region = envInfo?.Region;
-
         if (cancellationToken.IsCancellationRequested)
         {
             return;

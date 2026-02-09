@@ -213,7 +213,7 @@ public class MetadataScanNodeTests
         var rowCount = 0;
         await Assert.ThrowsAsync<OperationCanceledException>(async () =>
         {
-            await foreach (var row in node.ExecuteAsync(ctx, cts.Token))
+            await foreach (var _ in node.ExecuteAsync(ctx, cts.Token))
             {
                 rowCount++;
                 if (rowCount >= 2)

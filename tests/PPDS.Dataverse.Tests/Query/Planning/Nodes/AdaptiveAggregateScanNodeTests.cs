@@ -276,7 +276,7 @@ public class AdaptiveAggregateScanNodeTests
 
         var ex = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
         {
-            await foreach (var row in node.ExecuteAsync(context))
+            await foreach (var _ in node.ExecuteAsync(context))
             {
                 // Should not reach here
             }
@@ -310,7 +310,7 @@ public class AdaptiveAggregateScanNodeTests
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(async () =>
         {
-            await foreach (var row in node.ExecuteAsync(context, cts.Token))
+            await foreach (var _ in node.ExecuteAsync(context, cts.Token))
             {
                 // Should not reach here
             }

@@ -654,8 +654,7 @@ internal sealed class TuiShell : Window, ITuiStateCapture<TuiShellState>
         _errorService.FireAndForget(Task.Run(async () =>
         {
             var profileService = _session.GetProfileService();
-            var profiles = await profileService.GetProfilesAsync();
-            var active = profiles.FirstOrDefault(p => p.IsActive);
+            await profileService.GetProfilesAsync();
 
             Application.MainLoop?.Invoke(() =>
             {
@@ -672,8 +671,7 @@ internal sealed class TuiShell : Window, ITuiStateCapture<TuiShellState>
     private async Task LoadProfileInfoInternalAsync()
     {
         var store = _session.GetProfileStore();
-        var collection = await store.LoadAsync(CancellationToken.None);
-        var profile = collection.ActiveProfile;
+        await store.LoadAsync(CancellationToken.None);
 
         Application.MainLoop?.Invoke(() =>
         {

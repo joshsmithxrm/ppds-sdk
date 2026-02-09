@@ -447,7 +447,7 @@ internal sealed class SyntaxHighlightedTextView : TextView
                 timerArgs =>
                 {
                     _validationTimerToken = null;
-                    var fireAndForget = RunValidationAsync();
+                    _ = RunValidationAsync();
                     return false; // do not repeat
                 });
         }
@@ -686,7 +686,6 @@ internal sealed class SyntaxHighlightedTextView : TextView
             if (sub.Visible)
             {
                 // Set clip region to the subview's frame so it draws at the right position
-                var subFrame = sub.Frame;
                 Driver.SetAttribute(_defaultAttr);
                 sub.Redraw(sub.Bounds);
             }
