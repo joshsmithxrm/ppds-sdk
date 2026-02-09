@@ -371,6 +371,48 @@ public class SqlQueryServiceTests
         Assert.NotNull(service);
     }
 
+    [Fact]
+    [Trait("Category", "PlanUnit")]
+    public async Task ExecuteAsync_DmlDryRun_ReturnsPlanWithoutExecuting()
+    {
+        // Arrange: executor that throws if called, proving dry-run skips execution
+        var mockExecutor = new Mock<IQueryExecutor>();
+        mockExecutor
+            .Setup(x => x.ExecuteFetchXmlAsync(
+                It.IsAny<string>(),
+                It.IsAny<int?>(),
+                It.IsAny<string?>(),
+                It.IsAny<bool>(),
+                It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new InvalidOperationException("Executor should not be called during dry-run"));
+
+        var service = new SqlQueryService(mockExecutor.Object);
+        var request = new SqlQueryRequest
+        {
+            Sql = "DELETE FROM account WHERE name = 'test'",
+            DmlSafety = new DmlSafetyOptions { IsDryRun = true, IsConfirmed = true }
+        };
+
+        // Act
+        var result = await service.ExecuteAsync(request);
+
+        // Assert: dry-run returns the plan without calling the executor
+        Assert.NotNull(result);
+        Assert.False(string.IsNullOrEmpty(result.TranspiledFetchXml), "Dry-run should return transpiled FetchXML");
+        Assert.NotNull(result.DmlSafetyResult);
+        Assert.True(result.DmlSafetyResult.IsDryRun, "DmlSafetyResult should indicate dry-run");
+
+        // Verify executor was never called
+        mockExecutor.Verify(
+            x => x.ExecuteFetchXmlAsync(
+                It.IsAny<string>(),
+                It.IsAny<int?>(),
+                It.IsAny<string?>(),
+                It.IsAny<bool>(),
+                It.IsAny<CancellationToken>()),
+            Times.Never);
+    }
+
     #endregion
 
     #region ExpandFormattedValueColumns Tests

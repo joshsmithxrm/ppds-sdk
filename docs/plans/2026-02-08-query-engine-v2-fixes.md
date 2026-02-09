@@ -4,7 +4,7 @@
 > **Context:** Code review findings from Phases 4-7 of `docs/specs/query-engine-v2.md`.
 > **Branch:** `fix/tui-colors` in worktree `C:\VS\ppdsw\ppds\.worktrees\tui-polish`
 
-**Goal:** Fix all critical, important, and minor issues identified in the Phase 4-7 code review. 10 tasks, grouped by dependency so parallelizable tasks can be dispatched together.
+**Goal:** Fix all critical, important, and minor issues identified in the Phase 4-7 code review. 16 tasks, grouped by dependency so parallelizable tasks can be dispatched together.
 
 **Test command:** `dotnet test --filter "Category=TuiUnit|Category=PlanUnit"`
 
