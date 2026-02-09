@@ -5,6 +5,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Xml.Linq;
+using Microsoft.Crm.Sdk.Messages;
 using Microsoft.Extensions.Logging;
 using Microsoft.Xrm.Sdk;
 using Microsoft.Xrm.Sdk.Query;
@@ -193,6 +194,33 @@ public class QueryExecutor : IQueryExecutor
             ExecutedFetchXml = executedFetchXml,
             IsAggregate = isAggregate
         };
+    }
+
+    /// <inheritdoc />
+    public async Task<long?> GetTotalRecordCountAsync(
+        string entityLogicalName,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(entityLogicalName);
+
+        await using var client = await _connectionPool.GetClientAsync(
+            cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        var request = new RetrieveTotalRecordCountRequest
+        {
+            EntityNames = new[] { entityLogicalName }
+        };
+
+        var response = (RetrieveTotalRecordCountResponse)await client.ExecuteAsync(
+            request, cancellationToken).ConfigureAwait(false);
+
+        if (response.EntityRecordCountCollection != null
+            && response.EntityRecordCountCollection.TryGetValue(entityLogicalName, out var count))
+        {
+            return count;
+        }
+
+        return null;
     }
 
     /// <summary>
