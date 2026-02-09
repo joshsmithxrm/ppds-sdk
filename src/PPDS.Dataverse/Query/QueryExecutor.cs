@@ -223,6 +223,34 @@ public class QueryExecutor : IQueryExecutor
         return null;
     }
 
+    /// <inheritdoc />
+    public async Task<(DateTime? Min, DateTime? Max)> GetMinMaxCreatedOnAsync(
+        string entityLogicalName,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(entityLogicalName);
+
+        var fetchXml = $"<fetch aggregate='true'><entity name='{entityLogicalName}'>" +
+            "<attribute name='createdon' alias='mindate' aggregate='min' />" +
+            "<attribute name='createdon' alias='maxdate' aggregate='max' />" +
+            "</entity></fetch>";
+
+        var result = await ExecuteFetchXmlAsync(fetchXml, cancellationToken: cancellationToken)
+            .ConfigureAwait(false);
+
+        DateTime? min = null, max = null;
+        if (result.Records.Count > 0)
+        {
+            var row = result.Records[0];
+            if (row.TryGetValue("mindate", out var minVal) && minVal.Value is DateTime minDt)
+                min = minDt;
+            if (row.TryGetValue("maxdate", out var maxVal) && maxVal.Value is DateTime maxDt)
+                max = maxDt;
+        }
+
+        return (min, max);
+    }
+
     /// <summary>
     /// Extracts column metadata from the FetchXML entity element.
     /// </summary>
