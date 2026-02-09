@@ -88,7 +88,8 @@ public static class EnvCommandGroup
     {
         try
         {
-            using var store = new ProfileStore();
+            await using var localProvider = ProfileServiceFactory.CreateLocalProvider();
+            var store = localProvider.GetRequiredService<ProfileStore>();
             var collection = await store.LoadAsync(cancellationToken);
 
             var profile = collection.ActiveProfile;
@@ -254,7 +255,8 @@ public static class EnvCommandGroup
     {
         try
         {
-            using var store = new ProfileStore();
+            await using var localProvider = ProfileServiceFactory.CreateLocalProvider();
+            var store = localProvider.GetRequiredService<ProfileStore>();
             var collection = await store.LoadAsync(cancellationToken);
 
             var profile = collection.ActiveProfile;
@@ -268,7 +270,7 @@ public static class EnvCommandGroup
             Console.Error.WriteLine($"Resolving environment '{environmentIdentifier}'...");
 
             // Use multi-layer resolution: direct connection first for URLs, Global Discovery for names
-            using var credentialStore = new NativeCredentialStore();
+            var credentialStore = localProvider.GetRequiredService<ISecureCredentialStore>();
             using var resolver = new EnvironmentResolutionService(profile, credentialStore: credentialStore);
             var result = await resolver.ResolveAsync(environmentIdentifier, cancellationToken);
 
@@ -353,7 +355,8 @@ public static class EnvCommandGroup
     {
         try
         {
-            using var store = new ProfileStore();
+            await using var localProvider = ProfileServiceFactory.CreateLocalProvider();
+            var store = localProvider.GetRequiredService<ProfileStore>();
             var collection = await store.LoadAsync(cancellationToken);
 
             var profile = collection.ActiveProfile;
@@ -386,7 +389,7 @@ public static class EnvCommandGroup
                     Console.Error.WriteLine($"Resolving environment '{environmentOverride}'...");
                 }
 
-                using var credentialStore = new NativeCredentialStore();
+                var credentialStore = localProvider.GetRequiredService<ISecureCredentialStore>();
                 using var resolver = new EnvironmentResolutionService(profile, credentialStore: credentialStore);
                 var result = await resolver.ResolveAsync(environmentOverride, cancellationToken);
 
@@ -573,8 +576,8 @@ public static class EnvCommandGroup
             var list = parseResult.GetValue(listOption);
             var remove = parseResult.GetValue(removeOption);
 
-            using var store = new EnvironmentConfigStore();
-            var service = new EnvironmentConfigService(store);
+            await using var localProvider = ProfileServiceFactory.CreateLocalProvider();
+            var service = localProvider.GetRequiredService<IEnvironmentConfigService>();
 
             if (list)
                 return await ExecuteConfigListAsync(service, cancellationToken);
@@ -719,8 +722,8 @@ public static class EnvCommandGroup
             var remove = parseResult.GetValue(removeOption);
             var list = parseResult.GetValue(listOption);
 
-            using var store = new EnvironmentConfigStore();
-            var service = new EnvironmentConfigService(store);
+            await using var localProvider = ProfileServiceFactory.CreateLocalProvider();
+            var service = localProvider.GetRequiredService<IEnvironmentConfigService>();
 
             if (list)
             {
