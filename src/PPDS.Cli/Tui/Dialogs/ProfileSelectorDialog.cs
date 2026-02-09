@@ -451,7 +451,7 @@ internal sealed class ProfileSelectorDialog : TuiDialog, ITuiStateCapture<Profil
             return;
         }
 
-        var dialog = new ClearAllProfilesDialog(_profileService, _profiles.Count);
+        var dialog = new ClearAllProfilesDialog(_profileService, _profiles.Count, _session);
         Application.Run(dialog);
 
         if (dialog.Cleared)
