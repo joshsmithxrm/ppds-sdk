@@ -232,7 +232,7 @@ switch ($Command) {
         docker run --rm `
             -v "${WorkspaceVolume}:/workspace" `
             -v "${WorkspaceFolder}:/source:ro" `
-            alpine sh -c "cd /workspace && rm -rf /workspace/* /workspace/.* 2>/dev/null; cp -a /source/. /workspace/"
+            alpine sh -c "cd /workspace && find . -mindepth 1 -delete; cp -a /source/. ."
         if ($LASTEXITCODE -eq 0) {
             Write-Ok "Volume synced to local state ($branch)."
         }
