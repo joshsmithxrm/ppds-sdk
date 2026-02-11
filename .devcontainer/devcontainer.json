@@ -1,0 +1,31 @@
+{
+  "name": "PPDS",
+  "build": {
+    "dockerfile": "Dockerfile"
+  },
+  "mounts": [
+    "source=${localEnv:USERPROFILE}/.claude/.credentials.json,target=/home/vscode/.claude/.credentials.json,type=bind",
+    "source=${localEnv:USERPROFILE}/.claude.json,target=/tmp/host-claude-config.json,type=bind,readonly",
+    "source=${localEnv:USERPROFILE}/.claude/settings.json,target=/tmp/host-claude-settings.json,type=bind,readonly"
+  ],
+  "postCreateCommand": "bash .devcontainer/setup.sh",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-dotnettools.csdevkit",
+        "ms-dotnettools.csharp",
+        "ms-dotnettools.vscode-dotnet-runtime",
+        "dbaeumer.vscode-eslint",
+        "esbenp.prettier-vscode",
+        "ms-vscode.powershell",
+        "editorconfig.editorconfig"
+      ],
+      "settings": {
+        "terminal.integrated.defaultProfile.linux": "bash"
+      }
+    }
+  },
+  "remoteEnv": {
+    "TERM": "xterm-256color"
+  }
+}
