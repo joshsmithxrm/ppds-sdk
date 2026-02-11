@@ -8,7 +8,20 @@ PLUGINS_DIR="$CLAUDE_DIR/plugins"
 STAGED_CONFIG="/tmp/host-claude-config.json"
 STAGED_SETTINGS="/tmp/host-claude-settings.json"
 
-# --- Step 0: Configure git identity from host ---
+# --- Step 0: Mark bind-mounted workspace as safe for git ---
+echo "=== Configuring git safe directories ==="
+WORKSPACE_ROOT="$(pwd)"
+git config --global --add safe.directory "$WORKSPACE_ROOT"
+if [ -d ".worktrees" ]; then
+    for wt_dir in .worktrees/*/; do
+        wt_path="$WORKSPACE_ROOT/$(echo "$wt_dir" | sed 's:/$::')"
+        git config --global --add safe.directory "$wt_path"
+        echo "Safe directory: $wt_path"
+    done
+fi
+echo "Safe directory: $WORKSPACE_ROOT"
+
+# --- Step 0a: Configure git identity from host ---
 echo "=== Configuring git identity ==="
 HOST_GITCONFIG="/tmp/host-gitconfig"
 if [ -f "$HOST_GITCONFIG" ]; then
