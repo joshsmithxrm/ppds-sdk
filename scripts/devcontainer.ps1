@@ -16,13 +16,14 @@
     .\scripts\devcontainer.ps1 down                     # stop container
     .\scripts\devcontainer.ps1 push                      # push container commits via host (prompts for worktree)
     .\scripts\devcontainer.ps1 push query-engine-v3      # push worktree branch via host
-    .\scripts\devcontainer.ps1 sync                      # push local changes into the workspace volume
+    .\scripts\devcontainer.ps1 send                      # send host files to container (prompts for worktree)
+    .\scripts\devcontainer.ps1 send query-engine-v3      # send host worktree to container worktree
     .\scripts\devcontainer.ps1 reset                    # nuke everything, full clean rebuild
 #>
 
 param(
     [Parameter(Position = 0)]
-    [ValidateSet('up', 'shell', 'claude', 'ppds', 'down', 'status', 'sync', 'push', 'reset', 'help')]
+    [ValidateSet('up', 'shell', 'claude', 'ppds', 'down', 'status', 'send', 'push', 'reset', 'help')]
     [string]$Command = 'help',
 
     [Parameter(Position = 1)]
@@ -342,21 +343,40 @@ switch ($Command) {
         Write-Ok "Pushed '$branch' to origin ($ahead commit(s))."
     }
 
-    'sync' {
-        # Push current local branch state into the workspace volume
-        $branch = git -C $WorkspaceFolder branch --show-current
-        Write-Step "Syncing local repo into volume (branch: $branch)..."
-        $volExists = docker volume ls -q --filter "name=^${WorkspaceVolume}$"
-        if (-not $volExists) {
-            Write-Err "Workspace volume does not exist. Run 'up' first."
+    'send' {
+        # Sync host working tree into the container volume (preserves .git and .worktrees)
+        Ensure-ContainerRunning
+        $subdir = Select-WorkingDirectory -Target $Target
+
+        if ($subdir) {
+            $wtName = $subdir -replace '^\.worktrees/', ''
+            $hostPath = Join-Path $WorkspaceFolder ".worktrees\$wtName"
+            $containerTarget = ".worktrees/$wtName"
+            $label = "worktree '$wtName'"
+            $excludes = "--exclude='.git'"
+        }
+        else {
+            $hostPath = $WorkspaceFolder
+            $containerTarget = '.'
+            $label = 'main repo'
+            $excludes = "--exclude='.git/' --exclude='.worktrees/'"
+        }
+
+        if (-not (Test-Path $hostPath)) {
+            Write-Err "Host path not found: $hostPath"
             exit 1
         }
+
+        $branch = git -C $hostPath branch --show-current 2>$null
+        if (-not $branch) { $branch = 'unknown' }
+        Write-Step "Syncing $label to container ($branch)..."
+
         docker run --rm `
             -v "${WorkspaceVolume}:/workspace" `
-            -v "${WorkspaceFolder}:/source:ro" `
-            alpine sh -c "cd /workspace && find . -mindepth 1 -delete; cp -a /source/. ."
+            -v "${hostPath}:/source:ro" `
+            alpine sh -c "apk add --no-cache rsync >/dev/null 2>&1 && rsync -a --delete $excludes /source/ /workspace/${containerTarget}/ && chown -R 1000:1000 /workspace/${containerTarget}/"
         if ($LASTEXITCODE -eq 0) {
-            Write-Ok "Volume synced to local state ($branch)."
+            Write-Ok "Synced $label to container ($branch)."
         }
         else { Write-Err 'Sync failed.'; exit 1 }
     }
@@ -404,7 +424,7 @@ switch ($Command) {
         Write-Host '    down                  Stop the container'
         Write-Host '    status                Check if container is running'
         Write-Host '    push [worktree]       Push container commits to origin via host credentials'
-        Write-Host '    sync                  Push local repo state into the workspace volume'
+        Write-Host '    send [worktree]       Send host files to container (preserves .git state)'
         Write-Host '    reset                 Nuke container + all volumes + rebuild from scratch'
         Write-Host ''
         Write-Host '  Examples:' -ForegroundColor White
@@ -414,7 +434,7 @@ switch ($Command) {
         Write-Host '    .\scripts\devcontainer.ps1 ppds query-engine-v3      # TUI from worktree'
         Write-Host '    .\scripts\devcontainer.ps1 shell main               # shell at repo root'
         Write-Host '    .\scripts\devcontainer.ps1 push query-engine-v3      # push worktree branch via host'
-        Write-Host '    .\scripts\devcontainer.ps1 sync                      # push local changes to volume'
+        Write-Host '    .\scripts\devcontainer.ps1 send query-engine-v3      # send host worktree to container'
         Write-Host ''
     }
 }
