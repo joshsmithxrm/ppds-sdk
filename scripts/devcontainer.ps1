@@ -33,6 +33,7 @@ $ErrorActionPreference = 'Stop'
 $WorkspaceFolder = Split-Path -Parent $PSScriptRoot
 $WorkspaceVolume = 'ppds-workspace'
 $NugetVolume = 'ppds-nuget-cache'
+$AuthVolume = 'ppds-auth-cache'
 $PluginVolume = 'ppds-claude-plugins'
 $RepoUrl = 'https://github.com/joshsmithxrm/power-platform-developer-suite.git'
 
@@ -144,12 +145,14 @@ switch ($Command) {
     'up' {
         Ensure-WorkspaceVolume
 
-        # Ensure NuGet volume exists with correct ownership (Docker creates as root)
-        $nugetExists = docker volume ls -q --filter "name=^${NugetVolume}$"
-        if (-not $nugetExists) {
-            docker volume create $NugetVolume | Out-Null
+        # Ensure cache volumes exist with correct ownership (Docker creates as root)
+        foreach ($vol in @($NugetVolume, $AuthVolume)) {
+            $exists = docker volume ls -q --filter "name=^${vol}$"
+            if (-not $exists) {
+                docker volume create $vol | Out-Null
+            }
         }
-        docker run --rm -v "${NugetVolume}:/nuget" alpine chown -R 1000:1000 /nuget
+        docker run --rm -v "${NugetVolume}:/nuget" -v "${AuthVolume}:/auth" alpine sh -c "chown -R 1000:1000 /nuget /auth"
 
         Write-Step 'Building and starting devcontainer...'
         devcontainer up --workspace-folder $WorkspaceFolder
@@ -364,7 +367,7 @@ switch ($Command) {
         Stop-Container
 
         # Remove all named volumes
-        foreach ($vol in @($WorkspaceVolume, $NugetVolume, $PluginVolume)) {
+        foreach ($vol in @($WorkspaceVolume, $NugetVolume, $AuthVolume, $PluginVolume)) {
             $exists = docker volume ls -q --filter "name=^${vol}$"
             if ($exists) {
                 Write-Step "Removing volume $vol..."
