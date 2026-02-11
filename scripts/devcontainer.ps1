@@ -1,6 +1,10 @@
 <#
 .SYNOPSIS
     PPDS devcontainer management script.
+.DESCRIPTION
+    Uses a Docker volume for the workspace (not a bind mount) for native Linux I/O performance.
+    The local Windows repo is only used to locate the devcontainer config.
+    Code lives in the ppds-workspace Docker volume.
 .EXAMPLE
     .\scripts\devcontainer.ps1 up                       # build + start + ready to go
     .\scripts\devcontainer.ps1 shell                    # bash shell (prompts for worktree)
@@ -8,12 +12,13 @@
     .\scripts\devcontainer.ps1 claude                   # claude code (prompts for worktree)
     .\scripts\devcontainer.ps1 claude query-engine-v3   # claude code in worktree
     .\scripts\devcontainer.ps1 down                     # stop container
+    .\scripts\devcontainer.ps1 sync                     # push local changes into the workspace volume
     .\scripts\devcontainer.ps1 reset                    # nuke everything, full clean rebuild
 #>
 
 param(
     [Parameter(Position = 0)]
-    [ValidateSet('up', 'shell', 'claude', 'down', 'status', 'reset', 'help')]
+    [ValidateSet('up', 'shell', 'claude', 'down', 'status', 'sync', 'reset', 'help')]
     [string]$Command = 'help',
 
     [Parameter(Position = 1)]
@@ -22,8 +27,10 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $WorkspaceFolder = Split-Path -Parent $PSScriptRoot
-$ImageName = 'ppds-devcontainer'
-$VolumeName = 'ppds-claude-plugins'
+$WorkspaceVolume = 'ppds-workspace'
+$NugetVolume = 'ppds-nuget-cache'
+$PluginVolume = 'ppds-claude-plugins'
+$RepoUrl = 'https://github.com/joshsmithxrm/power-platform-developer-suite.git'
 
 function Write-Step($msg) { Write-Host "  $msg" -ForegroundColor Cyan }
 function Write-Ok($msg)   { Write-Host "  $msg" -ForegroundColor Green }
@@ -53,10 +60,35 @@ function Ensure-ContainerRunning {
     }
 }
 
+function Ensure-WorkspaceVolume {
+    # Create volume if it doesn't exist
+    $volExists = docker volume ls -q --filter "name=^${WorkspaceVolume}$"
+    if (-not $volExists) {
+        Write-Step "Creating workspace volume ($WorkspaceVolume)..."
+        docker volume create $WorkspaceVolume | Out-Null
+
+        # Clone repo into the volume (always clone default branch, switch later inside container)
+        Write-Step "Cloning repo into volume..."
+        docker run --rm -v "${WorkspaceVolume}:/workspace" alpine/git clone $RepoUrl /workspace
+        # Fix ownership — alpine/git runs as root, devcontainer runs as vscode (uid 1000)
+        docker run --rm -v "${WorkspaceVolume}:/workspace" alpine chown -R 1000:1000 /workspace
+        if ($LASTEXITCODE -ne 0) {
+            Write-Err 'Failed to clone repo into volume.'
+            docker volume rm $WorkspaceVolume | Out-Null
+            exit 1
+        }
+        Write-Ok 'Workspace volume ready.'
+    }
+    else {
+        Write-Ok 'Workspace volume exists.'
+    }
+}
+
 function Get-Worktrees {
-    $wtDir = Join-Path $WorkspaceFolder '.worktrees'
-    if (Test-Path $wtDir) {
-        Get-ChildItem -Directory $wtDir | Select-Object -ExpandProperty Name
+    # Query the container for worktrees (they live in the volume, not on Windows)
+    $raw = devcontainer exec --workspace-folder $WorkspaceFolder sh -c 'ls -d .worktrees/*/ 2>/dev/null' 2>$null
+    if ($raw) {
+        $raw -split "`n" | ForEach-Object { ($_.Trim() -replace '/$','') -replace '^\.worktrees/','' } | Where-Object { $_ }
     }
 }
 
@@ -76,15 +108,19 @@ function Select-WorkingDirectory {
         exit 1
     }
 
+    # Get main branch name from container
+    $mainBranch = devcontainer exec --workspace-folder $WorkspaceFolder git branch --show-current 2>$null
+    if (-not $mainBranch) { $mainBranch = 'main' }
+
     # Prompt user to pick
     Write-Host ''
     Write-Host '  Where do you want to work?' -ForegroundColor Yellow
     Write-Host ''
-    Write-Host "  [0] main repo ($(git -C $WorkspaceFolder branch --show-current))" -ForegroundColor White
+    Write-Host "  [0] main repo ($($mainBranch.Trim()))" -ForegroundColor White
     for ($i = 0; $i -lt $worktrees.Count; $i++) {
-        $branch = git -C (Join-Path $WorkspaceFolder ".worktrees/$($worktrees[$i])") branch --show-current 2>$null
+        $branch = devcontainer exec --workspace-folder $WorkspaceFolder git -C ".worktrees/$($worktrees[$i])" branch --show-current 2>$null
         if (-not $branch) { $branch = $worktrees[$i] }
-        Write-Host "  [$($i + 1)] $($worktrees[$i]) ($branch)" -ForegroundColor White
+        Write-Host "  [$($i + 1)] $($worktrees[$i]) ($($branch.Trim()))" -ForegroundColor White
     }
     Write-Host ''
     $choice = Read-Host '  Select'
@@ -102,10 +138,40 @@ function Select-WorkingDirectory {
 
 switch ($Command) {
     'up' {
-        # Build + start in one command. devcontainer CLI handles caching.
+        Ensure-WorkspaceVolume
+
+        # Ensure NuGet volume exists with correct ownership (Docker creates as root)
+        $nugetExists = docker volume ls -q --filter "name=^${NugetVolume}$"
+        if (-not $nugetExists) {
+            docker volume create $NugetVolume | Out-Null
+        }
+        docker run --rm -v "${NugetVolume}:/nuget" alpine chown -R 1000:1000 /nuget
+
         Write-Step 'Building and starting devcontainer...'
         devcontainer up --workspace-folder $WorkspaceFolder
         if ($LASTEXITCODE -eq 0) {
+            # Recreate worktrees from host into the volume
+            $hostWtDir = Join-Path $WorkspaceFolder '.worktrees'
+            if (Test-Path $hostWtDir) {
+                $hostWorktrees = Get-ChildItem -Directory $hostWtDir | Select-Object -ExpandProperty Name
+                foreach ($wt in $hostWorktrees) {
+                    $branch = git -C (Join-Path $hostWtDir $wt) branch --show-current 2>$null
+                    if (-not $branch) { $branch = $wt }
+                    # Check if worktree already exists in container
+                    $exists = devcontainer exec --workspace-folder $WorkspaceFolder sh -c "test -d .worktrees/$wt && echo yes" 2>$null
+                    if ($exists -ne 'yes') {
+                        Write-Step "Creating worktree: $wt ($branch)..."
+                        devcontainer exec --workspace-folder $WorkspaceFolder git worktree add ".worktrees/$wt" $branch 2>$null
+                        if ($LASTEXITCODE -eq 0) {
+                            Write-Ok "Worktree ready: $wt ($branch)"
+                        }
+                        else {
+                            Write-Err "Failed to create worktree $wt — branch '$branch' may not exist on remote"
+                        }
+                    }
+                }
+            }
+
             Write-Ok 'Container is running.'
             Write-Host ''
             Write-Host '  Next steps:' -ForegroundColor Yellow
@@ -154,47 +220,52 @@ switch ($Command) {
         }
     }
 
+    'sync' {
+        # Push current local branch state into the workspace volume
+        $branch = git -C $WorkspaceFolder branch --show-current
+        Write-Step "Syncing local repo into volume (branch: $branch)..."
+        $volExists = docker volume ls -q --filter "name=^${WorkspaceVolume}$"
+        if (-not $volExists) {
+            Write-Err "Workspace volume does not exist. Run 'up' first."
+            exit 1
+        }
+        docker run --rm `
+            -v "${WorkspaceVolume}:/workspace" `
+            -v "${WorkspaceFolder}:/source:ro" `
+            alpine sh -c "cd /workspace && find . -mindepth 1 -delete; cp -a /source/. ."
+        if ($LASTEXITCODE -eq 0) {
+            Write-Ok "Volume synced to local state ($branch)."
+        }
+        else { Write-Err 'Sync failed.'; exit 1 }
+    }
+
     'reset' {
         Write-Step 'Nuking everything for a clean rebuild...'
 
         # Stop and remove container
         Stop-Container
 
-        # Remove named volume (plugin cache)
-        $vol = docker volume ls -q --filter "name=$VolumeName" 2>$null
-        if ($vol) {
-            Write-Step "Removing volume $VolumeName..."
-            docker volume rm $VolumeName | Out-Null
-        }
-
-        # Remove the named image so it rebuilds from scratch
-        $img = docker images -q $ImageName 2>$null
-        if ($img) {
-            Write-Step "Removing image $ImageName..."
-            docker rmi $ImageName
-            if ($LASTEXITCODE -ne 0) {
-                Write-Err "Failed to remove image '$ImageName'. It may be in use. Aborting reset."
-                exit 1
+        # Remove all named volumes
+        foreach ($vol in @($WorkspaceVolume, $NugetVolume, $PluginVolume)) {
+            $exists = docker volume ls -q --filter "name=^${vol}$"
+            if ($exists) {
+                Write-Step "Removing volume $vol..."
+                docker volume rm $vol | Out-Null
             }
         }
 
-        # Full rebuild no cache
-        Write-Step 'Rebuilding image (no cache)...'
-        docker build --no-cache -t $ImageName "$WorkspaceFolder/.devcontainer/"
-        if ($LASTEXITCODE -ne 0) { Write-Err 'Build failed.'; exit 1 }
-
-        # Start fresh
-        Write-Step 'Starting fresh container...'
-        devcontainer up --workspace-folder $WorkspaceFolder
-        if ($LASTEXITCODE -eq 0) {
-            Write-Ok 'Clean rebuild complete. Container is running.'
-            Write-Host ''
-            Write-Host '  Next steps:' -ForegroundColor Yellow
-            Write-Host '    .\scripts\devcontainer.ps1 shell     # bash shell'
-            Write-Host '    .\scripts\devcontainer.ps1 claude    # claude code'
-            Write-Host ''
+        # Remove devcontainer images (both manual and CLI-generated)
+        $images = docker images --format "{{.Repository}}:{{.Tag}}" | Where-Object {
+            $_ -match 'ppds-devcontainer' -or $_ -match 'vsc-ppds-'
         }
-        else { Write-Err 'Failed to start container.'; exit 1 }
+        foreach ($img in $images) {
+            Write-Step "Removing image $img..."
+            docker rmi $img 2>$null | Out-Null
+        }
+
+        # Fresh start — volume + container
+        Write-Step 'Starting fresh...'
+        & $PSCommandPath up
     }
 
     'help' {
@@ -204,17 +275,19 @@ switch ($Command) {
         Write-Host '  Usage: .\scripts\devcontainer.ps1 <command> [target]' -ForegroundColor White
         Write-Host ''
         Write-Host '  Commands:' -ForegroundColor White
-        Write-Host '    up                    Build + start (one command, handles everything)'
+        Write-Host '    up                    Build + clone into volume + start'
         Write-Host '    shell [worktree]      Open bash shell (prompts for worktree if any exist)'
         Write-Host '    claude [worktree]     Start Claude Code (prompts for worktree if any exist)'
         Write-Host '    down                  Stop the container'
         Write-Host '    status                Check if container is running'
-        Write-Host '    reset                 Nuke container + volumes + rebuild from scratch'
+        Write-Host '    sync                  Push local repo state into the workspace volume'
+        Write-Host '    reset                 Nuke container + all volumes + rebuild from scratch'
         Write-Host ''
         Write-Host '  Examples:' -ForegroundColor White
         Write-Host '    .\scripts\devcontainer.ps1 claude                   # prompts for location'
         Write-Host '    .\scripts\devcontainer.ps1 claude query-engine-v3   # straight to worktree'
         Write-Host '    .\scripts\devcontainer.ps1 shell main               # shell at repo root'
+        Write-Host '    .\scripts\devcontainer.ps1 sync                     # push local changes to volume'
         Write-Host ''
     }
 }
