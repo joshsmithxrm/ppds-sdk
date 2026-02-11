@@ -8,7 +8,7 @@
     "source=${localEnv:USERPROFILE}/.claude.json,target=/tmp/host-claude-config.json,type=bind,readonly",
     "source=${localEnv:USERPROFILE}/.claude/settings.json,target=/tmp/host-claude-settings.json,type=bind,readonly"
   ],
-  "postCreateCommand": "bash .devcontainer/setup.sh",
+  "postCreateCommand": "sed -i 's/\\r$//' .devcontainer/setup.sh && bash .devcontainer/setup.sh",
   "customizations": {
     "vscode": {
       "extensions": [

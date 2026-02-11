@@ -88,3 +88,13 @@ csharp_style_namespace_declarations = block_scoped:none
 
 # Don't warn about partial class declarations
 dotnet_diagnostic.CA1052.severity = none
+
+# Linux-targeted files - must use LF line endings
+[*.sh]
+end_of_line = lf
+
+[Dockerfile*]
+end_of_line = lf
+
+[devcontainer.json]
+end_of_line = lf
