@@ -185,7 +185,9 @@ function Sync-ContainerFromOrigin {
 
     # Container: clear stale origin refs and fetch fresh ones from bundle
     # Clearing first ensures pruning — refs deleted on origin get removed
-    devcontainer exec --workspace-folder $WorkspaceFolder bash -c "git for-each-ref --format='delete %(refname)' refs/remotes/origin/ | git update-ref --stdin" 2>$null
+    # Must delete HEAD symref explicitly — update-ref --stdin doesn't handle symrefs,
+    # and an existing HEAD→main symref causes "multiple updates" error on fetch
+    devcontainer exec --workspace-folder $WorkspaceFolder bash -c "git symbolic-ref --delete refs/remotes/origin/HEAD 2>/dev/null; git for-each-ref --format='delete %(refname)' refs/remotes/origin/ | git update-ref --stdin" 2>$null
     devcontainer exec --workspace-folder $WorkspaceFolder bash -c "git fetch /tmp/sync.bundle 'refs/remotes/origin/*:refs/remotes/origin/*'" 2>$null
     $refCount = (devcontainer exec --workspace-folder $WorkspaceFolder bash -c "git for-each-ref --format='%(refname)' refs/remotes/origin/ | wc -l" 2>$null).Trim()
     Write-Ok "Updated remote tracking refs ($refCount refs synced)."
@@ -247,8 +249,8 @@ function Sync-ContainerFromOrigin {
         Write-Host ''
     }
 
-    # Clean up (bundle was docker cp'd as root, so remove as root)
-    docker exec $containerId rm -f /tmp/sync.bundle
+    # Clean up (bundle was docker cp'd as root, so remove as root via -u 0)
+    docker exec -u 0 $containerId rm -f /tmp/sync.bundle
 }
 
 switch ($Command) {
