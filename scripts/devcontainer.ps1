@@ -162,8 +162,8 @@ function Sync-ContainerFromOrigin {
         return
     }
 
-    # Collect all origin refs
-    $originRefs = @(git -C $WorkspaceFolder for-each-ref --format='%(refname)' refs/remotes/origin/)
+    # Collect all origin refs (exclude HEAD symref — causes duplicate update errors)
+    $originRefs = @(git -C $WorkspaceFolder for-each-ref --format='%(refname)' refs/remotes/origin/) | Where-Object { $_ -ne 'refs/remotes/origin/HEAD' }
     if ($originRefs.Count -eq 0) {
         Write-Err 'No remote refs found.'
         return
@@ -247,8 +247,8 @@ function Sync-ContainerFromOrigin {
         Write-Host ''
     }
 
-    # Clean up
-    devcontainer exec --workspace-folder $WorkspaceFolder rm -f /tmp/sync.bundle
+    # Clean up (bundle was docker cp'd as root, so remove as root)
+    docker exec $containerId rm -f /tmp/sync.bundle
 }
 
 switch ($Command) {
