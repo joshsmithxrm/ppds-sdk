@@ -189,6 +189,11 @@ function Sync-ContainerFromOrigin {
     # and an existing HEAD→main symref causes "multiple updates" error on fetch
     devcontainer exec --workspace-folder $WorkspaceFolder bash -c "git symbolic-ref --delete refs/remotes/origin/HEAD 2>/dev/null; git for-each-ref --format='delete %(refname)' refs/remotes/origin/ | git update-ref --stdin" 2>$null
     devcontainer exec --workspace-folder $WorkspaceFolder bash -c "git fetch /tmp/sync.bundle 'refs/remotes/origin/*:refs/remotes/origin/*'" 2>$null
+    if ($LASTEXITCODE -ne 0) {
+        Write-Err 'Failed to fetch from bundle in container.'
+        docker exec -u 0 $containerId rm -f /tmp/sync.bundle
+        return
+    }
     $refCount = (devcontainer exec --workspace-folder $WorkspaceFolder bash -c "git for-each-ref --format='%(refname)' refs/remotes/origin/ | wc -l" 2>$null).Trim()
     Write-Ok "Updated remote tracking refs ($refCount refs synced)."
 
@@ -451,7 +456,7 @@ switch ($Command) {
                 Remove-Item $originBundle -ErrorAction SilentlyContinue
 
                 # Container updates its origin ref from the bundle
-                devcontainer exec --workspace-folder $WorkspaceFolder bash -c "cd $workdir && git fetch /tmp/origin.bundle 'refs/heads/${branch}:refs/remotes/origin/${branch}'"
+                devcontainer exec --workspace-folder $WorkspaceFolder bash -c "cd $workdir && git fetch /tmp/origin.bundle 'refs/remotes/origin/${branch}:refs/remotes/origin/${branch}'"
 
                 # Container rebases new work on top of updated origin
                 Write-Step "Rebasing new commits onto updated origin/$branch..."
@@ -465,8 +470,10 @@ switch ($Command) {
                     } else {
                         'Start by using plan mode to analyze the conflicts and present a resolution strategy before making changes.'
                     }
-                    $conflictPrompt = "A git rebase of branch '${branch}' onto origin/${branch} has resulted in merge conflicts. Run git status to see conflicted files. Analyze each conflict, resolve them, git add the resolved files, and run git rebase --continue. If there are multiple conflicting commits, continue resolving until the rebase is complete. ${planInstruction}"
-                    devcontainer exec --workspace-folder $WorkspaceFolder bash -c "cd $workdir && claude --dangerously-skip-permissions -p '${conflictPrompt}'"
+                    $safeBranch = $branch -replace '[^a-zA-Z0-9_\-/.]', ''
+                    $conflictPrompt = "A git rebase of branch '${safeBranch}' onto origin/${safeBranch} has resulted in merge conflicts. Run git status to see conflicted files. Analyze each conflict, resolve them, git add the resolved files, and run git rebase --continue. If there are multiple conflicting commits, continue resolving until the rebase is complete. ${planInstruction}"
+                    $escapedPrompt = $conflictPrompt.Replace("'", "'\\''")
+                    devcontainer exec --workspace-folder $WorkspaceFolder bash -c "cd $workdir && claude --dangerously-skip-permissions -p '${escapedPrompt}'"
                     Write-Step "Claude session ended. Re-run 'push' when conflicts are resolved."
                     exit 1
                 }
