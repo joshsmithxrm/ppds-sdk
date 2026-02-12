@@ -312,6 +312,48 @@ switch ($Command) {
             Write-Step "Branch '$branch' is $ahead commit(s) ahead of origin."
         }
 
+        # Detect history divergence (e.g., branch was rebased on origin)
+        if ($remoteSha) {
+            $hasRemote = (devcontainer exec --workspace-folder $WorkspaceFolder bash -c "cd $workdir && git cat-file -t $remoteSha 2>/dev/null && echo yes || echo no").Trim()
+            if ($hasRemote -eq 'yes') {
+                $isFF = (devcontainer exec --workspace-folder $WorkspaceFolder bash -c "cd $workdir && git merge-base --is-ancestor $remoteSha HEAD 2>/dev/null && echo yes || echo no").Trim()
+            }
+            else {
+                $isFF = 'no'
+            }
+
+            if ($isFF -eq 'no') {
+                Write-Step "History diverged (origin was rebased) — syncing origin state to container..."
+
+                $containerId = (docker ps -q --filter "label=devcontainer.local_folder=$WorkspaceFolder").Trim()
+
+                # Fetch latest from origin on host, bundle it, and send to container
+                git -C $WorkspaceFolder fetch origin $branch
+                $originBundle = Join-Path $env:TEMP 'ppds-origin.bundle'
+                git -C $WorkspaceFolder bundle create $originBundle "origin/$branch"
+                docker cp $originBundle "${containerId}:/tmp/origin.bundle" | Out-Null
+                Remove-Item $originBundle -ErrorAction SilentlyContinue
+
+                # Container updates its origin ref from the bundle
+                devcontainer exec --workspace-folder $WorkspaceFolder bash -c "cd $workdir && git fetch /tmp/origin.bundle 'refs/heads/${branch}:refs/remotes/origin/${branch}'"
+
+                # Container rebases new work on top of updated origin
+                Write-Step "Rebasing new commits onto updated origin/$branch..."
+                devcontainer exec --workspace-folder $WorkspaceFolder bash -c "cd $workdir && git rebase origin/$branch"
+                if ($LASTEXITCODE -ne 0) {
+                    Write-Err "Rebase failed (conflicts). Resolve in container shell, then push again."
+                    devcontainer exec --workspace-folder $WorkspaceFolder bash -c "cd $workdir && git rebase --abort"
+                    devcontainer exec --workspace-folder $WorkspaceFolder rm -f /tmp/origin.bundle
+                    exit 1
+                }
+                devcontainer exec --workspace-folder $WorkspaceFolder rm -f /tmp/origin.bundle
+
+                # Update ahead count after rebase
+                $ahead = (devcontainer exec --workspace-folder $WorkspaceFolder bash -c "cd $workdir && git rev-list --count origin/${branch}..HEAD").Trim()
+                Write-Ok "Rebased onto origin. $ahead new commit(s) to push."
+            }
+        }
+
         # Create git bundle in container
         Write-Step 'Bundling commits...'
         devcontainer exec --workspace-folder $WorkspaceFolder bash -c "cd $workdir && git bundle create /tmp/push.bundle $branch" | Out-Null
